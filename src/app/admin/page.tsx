@@ -1,0 +1,899 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import { 
+  Product, Coupon, Order, 
+  getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
+  getCoupons, createCoupon, deleteCoupon,
+  getOrders
+} from '@/lib/db';
+
+export default function AdminDashboard() {
+  // Navigation tabs: 'products' | 'coupons' | 'orders'
+  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders'>('products');
+  
+  // Database States
+  const [products, setProducts] = useState<Product[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const { isAdmin, setAdminStatus } = useAuth();
+  const [passcode, setPasscode] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
+
+  const handlePasscodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passcode.trim() === 'STAGADMIN2026') {
+      setAdminStatus(true);
+      setPasscodeError('');
+    } else {
+      setPasscodeError('Invalid Administrative Passcode.');
+    }
+  };
+
+  // Form Modals
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  
+  // Product Form Input State
+  const [productForm, setProductForm] = useState({
+    title: '',
+    price: 0,
+    category: 'Men',
+    material: '',
+    description: '',
+    image1: '',
+    image2: '',
+    image3: '',
+    sizes: 'S, M, L, XL',
+    colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
+  });
+
+  // Coupon Form State
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    discount_type: 'percentage' as 'percentage' | 'fixed',
+    discount_value: 0,
+    min_order_value: 0,
+    active: true
+  });
+
+  // Bulk Upload State
+  const [bulkJsonText, setBulkJsonText] = useState('');
+  const [bulkError, setBulkError] = useState('');
+  const [bulkSuccess, setBulkSuccess] = useState('');
+
+  // Notifications
+  const [feedbackMsg, setFeedbackMsg] = useState({ type: '', text: '' });
+
+  // Load Data
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const allProducts = await getProducts();
+      setProducts(allProducts);
+      const allCoupons = await getCoupons();
+      setCoupons(allCoupons);
+      const allOrders = await getOrders();
+      setOrders(allOrders);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadData();
+    }
+  }, [isAdmin]);
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
+        <Header />
+        
+        <main className="flex-1 flex items-center justify-center py-20 relative z-10 bg-white">
+          <div className="fixed inset-0 marble-overlay z-0"></div>
+          
+          <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
+            <div className="text-center mb-8">
+              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
+              <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
+              <p className="text-[12px] text-zinc-500 font-body mt-2">
+                Enter administrative passcode to manage products, coupons, and view customer orders.
+              </p>
+            </div>
+
+            <form onSubmit={handlePasscodeSubmit} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-label-caps font-semibold text-zinc-400">ADMIN PASSCODE</label>
+                <input 
+                  type="password" 
+                  placeholder="••••••••••••••"
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  required
+                  className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[16px] tracking-[0.25em] outline-none"
+                />
+              </div>
+
+              {passcodeError && (
+                <p className="text-[11px] text-red-600 font-medium text-center">{passcodeError}</p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-primary text-white py-3.5 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md"
+              >
+                AUTHORIZE ACCESS
+              </button>
+            </form>
+
+            <div className="text-center mt-6">
+              <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
+                ← Return to Storefront
+              </Link>
+            </div>
+          </div>
+        </main>
+        
+        <Footer />
+      </div>
+    );
+  }
+
+  const triggerFeedback = (type: 'success' | 'error', text: string) => {
+    setFeedbackMsg({ type, text });
+    setTimeout(() => setFeedbackMsg({ type: '', text: '' }), 4000);
+  };
+
+  // =========================================================================
+  // PRODUCT CRUD HANDLERS
+  // =========================================================================
+  const openAddProduct = () => {
+    setEditingProduct(null);
+    setProductForm({
+      title: '',
+      price: 0,
+      category: 'Men',
+      material: '',
+      description: '',
+      image1: '',
+      image2: '',
+      image3: '',
+      sizes: 'S, M, L, XL',
+      colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
+    });
+    setShowProductModal(true);
+  };
+
+  const openEditProduct = (prod: Product) => {
+    setEditingProduct(prod);
+    setProductForm({
+      title: prod.title,
+      price: prod.price,
+      category: prod.category,
+      material: prod.material,
+      description: prod.description,
+      image1: prod.images[0] || '',
+      image2: prod.images[1] || '',
+      image3: prod.images[2] || '',
+      sizes: prod.sizes.join(', '),
+      colors: prod.colors.join(', ')
+    });
+    setShowProductModal(true);
+  };
+
+  const handleProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const imagesArray = [productForm.image1, productForm.image2, productForm.image3].filter(url => url.trim() !== '');
+    const sizesArray = productForm.sizes.split(',').map(s => s.trim()).filter(s => s !== '');
+    const colorsArray = productForm.colors.split(',').map(c => c.trim()).filter(c => c !== '');
+
+    const productPayload = {
+      title: productForm.title,
+      price: Number(productForm.price),
+      category: productForm.category,
+      material: productForm.material,
+      description: productForm.description,
+      images: imagesArray.length > 0 ? imagesArray : ["https://images.unsplash.com/photo-1539571696357-5a69c17a67c6"], // placeholder fallback
+      sizes: sizesArray.length > 0 ? sizesArray : ["One Size"],
+      colors: colorsArray.length > 0 ? colorsArray : ["Default"]
+    };
+
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, productPayload);
+        triggerFeedback('success', `Product "${productForm.title}" updated successfully!`);
+      } else {
+        await addProduct(productPayload);
+        triggerFeedback('success', `Product "${productForm.title}" added to catalog!`);
+      }
+      setShowProductModal(false);
+      loadData();
+    } catch (err) {
+      triggerFeedback('error', 'Failed to save product details.');
+    }
+  };
+
+  const handleDeleteProduct = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove "${name}" from the catalog?`)) return;
+    try {
+      const ok = await deleteProduct(id);
+      if (ok) {
+        triggerFeedback('success', `Product "${name}" deleted.`);
+        loadData();
+      } else {
+        triggerFeedback('error', 'Product not found.');
+      }
+    } catch (e) {
+      triggerFeedback('error', 'Error deleting product.');
+    }
+  };
+
+  // =========================================================================
+  // BULK CATALOG UPLOADER
+  // =========================================================================
+  const handleBulkUpload = async () => {
+    setBulkError('');
+    setBulkSuccess('');
+    try {
+      const parsed = JSON.parse(bulkJsonText);
+      if (!Array.isArray(parsed)) {
+        setBulkError('Catalog must be a JSON array of products.');
+        return;
+      }
+
+      // Quick validation
+      for (const item of parsed) {
+        if (!item.title || !item.price || !item.category || !item.material || !item.description) {
+          setBulkError('Each product must include: title, price, category, material, description.');
+          return;
+        }
+        if (!item.images || !Array.isArray(item.images)) {
+          item.images = ["https://images.unsplash.com/photo-1539571696357-5a69c17a67c6"];
+        }
+        if (!item.sizes || !Array.isArray(item.sizes)) {
+          item.sizes = ["One Size"];
+        }
+        if (!item.colors || !Array.isArray(item.colors)) {
+          item.colors = ["Default"];
+        }
+      }
+
+      const uploaded = await bulkUploadProducts(parsed);
+      setBulkSuccess(`Successfully imported ${uploaded.length} products to catalog!`);
+      setBulkJsonText('');
+      loadData();
+    } catch (e: any) {
+      setBulkError(`JSON Parsing Error: ${e.message}`);
+    }
+  };
+
+  // =========================================================================
+  // COUPON CREATION HANDLERS
+  // =========================================================================
+  const handleCouponSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponForm.code) {
+      triggerFeedback('error', 'Please enter a coupon code.');
+      return;
+    }
+
+    try {
+      await createCoupon({
+        code: couponForm.code,
+        discount_type: couponForm.discount_type,
+        discount_value: Number(couponForm.discount_value),
+        min_order_value: couponForm.min_order_value > 0 ? Number(couponForm.min_order_value) : undefined,
+        active: couponForm.active
+      });
+      
+      triggerFeedback('success', `Promo code ${couponForm.code.toUpperCase()} registered!`);
+      setCouponForm({
+        code: '',
+        discount_type: 'percentage',
+        discount_value: 0,
+        min_order_value: 0,
+        active: true
+      });
+      loadData();
+    } catch (err) {
+      triggerFeedback('error', 'Error creating discount code.');
+    }
+  };
+
+  const handleDeleteCoupon = async (code: string) => {
+    if (!confirm(`Remove coupon code "${code}"?`)) return;
+    try {
+      const ok = await deleteCoupon(code);
+      if (ok) {
+        triggerFeedback('success', `Coupon code "${code}" removed.`);
+        loadData();
+      }
+    } catch (e) {
+      triggerFeedback('error', 'Error deleting coupon.');
+    }
+  };
+
+  const sampleJson = JSON.stringify([
+    {
+      "title": "Jaipur Summer Kurta",
+      "price": 3200,
+      "category": "Men",
+      "material": "100% Organic Jaipur Linen",
+      "description": "A crisp, lightweight summer kurta tailored with premium Mandarin collar and subtle gold button detailing.",
+      "images": ["https://images.unsplash.com/photo-1597983073492-bc24058bd37f?q=80&w=2670"],
+      "sizes": ["S", "M", "L", "XL"],
+      "colors": ["Ivory White", "Sky Blue"]
+    }
+  ], null, 2);
+
+  return (
+    <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
+      <Header />
+
+      <main className="flex-1 relative z-10 py-12 md:py-16 bg-white">
+        <div className="fixed inset-0 marble-overlay z-0"></div>
+
+        <div className="max-w-container-max mx-auto px-6 md:px-12 relative z-10">
+          
+          {/* Page Title & Status */}
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-on-surface/10 pb-6 mb-8 gap-4">
+            <div>
+              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
+              <h1 className="font-display text-[32px] font-semibold text-on-surface">Atelier Dashboard</h1>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <span className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></span>
+              <span className="text-[12px] font-semibold font-label-caps tracking-widest text-zinc-500">
+                ACTIVE ATELIER DEV ENGINE
+              </span>
+            </div>
+          </div>
+
+          {/* Feedback Messages */}
+          {feedbackMsg.text && (
+            <div className={`mb-6 p-4 rounded-sm border text-[13px] font-medium transition-all ${
+              feedbackMsg.type === 'success' 
+                ? 'bg-green-50 border-green-200 text-green-800' 
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+              {feedbackMsg.text}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            {/* Sidebar Navigation */}
+            <div className="lg:col-span-3 bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-2">
+              <button
+                onClick={() => setActiveTab('products')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
+                  activeTab === 'products'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">apparel</span>
+                GARMENT CATALOG
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('coupons')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
+                  activeTab === 'coupons'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">sell</span>
+                DISCOUNT COUPONS
+              </button>
+
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
+                  activeTab === 'orders'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                ORDER REGISTRY
+              </button>
+            </div>
+
+            {/* Dashboard Workspace */}
+            <div className="lg:col-span-9 bg-white border border-on-surface/5 p-6 md:p-8 min-h-[500px]">
+              
+              {loading ? (
+                <div className="flex justify-center py-24">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-leaf"></div>
+                </div>
+              ) : (
+                <>
+                  {/* TAB 1: PRODUCT CATALOG */}
+                  {activeTab === 'products' && (
+                    <div className="space-y-8">
+                      <div className="flex justify-between items-baseline border-b border-on-surface/5 pb-4">
+                        <h2 className="font-display text-[20px] font-semibold text-on-surface">Product Catalog Management</h2>
+                        <button
+                          onClick={openAddProduct}
+                          className="bg-gold-leaf text-obsidian-charcoal px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf/90 transition-all shadow-sm"
+                        >
+                          ADD NEW GARMENT
+                        </button>
+                      </div>
+
+                      {/* Products list table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-[13px]">
+                          <thead>
+                            <tr className="border-b border-on-surface/10 font-label-caps text-[10px] tracking-wider text-on-surface-variant font-bold">
+                              <th className="pb-3">GARMENT DETAILS</th>
+                              <th className="pb-3">CATEGORY</th>
+                              <th className="pb-3 text-right">PRICE (₹)</th>
+                              <th className="pb-3 text-center">RATING</th>
+                              <th className="pb-3 text-right">CONTROLS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-on-surface/5">
+                            {products.map(prod => (
+                              <tr key={prod.id} className="hover:bg-surface-dim/20 transition-colors">
+                                <td className="py-4 flex items-center gap-3">
+                                  <img 
+                                    src={prod.images[0]} 
+                                    alt={prod.title} 
+                                    className="w-10 h-13 object-cover aspect-[3/4] border bg-zinc-50" 
+                                  />
+                                  <div>
+                                    <div className="font-bold text-on-surface text-[14px]">{prod.title}</div>
+                                    <div className="text-[11px] text-zinc-400 font-medium truncate max-w-sm">{prod.material}</div>
+                                  </div>
+                                </td>
+                                <td className="py-4 font-semibold uppercase text-[11px] text-zinc-500">{prod.category}</td>
+                                <td className="py-4 text-right font-bold text-gold-leaf text-[14px]">₹{prod.price}</td>
+                                <td className="py-4 text-center font-semibold text-on-surface-variant">{prod.rating || 5.0}</td>
+                                <td className="py-4 text-right space-x-2">
+                                  <button
+                                    onClick={() => openEditProduct(prod)}
+                                    className="text-[11px] font-label-caps font-semibold text-primary hover:underline uppercase tracking-wider"
+                                  >
+                                    EDIT
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(prod.id, prod.title)}
+                                    className="text-[11px] font-label-caps font-semibold text-red-600 hover:underline uppercase tracking-wider"
+                                  >
+                                    DELETE
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Bulk Catalog Uploader Panel */}
+                      <div className="border border-on-surface/5 p-6 bg-surface-dim/40 rounded-sm space-y-4">
+                        <h3 className="font-label-caps text-[11px] text-gold-leaf tracking-[0.25em] font-semibold uppercase">
+                          BULK CATALOG UPLOADER (JSON FORMAT)
+                        </h3>
+                        <p className="text-[12px] text-on-surface-variant leading-relaxed font-body">
+                          Paste a JSON array of products to seed or bulk-update your shopify-style inventory catalog.
+                        </p>
+                        
+                        <textarea
+                          rows={6}
+                          placeholder={`[\n  {\n    "title": "Product Title",\n    "price": 1000,\n    ...\n  }\n]`}
+                          value={bulkJsonText}
+                          onChange={(e) => setBulkJsonText(e.target.value)}
+                          className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm p-4 text-[12px] font-mono outline-none"
+                        />
+
+                        <div className="flex flex-col sm:flex-row justify-between items-baseline gap-4 pt-2">
+                          <button
+                            onClick={() => setBulkJsonText(sampleJson)}
+                            className="text-[10px] font-label-caps tracking-widest text-[#5f259f] hover:underline uppercase font-bold"
+                          >
+                            LOAD MOCK SAMPLE JSON
+                          </button>
+                          
+                          <button
+                            onClick={handleBulkUpload}
+                            className="bg-primary text-white px-6 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
+                          >
+                            IMPORT BULK CATALOG
+                          </button>
+                        </div>
+
+                        {bulkError && (
+                          <div className="bg-red-50 border border-red-200 text-red-800 text-[12px] py-3 px-4 font-mono rounded-sm">
+                            {bulkError}
+                          </div>
+                        )}
+                        {bulkSuccess && (
+                          <div className="bg-green-50 border border-green-200 text-green-800 text-[12px] py-3 px-4 rounded-sm font-semibold">
+                            {bulkSuccess}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* TAB 2: COUPONS & DISCOUNTS */}
+                  {activeTab === 'coupons' && (
+                    <div className="space-y-8">
+                      <div className="border-b border-on-surface/5 pb-4">
+                        <h2 className="font-display text-[20px] font-semibold text-on-surface">Discount Coupons Management</h2>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                        {/* Left Side: Create Coupon Form */}
+                        <form onSubmit={handleCouponSubmit} className="md:col-span-5 border border-on-surface/5 p-5 bg-surface-dim/20 space-y-4">
+                          <h3 className="font-label-caps text-[11px] text-gold-leaf tracking-[0.2em] font-semibold uppercase">
+                            CREATE PROMO CODE
+                          </h3>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">COUPON CODE</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. WELCOME30"
+                              value={couponForm.code}
+                              onChange={(e) => setCouponForm(prev => ({ ...prev, code: e.target.value }))}
+                              className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] uppercase outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">DISCOUNT METHOD</label>
+                            <select
+                              value={couponForm.discount_type}
+                              onChange={(e) => setCouponForm(prev => ({ ...prev, discount_type: e.target.value as 'percentage' | 'fixed' }))}
+                              className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                            >
+                              <option value="percentage">Percentage Deduction (%)</option>
+                              <option value="fixed">Flat Rupee Amount (₹)</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">
+                              DISCOUNT VALUE {couponForm.discount_type === 'percentage' ? '(%)' : '(₹)'}
+                            </label>
+                            <input 
+                              type="number" 
+                              value={couponForm.discount_value || ''}
+                              onChange={(e) => setCouponForm(prev => ({ ...prev, discount_value: Number(e.target.value) }))}
+                              placeholder={couponForm.discount_type === 'percentage' ? 'e.g. 20' : 'e.g. 1000'}
+                              className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">MIN ORDER AMOUNT REQUIRED (₹)</label>
+                            <input 
+                              type="number" 
+                              value={couponForm.min_order_value || ''}
+                              onChange={(e) => setCouponForm(prev => ({ ...prev, min_order_value: Number(e.target.value) }))}
+                              placeholder="e.g. 3000 (Optional)"
+                              className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
+                          >
+                            REGISTER DISCOUNT
+                          </button>
+                        </form>
+
+                        {/* Right Side: Coupons List */}
+                        <div className="md:col-span-7 space-y-4">
+                          <h3 className="font-label-caps text-[11px] text-zinc-500 tracking-[0.2em] font-semibold uppercase">
+                            ACTIVE PROMO CODES
+                          </h3>
+                          
+                          <div className="border border-on-surface/5 rounded-sm divide-y divide-on-surface/5 text-[13px]">
+                            {coupons.map(coupon => (
+                              <div key={coupon.code} className="p-4 flex items-center justify-between hover:bg-surface-dim/20 transition-colors">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="bg-purple-100 text-[#5f259f] font-mono font-bold px-2 py-0.5 rounded-sm uppercase text-[12px] border border-purple-200">
+                                      {coupon.code}
+                                    </span>
+                                    <span className={`h-1.5 w-1.5 rounded-full ${coupon.active ? 'bg-green-600' : 'bg-zinc-400'}`}></span>
+                                  </div>
+                                  <p className="text-zinc-500 text-[12px]">
+                                    Worth: <span className="font-bold text-zinc-800">{coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`} off</span>
+                                    {coupon.min_order_value && ` | Min Order: ₹${coupon.min_order_value}`}
+                                  </p>
+                                </div>
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCoupon(coupon.code)}
+                                  className="material-symbols-outlined text-[18px] text-red-500 hover:text-red-700 transition-colors"
+                                >
+                                  delete
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* TAB 3: ORDER REGISTRY */}
+                  {activeTab === 'orders' && (
+                    <div className="space-y-8">
+                      <div className="border-b border-on-surface/5 pb-4">
+                        <h2 className="font-display text-[20px] font-semibold text-on-surface">Order Registry Log (CRM)</h2>
+                      </div>
+
+                      {orders.length === 0 ? (
+                        <div className="text-center py-20 text-on-surface-variant font-body">
+                          No order receipts logged in the database yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {orders.map(order => (
+                            <div key={order.id} className="border border-on-surface/5 p-5 bg-surface-dim/10 rounded-sm space-y-4 text-[13px]">
+                              
+                              {/* Order Header */}
+                              <div className="flex justify-between items-baseline border-b border-on-surface/10 pb-2.5">
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-on-surface text-[14px]">{order.id}</span>
+                                  <p className="text-[11px] text-zinc-400">{new Date(order.created_at).toLocaleString()}</p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="bg-green-100 text-green-800 text-[10px] font-label-caps tracking-widest px-2.5 py-0.5 rounded-sm font-bold uppercase">
+                                    {order.payment_method}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Customer Details */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-on-surface-variant border-b border-on-surface/5 pb-4">
+                                <div>
+                                  <h4 className="text-[10px] font-label-caps font-semibold text-zinc-400 mb-0.5">CUSTOMER</h4>
+                                  <p className="font-bold text-zinc-800">{order.customer_name}</p>
+                                  <p className="text-[12px]">{order.customer_email}</p>
+                                </div>
+                                <div>
+                                  <h4 className="text-[10px] font-label-caps font-semibold text-zinc-400 mb-0.5">DELIVERY ADDRESS</h4>
+                                  <p className="text-[12px] truncate max-w-sm" title={order.shipping_address}>{order.shipping_address}</p>
+                                </div>
+                              </div>
+
+                              {/* Order Items */}
+                              <div className="space-y-2">
+                                <h4 className="text-[10px] font-label-caps font-semibold text-zinc-400">ORDERED PIECES</h4>
+                                <div className="divide-y divide-on-surface/5 font-body">
+                                  {order.items.map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center py-2 first:pt-0 last:pb-0">
+                                      <span className="font-medium text-zinc-800 truncate max-w-[80%]">
+                                        {item.title} ({item.selected_size} / {item.selected_color}) <span className="font-bold text-zinc-400">x{item.quantity}</span>
+                                      </span>
+                                      <span className="font-semibold text-zinc-800">₹{item.price * item.quantity}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Totals */}
+                              <div className="border-t border-on-surface/10 pt-3 flex justify-between items-baseline font-body">
+                                <div className="text-[11px] text-on-surface-variant font-semibold">
+                                  {order.coupon_applied && (
+                                    <span className="text-[#5f259f] font-mono font-bold uppercase">
+                                      COUPON: {order.coupon_applied} (-₹{order.discount_amount})
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <div className="text-right flex items-baseline gap-2">
+                                  <span className="text-on-surface-variant text-[11px] font-label-caps">Total Charged:</span>
+                                  <span className="text-gold-leaf font-bold text-[18px]">₹{order.total_price}</span>
+                                </div>
+                              </div>
+
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+                </>
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+      </main>
+
+      {/* ========================================================================= */}
+      {/* PRODUCT FORM MODAL (Add/Edit)                                            */}
+      {/* ========================================================================= */}
+      {showProductModal && (
+        <div className="fixed inset-0 z-[200] overflow-y-auto flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800">
+            
+            <div className="px-6 py-4 border-b border-on-surface/10 bg-surface-dim/40 flex justify-between items-center">
+              <h3 className="font-display text-[18px] font-semibold text-on-surface">
+                {editingProduct ? `Edit Garment Specifications: ${editingProduct.title}` : 'Add New Garment to Catalog'}
+              </h3>
+              <button 
+                onClick={() => setShowProductModal(false)}
+                className="material-symbols-outlined text-[20px] text-zinc-400 hover:text-zinc-600"
+              >
+                close
+              </button>
+            </div>
+
+            <form onSubmit={handleProductSubmit} className="p-6 space-y-6">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Title */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT NAME</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={productForm.title}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g. Jaipur Summer Kurta"
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* Price */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">PRICE IN RUPEES (₹)</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={productForm.price || ''}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
+                    placeholder="e.g. 3200"
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">CATEGORY</label>
+                  <select
+                    value={productForm.category}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  >
+                    <option value="Men">Men</option>
+                    <option value="Women">Women</option>
+                    <option value="Accessories">Accessories</option>
+                  </select>
+                </div>
+
+                {/* Material */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">FABRIC SPECIFICATION</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={productForm.material}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, material: e.target.value }))}
+                    placeholder="e.g. 100% Organic Jaipur Linen"
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* Description */}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">DESCRIPTION</label>
+                  <textarea 
+                    rows={3}
+                    required
+                    value={productForm.description}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Provide details about weave, cuts, tailoring..."
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* Colors */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">COLORS (COMMA SEPARATED)</label>
+                  <input 
+                    type="text" 
+                    value={productForm.colors}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, colors: e.target.value }))}
+                    placeholder="e.g. Ivory White, Sky Blue"
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* Sizes */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SIZES (COMMA SEPARATED)</label>
+                  <input 
+                    type="text" 
+                    value={productForm.sizes}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, sizes: e.target.value }))}
+                    placeholder="e.g. S, M, L, XL"
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* Images */}
+                <div className="sm:col-span-2 space-y-3">
+                  <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">IMAGE ANGLE URLS (MAIN + SIDES)</span>
+                  
+                  <div className="space-y-2">
+                    <input 
+                      type="text" 
+                      required
+                      value={productForm.image1}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, image1: e.target.value }))}
+                      placeholder="Front View Image URL"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                    />
+                    <input 
+                      type="text" 
+                      value={productForm.image2}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, image2: e.target.value }))}
+                      placeholder="Back View Image URL (Optional)"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                    />
+                    <input 
+                      type="text" 
+                      value={productForm.image3}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, image3: e.target.value }))}
+                      placeholder="Detail/Side View Image URL (Optional)"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="border-t border-on-surface/10 pt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowProductModal(false)}
+                  className="border border-on-surface/15 text-on-surface-variant px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-zinc-50"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  className="bg-primary text-white px-8 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
+                >
+                  {editingProduct ? 'SAVE CHANGES' : 'PUBLISH GARMENT'}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      <Footer />
+    </div>
+  );
+}
