@@ -20,8 +20,48 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Stag Beetle | The Anatomy of Elegance",
-  description: "Modern luxury defined by architectural form and hand-crafted precision. Crafted for the modern sovereign.",
+  metadataBase: new URL('https://stagbeetle.co.in'),
+  title: {
+    default: "Stag Beetle - The Anatomy of Elegance | Luxury Indian Weaves",
+    template: "%s | Stag Beetle"
+  },
+  description: "Modern luxury defined by architectural form, tailored in our Bengaluru atelier with hand-woven Indian textiles including Banarasi silk, Kashmir wool, and Jaipur handloom linen.",
+  keywords: ["Indian Luxury Weaves", "Stag Beetle", "Banarasi Silk Shirts", "Mysore Rosewood Accessories", "Kashmir Wool Coat", "Jaipur Handloom Linen Trousers", "Bengaluru Atelier", "Premium Men Tailoring India"],
+  authors: [{ name: "Stag Beetle Atelier" }],
+  creator: "Stag Beetle Development Team",
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    url: "https://stagbeetle.co.in",
+    siteName: "Stag Beetle",
+    title: "Stag Beetle | The Anatomy of Elegance",
+    description: "Modern luxury defined by architectural form and hand-crafted precision using raw organic Indian textiles.",
+    images: [
+      {
+        url: "https://lh3.googleusercontent.com/aida/ADBb0ujFqGREaXGbZqXPiWZTGXRJaf0kINJx3qPJYP40zlBqBhncUNgCM3pNCDoacB_0zqZJWMC3EmsbEWq0ab9Z4i-VT4EdSuXp7mmrgfFQi0ZuT-dhB9cm3WPyTNKTFzXVsnk8by8m8O-Dy0r5iZk3_ojV7lPukEqqKPGqG6ebpPy3lLAg3Odnd4VepJimWhQPGDHcshqfLo7UF1mawnG3bxSFUkGqTaKx8tzW288dlSi3lhJgZRaJHHsH",
+        width: 1200,
+        height: 630,
+        alt: "Stag Beetle Luxury Collection"
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Stag Beetle | The Anatomy of Elegance",
+    description: "Modern luxury defined by architectural form and hand-crafted organic weaves.",
+    images: ["https://lh3.googleusercontent.com/aida/ADBb0ujFqGREaXGbZqXPiWZTGXRJaf0kINJx3qPJYP40zlBqBhncUNgCM3pNCDoacB_0zqZJWMC3EmsbEWq0ab9Z4i-VT4EdSuXp7mmrgfFQi0ZuT-dhB9cm3WPyTNKTFzXVsnk8by8m8O-Dy0r5iZk3_ojV7lPukEqqKPGqG6ebpPy3lLAg3Odnd4VepJimWhQPGDHcshqfLo7UF1mawnG3bxSFUkGqTaKx8tzW288dlSi3lhJgZRaJHHsH"]
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    }
+  }
 };
 
 export default function RootLayout({
