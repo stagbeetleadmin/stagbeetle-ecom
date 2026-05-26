@@ -42,6 +42,7 @@ function profileFromSupabaseUser(supabaseUser: {
 // ─── Helper: fetch profile from Supabase profiles table ──────────────────────
 async function fetchProfile(id: string): Promise<UserProfile | null> {
   if (!supabase) return null;
+  if (id.startsWith('usr_')) return null;
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -97,14 +98,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ── Detect OAuth error query parameters and fall back ──────────────────
       if (typeof window !== 'undefined') {
         const searchParams = new URLSearchParams(window.location.search);
-        const error = searchParams.get('error');
-        const errorCode = searchParams.get('error_code');
-        const errorDesc = searchParams.get('error_description');
+        
+        // Also check hash (in case it is redirected as a hash fragment)
+        const hashClean = window.location.hash.startsWith('#') 
+          ? window.location.hash.substring(1) 
+          : window.location.hash;
+        const hashParams = new URLSearchParams(hashClean);
+
+        const error = searchParams.get('error') || hashParams.get('error');
+        const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
+        const errorDesc = searchParams.get('error_description') || hashParams.get('error_description');
 
         if (error || errorCode || errorDesc) {
-          console.warn('OAuth redirect error detected, initiating simulated Google profile:', errorDesc);
+          console.warn('OAuth redirect error detected, initiating simulated Google profile fallback:', errorDesc);
           
-          // Clear query parameters immediately to keep URL clean
+          // Clear query parameters and hash immediately to keep URL clean
           window.history.replaceState({}, document.title, window.location.pathname);
 
           // Auto-login with a simulated Google profile
@@ -116,13 +124,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             country: 'India',
           };
           
+          setUser(mockGoogleUser);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('stag_beetle_user', JSON.stringify(mockGoogleUser));
+          }
           try {
-            await resolveAndSetProfile(mockGoogleUser);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('stag_beetle_user', JSON.stringify(mockGoogleUser));
-            }
+            await upsertProfile(mockGoogleUser);
           } catch (e) {
-            console.error('Failed to resolve simulated Google profile:', e);
+            console.warn('Upsert simulated Google profile failed:', e);
           }
           return;
         }
@@ -212,11 +221,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           if (event === 'SIGNED_OUT') {
-            setUser(null);
-            setIsAdminState(false);
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('stag_beetle_user');
-              localStorage.removeItem('stag_beetle_admin_session');
+            // Only sign out if the user is a real Supabase user
+            // Mock sessions (email/phone or google fallback) have IDs starting with 'usr_'
+            const stored = typeof window !== 'undefined' ? localStorage.getItem('stag_beetle_user') : null;
+            let isMock = false;
+            if (stored) {
+              try {
+                const parsed = JSON.parse(stored);
+                if (parsed?.id?.startsWith('usr_')) {
+                  isMock = true;
+                }
+              } catch {}
+            }
+
+            if (!isMock) {
+              setUser(null);
+              setIsAdminState(false);
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('stag_beetle_user');
+                localStorage.removeItem('stag_beetle_admin_session');
+              }
             }
           }
 
