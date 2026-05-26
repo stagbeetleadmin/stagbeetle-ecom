@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdminState] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // false by default — modal never blocks on this
   const [onSuccessCallback, setOnSuccessCallback] = useState<(() => void) | null>(null);
 
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
@@ -108,17 +108,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ── localStorage fallback (email/phone login or no Supabase) ──────────
       if (typeof window !== 'undefined') {
         const storedUser = localStorage.getItem('stag_beetle_user');
-        if (storedUser && mounted && !user) {
+        if (storedUser && mounted) {
           try {
-            setUser(JSON.parse(storedUser));
+            const parsed = JSON.parse(storedUser);
+            // Only use localStorage if Supabase didn't already set a user
+            setUser(prev => prev ?? parsed);
           } catch { /* ignore */ }
         }
         if (localStorage.getItem('stag_beetle_admin_session') === 'true' && mounted) {
           setIsAdminState(true);
         }
       }
-
-      if (mounted) setLoading(false);
     };
 
     bootstrap();
@@ -130,16 +130,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!mounted) return;
 
           if (event === 'SIGNED_IN' && session?.user) {
-            setLoading(true);
             const profile = await resolveAndSetProfile(session.user);
             setIsLoginModalOpen(false);
-            setLoading(false);
-            // Fire any pending success callback (e.g. redirect to checkout)
+            // Fire any pending success callback
             setOnSuccessCallback(prev => {
               if (prev) { prev(); return null; }
               return null;
             });
-            // Persist to localStorage so email/phone tab also benefits
             if (typeof window !== 'undefined') {
               localStorage.setItem('stag_beetle_user', JSON.stringify(profile));
             }
@@ -175,27 +172,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Supabase is not configured. Cannot sign in with Google.');
       return;
     }
-    setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}`,
         queryParams: {
           access_type: 'offline',
-          prompt: 'select_account', // always show account picker
+          prompt: 'select_account',
         },
       },
     });
     if (error) {
       console.error('Google OAuth error:', error.message);
-      setLoading(false);
     }
-    // If no error, browser will redirect — loading stays true until redirect
   };
 
   // ── Email + Phone login (no Supabase auth, profile-only) ──────────────────
   const loginWithEmailPhone = async (name: string, email: string, phone: string) => {
-    setLoading(true);
     const profile: UserProfile = {
       id: `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       name,
@@ -204,7 +197,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       country: 'India',
     };
 
-    // Save to Supabase profiles table if available
     if (supabase) {
       try {
         await upsertProfile(profile);
@@ -219,7 +211,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUser(profile);
     setIsLoginModalOpen(false);
-    setLoading(false);
 
     setOnSuccessCallback(prev => {
       if (prev) { prev(); return null; }
