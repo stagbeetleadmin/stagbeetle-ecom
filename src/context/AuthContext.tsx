@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUser(profile);
 
-    const isAdminEmail = supabaseUser.email === 'admin@stagbeetle.co.in';
+    const isAdminEmail = supabaseUser.email?.toLowerCase() === 'admin@stagbeetle.co.in';
     if (isAdminEmail) {
       setIsAdminState(true);
       if (typeof window !== 'undefined') {

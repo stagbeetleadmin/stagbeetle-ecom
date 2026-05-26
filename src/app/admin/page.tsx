@@ -22,7 +22,7 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const { isAdmin, setAdminStatus, loginWithEmailPassword } = useAuth();
+  const { isAdmin, setAdminStatus, loginWithEmailPassword, logout } = useAuth();
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
 
@@ -60,7 +60,7 @@ export default function AdminDashboard() {
         setLoginError(res.error);
       } else {
         // Successful login, check if they are the admin email
-        if (adminEmail.trim() !== 'admin@stagbeetle.co.in') {
+        if (adminEmail.trim().toLowerCase() !== 'admin@stagbeetle.co.in') {
           setLoginError('Access Denied: This account does not have administrative privileges.');
         }
       }
@@ -455,11 +455,25 @@ export default function AdminDashboard() {
               <h1 className="font-display text-[32px] font-semibold text-on-surface">Atelier Dashboard</h1>
             </div>
             
-            <div className="flex items-center gap-3">
-              <span className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></span>
-              <span className="text-[12px] font-semibold font-label-caps tracking-widest text-zinc-500">
-                ACTIVE ATELIER DEV ENGINE
-              </span>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></span>
+                <span className="text-[12px] font-semibold font-label-caps tracking-widest text-zinc-500">
+                  ACTIVE ATELIER DEV ENGINE
+                </span>
+              </div>
+              
+              <button
+                type="button"
+                onClick={async () => {
+                  await logout();
+                  window.location.href = '/';
+                }}
+                className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 text-[11px] font-bold tracking-widest uppercase transition-all rounded-sm flex items-center gap-1.5 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[15px]">logout</span>
+                Sign Out
+              </button>
             </div>
           </div>
 

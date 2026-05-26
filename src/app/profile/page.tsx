@@ -10,7 +10,7 @@ import Link from 'next/link';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, loading, updateProfile, saveAddress, triggerLoginModal } = useAuth();
+  const { user, isAdmin, loading, updateProfile, saveAddress, triggerLoginModal, logout } = useAuth();
   
   // Local states for forms
   const [personalData, setPersonalData] = useState({
@@ -225,13 +225,33 @@ export default function ProfilePage() {
 
         <div className="max-w-[1200px] mx-auto px-6 md:px-12 relative z-10">
           {/* Breadcrumb & Welcome */}
-          <div className="flex flex-col items-center md:items-start mb-12">
-            <p className="text-[10px] font-bold tracking-[0.3em] text-[#C5A059] uppercase mb-2">
-              Atelier Member Portal
-            </p>
-            <h1 className="font-display text-[36px] font-semibold text-on-surface">
-              Welcome, {user.name}
-            </h1>
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-on-surface/5 pb-6 mb-12 gap-4">
+            <div className="text-center md:text-left">
+              <p className="text-[10px] font-bold tracking-[0.3em] text-[#C5A059] uppercase mb-2">
+                Atelier Member Portal
+              </p>
+              <div className="flex items-center gap-3 flex-wrap justify-center md:justify-start">
+                <h1 className="font-display text-[36px] font-semibold text-on-surface leading-tight">
+                  Welcome, {user.name}
+                </h1>
+                {isAdmin && (
+                  <span className="bg-gold-leaf/10 text-gold-leaf border border-gold-leaf/30 text-[10px] font-bold tracking-widest px-3 py-1 rounded-sm uppercase mt-1 md:mt-0">
+                    Atelier Administrator
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <button
+              onClick={async () => {
+                await logout();
+                router.push('/');
+              }}
+              className="border border-red-200 text-red-600 hover:bg-red-50 px-5 py-2.5 text-[11px] font-bold tracking-widest uppercase transition-all rounded-sm flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">logout</span>
+              Sign Out
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
@@ -342,7 +362,7 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-3">
                       <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">Account Type</span>
                       <span className="col-span-2 font-semibold text-gold-leaf uppercase tracking-wider text-[11px]">
-                        {user.id?.includes('google') ? 'Google Connected' : 'Email & Phone'}
+                        {isAdmin ? 'System Administrator' : user.id?.includes('google') ? 'Google Connected' : 'Email & Phone'}
                       </span>
                     </div>
                   </div>
