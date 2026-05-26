@@ -22,9 +22,16 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const { isAdmin, setAdminStatus } = useAuth();
+  const { isAdmin, setAdminStatus, loginWithEmailPassword } = useAuth();
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
+
+  // Admin login states
+  const [activeGateTab, setActiveGateTab] = useState<'login' | 'passcode'>('login');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const handlePasscodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +40,34 @@ export default function AdminDashboard() {
       setPasscodeError('');
     } else {
       setPasscodeError('Invalid Administrative Passcode.');
+    }
+  };
+
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoginLoading(false); // Reset just in case
+    
+    if (!adminEmail.trim() || !adminPassword.trim()) {
+      setLoginError('Please enter both email and password.');
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const res = await loginWithEmailPassword(adminEmail.trim(), adminPassword.trim());
+      if (res.error) {
+        setLoginError(res.error);
+      } else {
+        // Successful login, check if they are the admin email
+        if (adminEmail.trim() !== 'admin@stagbeetle.co.in') {
+          setLoginError('Access Denied: This account does not have administrative privileges.');
+        }
+      }
+    } catch (err: any) {
+      setLoginError(err.message || 'An error occurred during authentication.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -102,38 +137,107 @@ export default function AdminDashboard() {
           <div className="fixed inset-0 marble-overlay z-0"></div>
           
           <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
-            <div className="text-center mb-8">
+            <div className="text-center mb-6">
               <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
               <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
               <p className="text-[12px] text-zinc-500 font-body mt-2">
-                Enter administrative passcode to manage products, coupons, and view customer orders.
+                Log in with your administrator account or enter the administrative passcode.
               </p>
             </div>
 
-            <form onSubmit={handlePasscodeSubmit} className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-label-caps font-semibold text-zinc-400">ADMIN PASSCODE</label>
-                <input 
-                  type="password" 
-                  placeholder="••••••••••••••"
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  required
-                  className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[16px] tracking-[0.25em] outline-none"
-                />
-              </div>
-
-              {passcodeError && (
-                <p className="text-[11px] text-red-600 font-medium text-center">{passcodeError}</p>
-              )}
-
+            {/* Gate Tabs */}
+            <div className="flex border-b border-on-surface/10 mb-6 text-[10px] font-bold uppercase tracking-wider">
               <button
-                type="submit"
-                className="w-full bg-primary text-white py-3.5 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md"
+                type="button"
+                onClick={() => { setActiveGateTab('login'); setLoginError(''); setPasscodeError(''); }}
+                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${
+                  activeGateTab === 'login'
+                    ? 'border-gold-leaf text-on-surface'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-600'
+                }`}
               >
-                AUTHORIZE ACCESS
+                Admin Sign In
               </button>
-            </form>
+              <button
+                type="button"
+                onClick={() => { setActiveGateTab('passcode'); setLoginError(''); setPasscodeError(''); }}
+                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${
+                  activeGateTab === 'passcode'
+                    ? 'border-gold-leaf text-on-surface'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-600'
+                }`}
+              >
+                Atelier Passcode
+              </button>
+            </div>
+
+            {activeGateTab === 'login' ? (
+              <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
+                  <input 
+                    type="email" 
+                    placeholder="admin@stagbeetle.co.in"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    required
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    required
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
+                  />
+                </div>
+
+                {loginError && (
+                  <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  {loginLoading && (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handlePasscodeSubmit} className="space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSCODE</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••••••••"
+                    value={passcode}
+                    onChange={(e) => setPasscode(e.target.value)}
+                    required
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[16px] tracking-[0.25em] outline-none"
+                  />
+                </div>
+
+                {passcodeError && (
+                  <p className="text-[11px] text-red-600 font-medium text-center">{passcodeError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-primary text-white py-3.5 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md"
+                >
+                  AUTHORIZE ACCESS
+                </button>
+              </form>
+            )}
 
             <div className="text-center mt-6">
               <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">

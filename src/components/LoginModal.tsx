@@ -4,15 +4,23 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginModal() {
-  const { isLoginModalOpen, closeLoginModal, loginWithGoogle, loginWithEmailPhone } = useAuth();
+  const { 
+    isLoginModalOpen, 
+    closeLoginModal, 
+    loginWithGoogle, 
+    loginWithEmailPhone,
+    loginWithEmailPassword,
+    registerWithEmailPassword
+  } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'google' | 'email'>('google');
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup' | 'guest'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [formError, setFormError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [emailLoading, setEmailLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
 
   if (!isLoginModalOpen) return null;
 
@@ -24,24 +32,58 @@ export default function LoginModal() {
     setGoogleLoading(false);
   };
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !phone.trim()) {
-      setFormError('Please fill in all fields.');
-      return;
-    }
     setFormError('');
-    setEmailLoading(true);
-    await loginWithEmailPhone(name, email, phone);
-    setEmailLoading(false);
+    setAuthLoading(true);
+
+    try {
+      if (activeTab === 'signin') {
+        if (!email.trim() || !password.trim()) {
+          setFormError('Please enter both email and password.');
+          setAuthLoading(false);
+          return;
+        }
+        const res = await loginWithEmailPassword(email.trim(), password.trim());
+        if (res.error) {
+          setFormError(res.error);
+        }
+      } else if (activeTab === 'signup') {
+        if (!name.trim() || !email.trim() || !password.trim() || !phone.trim()) {
+          setFormError('Please fill in all fields.');
+          setAuthLoading(false);
+          return;
+        }
+        const res = await registerWithEmailPassword(
+          name.trim(),
+          email.trim(),
+          password.trim(),
+          phone.trim()
+        );
+        if (res.error) {
+          setFormError(res.error);
+        }
+      } else if (activeTab === 'guest') {
+        if (!name.trim() || !email.trim() || !phone.trim()) {
+          setFormError('Please fill in all fields.');
+          setAuthLoading(false);
+          return;
+        }
+        await loginWithEmailPhone(name.trim(), email.trim(), phone.trim());
+      }
+    } catch (err: any) {
+      setFormError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   return (
     <div
-      className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) closeLoginModal(); }}
     >
-      <div className="bg-white w-full max-w-sm shadow-2xl flex flex-col overflow-hidden rounded-sm">
+      <div className="bg-white w-full max-w-sm shadow-2xl flex flex-col overflow-hidden rounded-sm text-zinc-800">
 
         {/* Header */}
         <div className="px-6 pt-6 pb-4 flex justify-between items-start">
@@ -55,7 +97,7 @@ export default function LoginModal() {
           </div>
           <button
             onClick={closeLoginModal}
-            className="mt-1 text-gray-400 hover:text-gray-700 transition-colors"
+            className="mt-1 text-gray-400 hover:text-gray-700 transition-colors animate-float"
             aria-label="Close"
           >
             <span className="material-symbols-outlined text-[20px]">close</span>
@@ -94,34 +136,60 @@ export default function LoginModal() {
           </div>
 
           {/* ── Tab toggle ── */}
-          <div className="flex rounded-sm border border-gray-200 overflow-hidden">
+          <div className="flex rounded-sm border border-gray-200 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
             <button
-              onClick={() => setActiveTab('email')}
-              className={`flex-1 py-2 text-[11px] font-bold tracking-wider uppercase transition-colors ${
-                activeTab === 'email'
+              onClick={() => { setActiveTab('signin'); setFormError(''); }}
+              className={`flex-1 py-2.5 transition-colors ${
+                activeTab === 'signin'
                   ? 'bg-[#0D1B2A] text-white'
                   : 'bg-white text-gray-500 hover:bg-gray-50'
               }`}
             >
-              Email &amp; Phone
+              Sign In
+            </button>
+            <button
+              onClick={() => { setActiveTab('signup'); setFormError(''); }}
+              className={`flex-1 py-2.5 border-l border-r border-gray-200 transition-colors ${
+                activeTab === 'signup'
+                  ? 'bg-[#0D1B2A] text-white'
+                  : 'bg-white text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              Sign Up
+            </button>
+            <button
+              onClick={() => { setActiveTab('guest'); setFormError(''); }}
+              className={`flex-1 py-2.5 transition-colors ${
+                activeTab === 'guest'
+                  ? 'bg-[#0D1B2A] text-white'
+                  : 'bg-white text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              Guest
             </button>
           </div>
 
-          {/* ── Email & Phone Form ── */}
-          <form onSubmit={handleEmailSubmit} className="space-y-3">
-            <div>
-              <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Amit Kumar"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2.5 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
-              />
-            </div>
+          {/* ── Auth Form ── */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            
+            {/* Full Name field (signup and guest) */}
+            {(activeTab === 'signup' || activeTab === 'guest') && (
+              <div>
+                <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Eleanor Vance"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
+                />
+              </div>
+            )}
+
+            {/* Email Address field (all tabs) */}
             <div>
               <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
                 Email Address
@@ -129,39 +197,60 @@ export default function LoginModal() {
               <input
                 type="email"
                 required
-                placeholder="amit@example.in"
+                placeholder="eleanor@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2.5 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                required
-                placeholder="+91 98765 43210"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2.5 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
+                className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
               />
             </div>
 
+            {/* Password field (signin and signup) */}
+            {(activeTab === 'signin' || activeTab === 'signup') && (
+              <div>
+                <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
+                />
+              </div>
+            )}
+
+            {/* Phone Number field (signup and guest) */}
+            {(activeTab === 'signup' || activeTab === 'guest') && (
+              <div>
+                <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="+91 98765 43210"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
+                />
+              </div>
+            )}
+
             {formError && (
-              <p className="text-[12px] text-red-500 font-medium">{formError}</p>
+              <p className="text-[11px] text-red-500 font-medium leading-relaxed">{formError}</p>
             )}
 
             <button
               type="submit"
-              disabled={emailLoading}
+              disabled={authLoading}
               className="w-full bg-[#0D1B2A] text-white py-3 text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[#C5A059] transition-colors rounded-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {emailLoading && (
+              {authLoading && (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               )}
-              {emailLoading ? 'Saving…' : 'Continue'}
+              {authLoading ? 'Verifying…' : activeTab === 'signin' ? 'Sign In' : activeTab === 'signup' ? 'Create Account' : 'Continue as Guest'}
             </button>
           </form>
 

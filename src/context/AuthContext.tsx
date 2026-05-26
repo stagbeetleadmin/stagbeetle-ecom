@@ -10,6 +10,8 @@ interface AuthContextType {
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
   loginWithEmailPhone: (name: string, email: string, phone: string) => Promise<void>;
+  loginWithEmailPassword: (email: string, password: string) => Promise<{ error: string | null }>;
+  registerWithEmailPassword: (name: string, email: string, password: string, phone: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
   saveAddress: (address: string, city: string, zip: string, country: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -87,6 +89,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setUser(profile);
+
+    const isAdminEmail = supabaseUser.email === 'admin@stagbeetle.co.in';
+    if (isAdminEmail) {
+      setIsAdminState(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('stag_beetle_admin_session', 'true');
+      }
+    } else {
+      setIsAdminState(false);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('stag_beetle_admin_session');
+      }
+    }
+
     return profile;
   }, []);
 
@@ -224,17 +240,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Only sign out if the user is a real Supabase user
             // Mock sessions (email/phone or google fallback) have IDs starting with 'usr_'
             const stored = typeof window !== 'undefined' ? localStorage.getItem('stag_beetle_user') : null;
-            let isMock = false;
+            let isRealSupabaseUser = false;
             if (stored) {
               try {
                 const parsed = JSON.parse(stored);
-                if (parsed?.id?.startsWith('usr_')) {
-                  isMock = true;
+                if (parsed?.id && !parsed.id.startsWith('usr_')) {
+                  isRealSupabaseUser = true;
                 }
               } catch {}
             }
 
-            if (!isMock) {
+            if (isRealSupabaseUser) {
               setUser(null);
               setIsAdminState(false);
               if (typeof window !== 'undefined') {
@@ -311,6 +327,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  // ── Email + Password login (real Supabase Auth) ───────────────────────────
+  const loginWithEmailPassword = async (email: string, password: string) => {
+    if (!supabase) {
+      return { error: 'Supabase is not configured' };
+    }
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      if (error) {
+        return { error: error.message };
+      }
+      if (data.user) {
+        const profile = await resolveAndSetProfile(data.user);
+        setIsLoginModalOpen(false);
+        setOnSuccessCallback(prev => {
+          if (prev) { prev(); return null; }
+          return null;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('stag_beetle_user', JSON.stringify(profile));
+        }
+      }
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'An unexpected error occurred' };
+    }
+  };
+
+  // ── Email + Password registration (real Supabase Auth) ────────────────────
+  const registerWithEmailPassword = async (name: string, email: string, password: string, phone: string) => {
+    if (!supabase) {
+      return { error: 'Supabase is not configured' };
+    }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            phone
+          }
+        }
+      });
+      if (error) {
+        return { error: error.message };
+      }
+      if (data.user) {
+        const profile = await resolveAndSetProfile(data.user);
+        setIsLoginModalOpen(false);
+        setOnSuccessCallback(prev => {
+          if (prev) { prev(); return null; }
+          return null;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('stag_beetle_user', JSON.stringify(profile));
+        }
+      }
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'An unexpected error occurred' };
+    }
+  };
+
   // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = async () => {
     if (supabase) {
@@ -371,6 +453,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       loginWithGoogle,
       loginWithEmailPhone,
+      loginWithEmailPassword,
+      registerWithEmailPassword,
       logout,
       saveAddress,
       updateProfile,
