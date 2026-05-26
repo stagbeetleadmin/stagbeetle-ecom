@@ -93,6 +93,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const bootstrap = async () => {
+      // ── One-time cleanup: wipe stale mock data from old sessions ──────────
+      // Old mock profiles had IDs like "usr_xxx" with fake names/emails.
+      // Old product cache may have broken lh3.googleusercontent.com images.
+      // We version the cache with a key — bump this string to force a wipe.
+      const CACHE_VERSION = 'v2';
+      if (typeof window !== 'undefined') {
+        const cachedVersion = localStorage.getItem('stag_beetle_cache_version');
+        if (cachedVersion !== CACHE_VERSION) {
+          localStorage.removeItem('stag_beetle_user');
+          localStorage.removeItem('stag_beetle_products');
+          localStorage.removeItem('stag_beetle_profiles');
+          localStorage.removeItem('stag_beetle_admin_session');
+          localStorage.setItem('stag_beetle_cache_version', CACHE_VERSION);
+        }
+      }
+
       // ── Supabase path ──────────────────────────────────────────────────────
       if (supabase) {
         try {
@@ -110,9 +126,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = localStorage.getItem('stag_beetle_user');
         if (storedUser && mounted) {
           try {
-            const parsed = JSON.parse(storedUser);
-            // Only use localStorage if Supabase didn't already set a user
-            setUser(prev => prev ?? parsed);
+            const parsed = JSON.parse(storedUser) as UserProfile;
+            // If Supabase is configured, only trust localStorage for real
+            // email/phone sessions (id starts with 'usr_').
+            // Discard any old mock accounts (those also start with 'usr_' but
+            // were created with fake data — they'll be re-created on next
+            // email/phone login). Never restore a stale mock if Supabase
+            // already confirmed no active session above.
+            if (supabase) {
+              // Supabase is live — only restore email/phone sessions,
+              // never restore old mock Google accounts
+              const isEmailPhoneSession = parsed.id?.startsWith('usr_');
+              if (isEmailPhoneSession) {
+                setUser(prev => prev ?? parsed);
+              } else {
+                // Stale mock Google account — clear it
+                localStorage.removeItem('stag_beetle_user');
+              }
+            } else {
+              // No Supabase — trust whatever is stored
+              setUser(prev => prev ?? parsed);
+            }
           } catch { /* ignore */ }
         }
         if (localStorage.getItem('stag_beetle_admin_session') === 'true' && mounted) {
