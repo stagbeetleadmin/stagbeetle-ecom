@@ -58,10 +58,21 @@ export default function Header() {
 
             {/* Center Nav */}
             <div className="hidden md:flex items-center gap-8">
-              <Link href="/?category=all" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">New Arrivals</Link>
-              <Link href="/?category=men" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Men</Link>
-              <Link href="/?category=women" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Women</Link>
-              <Link href="/about" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Our Story</Link>
+              {isAdmin ? (
+                <>
+                  <Link href="/admin?tab=analytics" className="text-[12px] font-semibold tracking-[0.12em] text-[#C5A059] hover:text-gray-800 transition-colors uppercase">Atelier Analytics</Link>
+                  <Link href="/admin?tab=products" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Garment Catalog</Link>
+                  <Link href="/admin?tab=coupons" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Discount Coupons</Link>
+                  <Link href="/admin?tab=orders" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Order Registry</Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/?category=all" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">New Arrivals</Link>
+                  <Link href="/?category=men" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Men</Link>
+                  <Link href="/?category=women" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Women</Link>
+                  <Link href="/about" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Our Story</Link>
+                </>
+              )}
             </div>
 
             {/* Right Icons */}

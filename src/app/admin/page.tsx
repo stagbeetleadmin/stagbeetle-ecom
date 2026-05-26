@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Product, Coupon, Order, 
@@ -12,9 +13,19 @@ import {
   getOrders, updateOrderShipping
 } from '@/lib/db';
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+
   // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics'
   const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics'>('analytics');
+
+  useEffect(() => {
+    if (tabParam && ['products', 'coupons', 'orders', 'analytics'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [tabParam]);
   
   // Database States
   const [products, setProducts] = useState<Product[]>([]);
@@ -494,7 +505,7 @@ export default function AdminDashboard() {
             <div className="lg:col-span-3 bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('analytics')}
+                onClick={() => router.push('/admin?tab=analytics')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
                   activeTab === 'analytics'
                     ? 'bg-primary text-white shadow-sm'
@@ -507,7 +518,7 @@ export default function AdminDashboard() {
 
               <button
                 type="button"
-                onClick={() => setActiveTab('products')}
+                onClick={() => router.push('/admin?tab=products')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
                   activeTab === 'products'
                     ? 'bg-primary text-white shadow-sm'
@@ -519,7 +530,7 @@ export default function AdminDashboard() {
               </button>
               
               <button
-                onClick={() => setActiveTab('coupons')}
+                onClick={() => router.push('/admin?tab=coupons')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
                   activeTab === 'coupons'
                     ? 'bg-primary text-white shadow-sm'
@@ -531,7 +542,7 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('orders')}
+                onClick={() => router.push('/admin?tab=orders')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
                   activeTab === 'orders'
                     ? 'bg-primary text-white shadow-sm'
@@ -565,6 +576,11 @@ export default function AdminDashboard() {
                     const deliveredOrders = orders.filter(o => o.shipping_status === 'Delivered').length;
                     const processingOrders = orders.filter(o => o.shipping_status === 'Processing' || !o.shipping_status).length;
                     const transitOrders = orders.filter(o => o.shipping_status === 'Shipped' || o.shipping_status === 'In Transit' || o.shipping_status === 'Scheduled').length;
+                    const undeliveredOrders = orders.filter(o => o.shipping_status !== 'Delivered' && o.shipping_status !== 'Returned').length;
+
+                    // Payment collections calculations
+                    const paymentSuccessCount = orders.filter(o => (o.payment_status || '').toLowerCase() === 'paid').length;
+                    const paymentFailedCount = orders.filter(o => (o.payment_status || '').toLowerCase() !== 'paid').length;
 
                     // 2. Category Sales Calculations
                     const categoryCounts: Record<string, number> = { Men: 0, Women: 0, Accessories: 0 };
@@ -743,9 +759,8 @@ export default function AdminDashboard() {
                             </div>
                           </div>
 
-                          {/* Category & Status Breakdown */}
+                          {/* Category Share */}
                           <div className="lg:col-span-4 border border-on-surface/5 p-6 rounded-sm space-y-6 shadow-sm bg-white">
-                            {/* Category Share */}
                             <div className="space-y-4">
                               <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase border-b border-zinc-50 pb-2">
                                 SHARE BY CATEGORY
@@ -772,28 +787,237 @@ export default function AdminDashboard() {
                                 })}
                               </div>
                             </div>
+                          </div>
+                        </div>
 
-                            {/* Shipment Status Distribution */}
-                            <div className="space-y-4 pt-2 border-t border-zinc-100">
-                              <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase pb-2">
-                                ORDER STATUS RADAR
-                              </h3>
-                              <div className="grid grid-cols-2 gap-3 text-[12px] font-semibold">
-                                <div className="bg-zinc-50 p-2.5 rounded-sm border border-zinc-100 text-center">
-                                  <span className="text-zinc-400 block text-[9px] tracking-wider uppercase font-bold">DELIVERED</span>
-                                  <span className="text-[16px] text-green-600 font-bold">{deliveredOrders}</span>
-                                </div>
-                                <div className="bg-zinc-50 p-2.5 rounded-sm border border-zinc-100 text-center">
-                                  <span className="text-zinc-400 block text-[9px] tracking-wider uppercase font-bold">IN TRANSIT</span>
-                                  <span className="text-[16px] text-[#C5A059] font-bold">{transitOrders}</span>
-                                </div>
-                                <div className="bg-zinc-50 p-2.5 rounded-sm border border-zinc-100 text-center col-span-2">
-                                  <span className="text-zinc-400 block text-[9px] tracking-wider uppercase font-bold">AWAITING PROCESSING</span>
-                                  <span className="text-[16px] text-zinc-700 font-bold">{processingOrders}</span>
-                                </div>
-                              </div>
-                            </div>
+                        {/* Fulfillment and Payment Auditing Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Fulfillment Radar */}
+                          <div className="border border-on-surface/5 p-6 rounded-sm space-y-6 shadow-sm bg-white">
+                            <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase border-b border-zinc-50 pb-2 flex items-center justify-between">
+                              FULFILLMENT LOGISTICS RADAR
+                              <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-sm">Shipping Status</span>
+                            </h3>
 
+                            {(() => {
+                              const total = deliveredOrders + undeliveredOrders + returnedOrders;
+                              const deliveredPct = total > 0 ? (deliveredOrders / total) * 100 : 0;
+                              const undeliveredPct = total > 0 ? (undeliveredOrders / total) * 100 : 0;
+                              const returnedPct = total > 0 ? (returnedOrders / total) * 100 : 0;
+
+                              const R = 36;
+                              const C = 2 * Math.PI * R; // ~226.195
+                              
+                              const dashDelivered = `${(deliveredPct / 100) * C} ${C}`;
+                              const offsetDelivered = 0;
+                              
+                              const dashUndelivered = `${(undeliveredPct / 100) * C} ${C}`;
+                              const offsetUndelivered = -((deliveredPct / 100) * C);
+                              
+                              const dashReturned = `${(returnedPct / 100) * C} ${C}`;
+                              const offsetReturned = -(((deliveredPct + undeliveredPct) / 100) * C);
+
+                              return (
+                                <div className="flex flex-col sm:flex-row items-center gap-6">
+                                  {/* Donut Graphic */}
+                                  <div className="relative w-32 h-32 shrink-0">
+                                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                                      <circle
+                                        cx="50"
+                                        cy="50"
+                                        r={R}
+                                        fill="transparent"
+                                        stroke="#F4F4F5"
+                                        strokeWidth="8"
+                                      />
+                                      {total > 0 ? (
+                                        <>
+                                          {deliveredPct > 0 && (
+                                            <circle
+                                              cx="50"
+                                              cy="50"
+                                              r={R}
+                                              fill="transparent"
+                                              stroke="#10B981"
+                                              strokeWidth="8"
+                                              strokeDasharray={dashDelivered}
+                                              strokeDashoffset={offsetDelivered}
+                                              strokeLinecap="round"
+                                            />
+                                          )}
+                                          {undeliveredPct > 0 && (
+                                            <circle
+                                              cx="50"
+                                              cy="50"
+                                              r={R}
+                                              fill="transparent"
+                                              stroke="#C5A059"
+                                              strokeWidth="8"
+                                              strokeDasharray={dashUndelivered}
+                                              strokeDashoffset={offsetUndelivered}
+                                              strokeLinecap="round"
+                                            />
+                                          )}
+                                          {returnedPct > 0 && (
+                                            <circle
+                                              cx="50"
+                                              cy="50"
+                                              r={R}
+                                              fill="transparent"
+                                              stroke="#EF4444"
+                                              strokeWidth="8"
+                                              strokeDasharray={dashReturned}
+                                              strokeDashoffset={offsetReturned}
+                                              strokeLinecap="round"
+                                            />
+                                          )}
+                                        </>
+                                      ) : (
+                                        <circle
+                                          cx="50"
+                                          cy="50"
+                                          r={R}
+                                          fill="transparent"
+                                          stroke="#E4E4E7"
+                                          strokeWidth="8"
+                                        />
+                                      )}
+                                    </svg>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                      <span className="text-[20px] font-bold text-[#0D1B2A]">{totalOrders}</span>
+                                      <span className="text-[8px] font-bold tracking-widest text-zinc-400 uppercase">ORDERS</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Metrics List */}
+                                  <div className="flex-1 w-full space-y-2.5">
+                                    <div className="flex items-center justify-between p-2 rounded-sm border border-zinc-50 bg-zinc-50/50">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+                                        <span className="text-[12px] font-semibold text-zinc-700">Delivered</span>
+                                      </div>
+                                      <span className="text-[12px] font-bold text-zinc-800">{deliveredOrders} ({Math.round(deliveredPct)}%)</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 rounded-sm border border-zinc-50 bg-zinc-50/50">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#C5A059]" />
+                                        <span className="text-[12px] font-semibold text-zinc-700">Undelivered</span>
+                                      </div>
+                                      <span className="text-[12px] font-bold text-zinc-800">{undeliveredOrders} ({Math.round(undeliveredPct)}%)</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 rounded-sm border border-zinc-50 bg-zinc-50/50">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                                        <span className="text-[12px] font-semibold text-zinc-700">Returned</span>
+                                      </div>
+                                      <span className="text-[12px] font-bold text-zinc-800">{returnedOrders} ({Math.round(returnedPct)}%)</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Payment Collection */}
+                          <div className="border border-on-surface/5 p-6 rounded-sm space-y-6 shadow-sm bg-white">
+                            <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase border-b border-zinc-50 pb-2 flex items-center justify-between">
+                              PAYMENT COLLECTION AUDITING
+                              <span className="text-[9px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded-sm">Ledger Status</span>
+                            </h3>
+
+                            {(() => {
+                              const totalPayments = paymentSuccessCount + paymentFailedCount;
+                              const paymentSuccessPct = totalPayments > 0 ? (paymentSuccessCount / totalPayments) * 100 : 0;
+                              const paymentFailedPct = totalPayments > 0 ? (paymentFailedCount / totalPayments) * 100 : 0;
+
+                              const R = 36;
+                              const C = 2 * Math.PI * R;
+                              
+                              const dashSuccess = `${(paymentSuccessPct / 100) * C} ${C}`;
+                              const offsetSuccess = 0;
+
+                              const dashFailed = `${(paymentFailedPct / 100) * C} ${C}`;
+                              const offsetFailed = -((paymentSuccessPct / 100) * C);
+
+                              return (
+                                <div className="flex flex-col sm:flex-row items-center gap-6">
+                                  {/* Donut Graphic */}
+                                  <div className="relative w-32 h-32 shrink-0">
+                                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                                      <circle
+                                        cx="50"
+                                        cy="50"
+                                        r={R}
+                                        fill="transparent"
+                                        stroke="#F4F4F5"
+                                        strokeWidth="8"
+                                      />
+                                      {totalPayments > 0 ? (
+                                        <>
+                                          {paymentSuccessPct > 0 && (
+                                            <circle
+                                              cx="50"
+                                              cy="50"
+                                              r={R}
+                                              fill="transparent"
+                                              stroke="#10B981"
+                                              strokeWidth="8"
+                                              strokeDasharray={dashSuccess}
+                                              strokeDashoffset={offsetSuccess}
+                                              strokeLinecap="round"
+                                            />
+                                          )}
+                                          {paymentFailedPct > 0 && (
+                                            <circle
+                                              cx="50"
+                                              cy="50"
+                                              r={R}
+                                              fill="transparent"
+                                              stroke="#EF4444"
+                                              strokeWidth="8"
+                                              strokeDasharray={dashFailed}
+                                              strokeDashoffset={offsetFailed}
+                                              strokeLinecap="round"
+                                            />
+                                          )}
+                                        </>
+                                      ) : (
+                                        <circle
+                                          cx="50"
+                                          cy="50"
+                                          r={R}
+                                          fill="transparent"
+                                          stroke="#E4E4E7"
+                                          strokeWidth="8"
+                                        />
+                                      )}
+                                    </svg>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                      <span className="text-[18px] font-bold text-green-600">{Math.round(paymentSuccessPct)}%</span>
+                                      <span className="text-[8px] font-bold tracking-widest text-zinc-400 uppercase">SUCCESS</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Metrics List */}
+                                  <div className="flex-1 w-full space-y-2.5">
+                                    <div className="flex items-center justify-between p-2 rounded-sm border border-zinc-50 bg-zinc-50/50">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+                                        <span className="text-[12px] font-semibold text-zinc-700">Payment Success</span>
+                                      </div>
+                                      <span className="text-[12px] font-bold text-zinc-800">{paymentSuccessCount} ({Math.round(paymentSuccessPct)}%)</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 rounded-sm border border-zinc-50 bg-zinc-50/50">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                                        <span className="text-[12px] font-semibold text-zinc-700">Payment Failed/Pending</span>
+                                      </div>
+                                      <span className="text-[12px] font-bold text-zinc-800">{paymentFailedCount} ({Math.round(paymentFailedPct)}%)</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -1381,5 +1605,17 @@ export default function AdminDashboard() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
