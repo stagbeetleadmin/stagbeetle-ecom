@@ -573,7 +573,7 @@ export const getSuggestions = async (cartProductIds: string[]): Promise<Product[
 // =========================================================================
 
 export const getProfile = async (id: string): Promise<UserProfile | null> => {
-  if (isSupabaseConfigured && supabase) {
+  if (isSupabaseConfigured && supabase && !id.startsWith('usr_')) {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
       if (!error && data) return data as UserProfile;
@@ -597,7 +597,7 @@ export const getProfile = async (id: string): Promise<UserProfile | null> => {
 };
 
 export const upsertProfile = async (profile: UserProfile): Promise<UserProfile> => {
-  if (isSupabaseConfigured && supabase) {
+  if (isSupabaseConfigured && supabase && !profile.id.startsWith('usr_')) {
     try {
       const { data, error } = await supabase.from('profiles').upsert([profile]).select().single();
       if (!error && data) return data as UserProfile;
