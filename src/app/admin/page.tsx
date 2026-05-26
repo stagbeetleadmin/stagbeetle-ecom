@@ -13,8 +13,8 @@ import {
 } from '@/lib/db';
 
 export default function AdminDashboard() {
-  // Navigation tabs: 'products' | 'coupons' | 'orders'
-  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders'>('products');
+  // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics'
+  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics'>('analytics');
   
   // Database States
   const [products, setProducts] = useState<Product[]>([]);
@@ -493,6 +493,20 @@ export default function AdminDashboard() {
             {/* Sidebar Navigation */}
             <div className="lg:col-span-3 bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-2">
               <button
+                type="button"
+                onClick={() => setActiveTab('analytics')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
+                  activeTab === 'analytics'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">query_stats</span>
+                ATELIER ANALYTICS
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab('products')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
                   activeTab === 'products'
@@ -538,6 +552,284 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <>
+                  {/* TAB: ATELIER ANALYTICS */}
+                  {activeTab === 'analytics' && (() => {
+                    // 1. KPI Calculations
+                    const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+                    const totalOrders = orders.length;
+                    const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+                    
+                    const returnedOrders = orders.filter(o => o.shipping_status === 'Returned').length;
+                    const returnRate = totalOrders > 0 ? ((returnedOrders / totalOrders) * 100).toFixed(1) : '0.0';
+                    
+                    const deliveredOrders = orders.filter(o => o.shipping_status === 'Delivered').length;
+                    const processingOrders = orders.filter(o => o.shipping_status === 'Processing' || !o.shipping_status).length;
+                    const transitOrders = orders.filter(o => o.shipping_status === 'Shipped' || o.shipping_status === 'In Transit' || o.shipping_status === 'Scheduled').length;
+
+                    // 2. Category Sales Calculations
+                    const categoryCounts: Record<string, number> = { Men: 0, Women: 0, Accessories: 0 };
+                    const categoryRevenue: Record<string, number> = { Men: 0, Women: 0, Accessories: 0 };
+                    let totalItemsSold = 0;
+
+                    orders.forEach(o => {
+                      o.items?.forEach(item => {
+                        const prod = products.find(p => p.id === item.product_id);
+                        const cat = prod?.category || 'Men';
+                        const resolvedCat = ['Men', 'Women', 'Accessories'].includes(cat) ? cat : 'Men';
+                        categoryCounts[resolvedCat] += item.quantity;
+                        categoryRevenue[resolvedCat] += item.price * item.quantity;
+                        totalItemsSold += item.quantity;
+                      });
+                    });
+
+                    // 3. Best Selling Products
+                    const productSalesMap: Record<string, { title: string; count: number; revenue: number; image?: string }> = {};
+                    orders.forEach(o => {
+                      o.items?.forEach(item => {
+                        if (!productSalesMap[item.product_id]) {
+                          productSalesMap[item.product_id] = {
+                            title: item.title,
+                            count: 0,
+                            revenue: 0,
+                            image: item.image
+                          };
+                        }
+                        productSalesMap[item.product_id].count += item.quantity;
+                        productSalesMap[item.product_id].revenue += item.price * item.quantity;
+                      });
+                    });
+                    const popularProducts = Object.values(productSalesMap).sort((a, b) => b.count - a.count).slice(0, 4);
+
+                    // 4. Sales Trend Line Chart (Last 7 Days)
+                    const last7Days = Array.from({ length: 7 }).map((_, i) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() - i);
+                      return d;
+                    }).reverse();
+
+                    const dailyStats = last7Days.map(date => {
+                      const dayStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                      const dayOrders = orders.filter(o => {
+                        const oDate = new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                        return oDate === dayStr;
+                      });
+                      const revenue = dayOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+                      return {
+                        label: dayStr,
+                        revenue,
+                        count: dayOrders.length
+                      };
+                    });
+
+                    // Compute SVG line chart paths
+                    const chartWidth = 500;
+                    const chartHeight = 150;
+                    const maxRevenue = Math.max(...dailyStats.map(d => d.revenue), 1000);
+                    
+                    const chartPoints = dailyStats.map((d, index) => {
+                      const x = (index / (dailyStats.length - 1)) * chartWidth;
+                      // Max height minus padding
+                      const y = chartHeight - (d.revenue / maxRevenue) * (chartHeight - 40) - 20;
+                      return { x, y, ...d };
+                    });
+
+                    const pathD = chartPoints.reduce((acc, p, index) => {
+                      return acc + (index === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`);
+                    }, "");
+
+                    const areaD = chartPoints.length > 0
+                      ? `${pathD} L ${chartPoints[chartPoints.length - 1].x} ${chartHeight} L ${chartPoints[0].x} ${chartHeight} Z`
+                      : "";
+
+                    return (
+                      <div className="space-y-8 animate-fade-in text-zinc-800">
+                        {/* Tab Header */}
+                        <div className="border-b border-on-surface/5 pb-4">
+                          <h2 className="font-display text-[20px] font-semibold text-on-surface">Atelier Performance Analytics</h2>
+                        </div>
+
+                        {/* KPI Cards Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {/* Revenue Card */}
+                          <div className="border border-on-surface/5 bg-surface-dim/20 p-5 rounded-sm flex items-center justify-between shadow-sm">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">TOTAL REVENUE</span>
+                              <p className="font-display text-[24px] font-bold text-on-surface">₹{totalRevenue.toLocaleString('en-IN')}</p>
+                              <span className="text-[10px] text-green-600 font-semibold flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">trending_up</span> Live Atelier Sales
+                              </span>
+                            </div>
+                            <span className="material-symbols-outlined text-[28px] text-gold-leaf bg-white p-3 rounded-full border shadow-sm">payments</span>
+                          </div>
+
+                          {/* Orders Card */}
+                          <div className="border border-on-surface/5 bg-surface-dim/20 p-5 rounded-sm flex items-center justify-between shadow-sm">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">TOTAL RECEIPTS</span>
+                              <p className="font-display text-[24px] font-bold text-on-surface">{totalOrders}</p>
+                              <span className="text-[10px] text-zinc-500 font-medium">Receipt registry total</span>
+                            </div>
+                            <span className="material-symbols-outlined text-[28px] text-gold-leaf bg-white p-3 rounded-full border shadow-sm">receipt_long</span>
+                          </div>
+
+                          {/* AOV Card */}
+                          <div className="border border-on-surface/5 bg-surface-dim/20 p-5 rounded-sm flex items-center justify-between shadow-sm">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">AVERAGE BASKET</span>
+                              <p className="font-display text-[24px] font-bold text-on-surface">₹{avgOrderValue.toLocaleString('en-IN')}</p>
+                              <span className="text-[10px] text-zinc-500 font-medium">Per order average</span>
+                            </div>
+                            <span className="material-symbols-outlined text-[28px] text-gold-leaf bg-white p-3 rounded-full border shadow-sm">shopping_bag</span>
+                          </div>
+
+                          {/* Returns Card */}
+                          <div className="border border-on-surface/5 bg-surface-dim/20 p-5 rounded-sm flex items-center justify-between shadow-sm">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">RETURN RATE</span>
+                              <p className="font-display text-[24px] font-bold text-on-surface">{returnRate}%</p>
+                              <span className="text-[10px] text-zinc-500 font-medium">{returnedOrders} returned receipts</span>
+                            </div>
+                            <span className="material-symbols-outlined text-[28px] text-red-400 bg-white p-3 rounded-full border shadow-sm">assignment_return</span>
+                          </div>
+                        </div>
+
+                        {/* Chart & Category Distribution */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                          
+                          {/* Daily Sales Trend SVG Chart */}
+                          <div className="lg:col-span-8 border border-on-surface/5 p-6 rounded-sm space-y-4 shadow-sm bg-white">
+                            <div className="flex justify-between items-center pb-2 border-b border-zinc-50">
+                              <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase">
+                                WEEKLY REVENUE TREND (₹)
+                              </h3>
+                              <span className="text-[10px] bg-gold-leaf/10 text-gold-leaf font-bold px-2 py-0.5 rounded-sm">7-Day Horizon</span>
+                            </div>
+                            
+                            <div className="w-full relative pt-2">
+                              {/* Responsive SVG Chart */}
+                              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full overflow-visible">
+                                <defs>
+                                  <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#C5A059" stopOpacity="0.4"/>
+                                    <stop offset="100%" stopColor="#C5A059" stopOpacity="0.0"/>
+                                  </linearGradient>
+                                </defs>
+
+                                {/* Grid Lines */}
+                                <line x1="0" y1="20" x2={chartWidth} y2="20" stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
+                                <line x1="0" y1={chartHeight/2} x2={chartWidth} y2={chartHeight/2} stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
+                                <line x1="0" y1={chartHeight-20} x2={chartWidth} y2={chartHeight-20} stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
+
+                                {/* Filled Area */}
+                                {areaD && <path d={areaD} fill="url(#chartGradient)" />}
+
+                                {/* Line Path */}
+                                {pathD && <path d={pathD} fill="none" stroke="#C5A059" strokeWidth="2.5" strokeLinecap="round" />}
+
+                                {/* Data Points & Labels */}
+                                {chartPoints.map((p, i) => (
+                                  <g key={i} className="group cursor-pointer">
+                                    <circle cx={p.x} cy={p.y} r="4" fill="#0D1B2A" stroke="#C5A059" strokeWidth="2" />
+                                    {/* Tooltip on hover */}
+                                    <text x={p.x} y={p.y - 12} textAnchor="middle" className="text-[9px] font-bold fill-[#0D1B2A] opacity-0 group-hover:opacity-100 transition-opacity bg-white">
+                                      ₹{p.revenue}
+                                    </text>
+                                    <text x={p.x} y={chartHeight + 14} textAnchor="middle" className="text-[9px] font-semibold fill-zinc-400">
+                                      {p.label}
+                                    </text>
+                                  </g>
+                                ))}
+                              </svg>
+                            </div>
+                          </div>
+
+                          {/* Category & Status Breakdown */}
+                          <div className="lg:col-span-4 border border-on-surface/5 p-6 rounded-sm space-y-6 shadow-sm bg-white">
+                            {/* Category Share */}
+                            <div className="space-y-4">
+                              <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase border-b border-zinc-50 pb-2">
+                                SHARE BY CATEGORY
+                              </h3>
+                              <div className="space-y-3.5 text-[12px] font-medium">
+                                {['Men', 'Women', 'Accessories'].map(cat => {
+                                  const count = categoryCounts[cat] || 0;
+                                  const rev = categoryRevenue[cat] || 0;
+                                  const pct = totalItemsSold > 0 ? Math.round((count / totalItemsSold) * 100) : 0;
+                                  return (
+                                    <div key={cat} className="space-y-1">
+                                      <div className="flex justify-between items-baseline text-zinc-700">
+                                        <span className="font-semibold">{cat}</span>
+                                        <span>₹{rev.toLocaleString('en-IN')} ({pct}%)</span>
+                                      </div>
+                                      <div className="h-1.5 w-full bg-zinc-150 rounded-full overflow-hidden">
+                                        <div 
+                                          className="h-full bg-gold-leaf transition-all duration-500" 
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Shipment Status Distribution */}
+                            <div className="space-y-4 pt-2 border-t border-zinc-100">
+                              <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase pb-2">
+                                ORDER STATUS RADAR
+                              </h3>
+                              <div className="grid grid-cols-2 gap-3 text-[12px] font-semibold">
+                                <div className="bg-zinc-50 p-2.5 rounded-sm border border-zinc-100 text-center">
+                                  <span className="text-zinc-400 block text-[9px] tracking-wider uppercase font-bold">DELIVERED</span>
+                                  <span className="text-[16px] text-green-600 font-bold">{deliveredOrders}</span>
+                                </div>
+                                <div className="bg-zinc-50 p-2.5 rounded-sm border border-zinc-100 text-center">
+                                  <span className="text-zinc-400 block text-[9px] tracking-wider uppercase font-bold">IN TRANSIT</span>
+                                  <span className="text-[16px] text-[#C5A059] font-bold">{transitOrders}</span>
+                                </div>
+                                <div className="bg-zinc-50 p-2.5 rounded-sm border border-zinc-100 text-center col-span-2">
+                                  <span className="text-zinc-400 block text-[9px] tracking-wider uppercase font-bold">AWAITING PROCESSING</span>
+                                  <span className="text-[16px] text-zinc-700 font-bold">{processingOrders}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* Best Selling Products */}
+                        <div className="border border-on-surface/5 p-6 rounded-sm bg-white shadow-sm space-y-4">
+                          <h3 className="font-label-caps text-[11px] text-[#0D1B2A] tracking-[0.25em] font-semibold uppercase border-b border-zinc-50 pb-2">
+                            BEST SELLING MASTER WEAVES
+                          </h3>
+
+                          {popularProducts.length === 0 ? (
+                            <p className="text-zinc-400 text-center py-6 text-[13px] italic">No product sales recorded yet.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                              {popularProducts.map((p, idx) => (
+                                <div key={idx} className="flex items-center gap-3 p-3 border border-zinc-100 rounded-sm hover:bg-zinc-50 transition-colors">
+                                  {p.image ? (
+                                    <img src={p.image} alt={p.title} className="w-10 h-13 object-cover rounded-sm aspect-[3/4]" />
+                                  ) : (
+                                    <div className="w-10 h-13 bg-zinc-50 rounded-sm flex items-center justify-center border text-zinc-400">
+                                      <span className="material-symbols-outlined text-[18px]">image</span>
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1 text-[13px]">
+                                    <h4 className="font-semibold text-zinc-800 truncate" title={p.title}>{p.title}</h4>
+                                    <p className="text-zinc-400 text-[11px] font-medium">{p.count} units sold</p>
+                                    <p className="text-gold-leaf font-bold text-[12px] mt-0.5">₹{p.revenue.toLocaleString('en-IN')}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    )})()}
+
                   {/* TAB 1: PRODUCT CATALOG */}
                   {activeTab === 'products' && (
                     <div className="space-y-8">
@@ -876,6 +1168,7 @@ export default function AdminDashboard() {
                                       <option value="Shipped">Shipped</option>
                                       <option value="In Transit">In Transit</option>
                                       <option value="Delivered">Delivered</option>
+                                      <option value="Returned">Returned</option>
                                     </select>
                                   </div>
 

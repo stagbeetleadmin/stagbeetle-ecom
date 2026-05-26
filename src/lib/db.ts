@@ -36,7 +36,7 @@ export interface Order {
   payment_method: string;
   coupon_applied?: string;
   discount_amount?: number;
-  shipping_status?: 'Processing' | 'Scheduled' | 'Shipped' | 'In Transit' | 'Delivered';
+  shipping_status?: 'Processing' | 'Scheduled' | 'Shipped' | 'In Transit' | 'Delivered' | 'Returned';
   shipping_carrier?: 'India Post' | 'Delhivery' | 'Blue Dart' | 'DHL';
   tracking_number?: string;
 }
@@ -583,7 +583,7 @@ export const updateOrderShipping = async (
   id: string,
   shipping_carrier: 'India Post' | 'Delhivery' | 'Blue Dart' | 'DHL',
   tracking_number: string,
-  shipping_status: 'Processing' | 'Scheduled' | 'Shipped' | 'In Transit' | 'Delivered'
+  shipping_status: 'Processing' | 'Scheduled' | 'Shipped' | 'In Transit' | 'Delivered' | 'Returned'
 ): Promise<Order | null> => {
   if (isSupabaseConfigured && supabase) {
     try {

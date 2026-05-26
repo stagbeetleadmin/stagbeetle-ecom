@@ -87,14 +87,16 @@ export default function Header() {
               )}
 
               {/* Cart */}
-              <button onClick={() => setIsCartOpen(true)} className="relative p-1.5 text-gray-600 hover:text-[#C5A059] transition-colors" aria-label="Cart">
-                <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
-                {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-[#C5A059] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                    {cartCount}
-                  </span>
-                )}
-              </button>
+              {!isAdmin && (
+                <button onClick={() => setIsCartOpen(true)} className="relative p-1.5 text-gray-600 hover:text-[#C5A059] transition-colors" aria-label="Cart">
+                  <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+                  {cartCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 bg-[#C5A059] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {cartCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {/* Account */}
               <div className="relative">
