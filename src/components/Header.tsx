@@ -1,169 +1,141 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/context/CartContext';
 import CartDrawer from './CartDrawer';
 import Logo from './Logo';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function Header() {
   const { cartCount } = useCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
   const { user, isAdmin, triggerLoginModal, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  // Monitor scroll to shrink header and collapse notification banner
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 30) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 30);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      router.push(`/?search=${encodeURIComponent(searchTerm.trim())}`);
+      setSearchOpen(false);
+      setSearchTerm('');
+    }
+  };
+
   return (
     <>
       <header className="fixed top-0 left-0 w-full z-[100] flex flex-col">
-        {/* Top Banner: Collapses smoothly on scroll */}
-        <div 
-          className={`w-full bg-primary text-white text-[9px] md:text-[10px] font-label-caps tracking-[0.25em] text-center border-b border-white/15 transition-all duration-500 ease-in-out overflow-hidden ${
-            isScrolled ? 'h-0 py-0 opacity-0 border-b-0' : 'py-2.5 opacity-100'
-          }`}
-        >
-          COMPLIMENTARY SHIPPING ACROSS INDIA | APPOINTMENTS AVAILABLE AT OUR BENGALURU ATELIER
+        {/* Announcement Banner */}
+        <div className={`w-full bg-[#0D1B2A] text-white text-[10px] font-medium tracking-[0.2em] text-center transition-all duration-500 overflow-hidden ${isScrolled ? 'h-0 py-0 opacity-0' : 'py-2.5 opacity-100'}`}>
+          FREE SHIPPING ACROSS INDIA &nbsp;·&nbsp; USE CODE <span className="text-[#C5A059] font-bold">WELCOME10</span> FOR 10% OFF
         </div>
 
-        {/* Navigation Bar */}
-        <nav 
-          className={`w-full bg-surface/95 backdrop-blur-md border-b border-on-surface/5 transition-all duration-500 ease-in-out ${
-            isScrolled ? 'shadow-md' : ''
-          }`}
-        >
-          <div 
-            className={`flex justify-between items-center px-6 md:px-12 max-w-container-max mx-auto transition-all duration-500 ease-in-out ${
-              isScrolled ? 'h-16' : 'h-20'
-            }`}
-          >
-            {/* Left: Brand Logo (Crisp HD SVG) */}
-            <div className="flex items-center">
-              <Link href="/" className="hover:opacity-90 transition-opacity">
-                <Logo className="h-9 w-9 text-primary transition-all duration-500" showText={true} />
-              </Link>
+        {/* Main Nav */}
+        <nav className={`w-full bg-white border-b border-gray-100 transition-all duration-300 ${isScrolled ? 'shadow-sm' : ''}`}>
+          <div className={`flex items-center justify-between px-4 md:px-10 max-w-[1400px] mx-auto transition-all duration-300 ${isScrolled ? 'h-14' : 'h-16'}`}>
+
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2 shrink-0">
+              <Logo className="h-8 w-8 text-[#0D1B2A]" showText={true} />
+            </Link>
+
+            {/* Center Nav */}
+            <div className="hidden md:flex items-center gap-8">
+              <Link href="/?category=all" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">New Arrivals</Link>
+              <Link href="/?category=men" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Men</Link>
+              <Link href="/?category=women" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Women</Link>
+              <Link href="/about" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Our Story</Link>
             </div>
 
-            {/* Center: Navigation Links */}
-            <div className="hidden md:flex gap-10 items-center">
-              <Link href="/?category=all" className="font-label-caps text-[11px] tracking-widest text-on-surface hover:text-gold-leaf transition-colors font-semibold">COLLECTIONS</Link>
-              <Link href="/?category=men" className="font-label-caps text-[11px] tracking-widest text-on-surface/70 hover:text-gold-leaf transition-colors font-semibold">MEN</Link>
-              <Link href="/?category=women" className="font-label-caps text-[11px] tracking-widest text-on-surface/70 hover:text-gold-leaf transition-colors font-semibold">WOMEN</Link>
-              <Link href="/?category=accessories" className="font-label-caps text-[11px] tracking-widest text-on-surface/70 hover:text-gold-leaf transition-colors font-semibold">ACCESSORIES</Link>
-            </div>
-
-            {/* Right: Utilities */}
-            <div className="flex items-center gap-6">
-              <div className="hidden lg:flex items-center bg-on-surface/5 border border-on-surface/10 px-4 py-1.5 rounded-full">
-                <span className="material-symbols-outlined text-outline text-[18px]">search</span>
-                <input 
-                  className="bg-transparent border-none focus:ring-0 text-[13px] ml-2 w-32 text-on-surface placeholder:text-outline outline-none" 
-                  placeholder="Search" 
-                  type="text"
-                />
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <button className="material-symbols-outlined text-[20px] text-on-surface/80 hover:text-gold-leaf transition-colors">favorite</button>
-                
-                <button 
-                  onClick={() => setIsCartOpen(true)}
-                  className="material-symbols-outlined text-[20px] text-on-surface/80 hover:text-gold-leaf transition-colors relative"
-                >
-                  shopping_bag
-                  {cartCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-gold-leaf text-obsidian-charcoal font-semibold text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center border border-surface animate-pulse">
-                      {cartCount}
-                    </span>
-                  )}
-                </button>
-                
-                {/* User Session Interface */}
-                <div className="relative">
-                  <button 
-                    onClick={() => {
-                      if (!user) {
-                        triggerLoginModal();
-                      } else {
-                        setIsUserMenuOpen(!isUserMenuOpen);
-                      }
-                    }}
-                    className="flex items-center material-symbols-outlined text-[20px] text-on-surface/80 hover:text-gold-leaf transition-colors focus:outline-none"
-                  >
-                    person
+            {/* Right Icons */}
+            <div className="flex items-center gap-3">
+              {/* Search */}
+              {searchOpen ? (
+                <form onSubmit={handleSearch} className="flex items-center border-b border-gray-300 focus-within:border-[#C5A059] transition-colors">
+                  <input
+                    ref={searchRef}
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Search..."
+                    className="text-[13px] outline-none bg-transparent py-1 px-2 w-36 md:w-48"
+                  />
+                  <button type="button" onClick={() => setSearchOpen(false)} className="p-1 text-gray-400 hover:text-gray-700">
+                    <span className="material-symbols-outlined text-[18px]">close</span>
                   </button>
+                </form>
+              ) : (
+                <button onClick={() => setSearchOpen(true)} className="p-1.5 text-gray-600 hover:text-[#C5A059] transition-colors" aria-label="Search">
+                  <span className="material-symbols-outlined text-[20px]">search</span>
+                </button>
+              )}
 
-                  {/* Dropdown Menu */}
-                  {user && isUserMenuOpen && (
-                    <div className="absolute right-0 mt-3 w-64 bg-white border border-on-surface/10 rounded-sm shadow-xl p-4 z-[150] text-zinc-800 animate-fade-in font-body text-[13px]">
-                      <div className="border-b border-on-surface/5 pb-3 mb-2">
-                        <span className="font-label-caps text-[9px] text-gold-leaf tracking-[0.2em] block mb-0.5">ACTIVE PATRON</span>
-                        <p className="font-bold text-on-surface truncate text-[14px]">{user.name}</p>
-                        <p className="text-[11px] text-zinc-400 truncate">{user.email}</p>
-                      </div>
+              {/* Cart */}
+              <button onClick={() => setIsCartOpen(true)} className="relative p-1.5 text-gray-600 hover:text-[#C5A059] transition-colors" aria-label="Cart">
+                <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-[#C5A059] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
 
-                      {user.phone && (
-                        <div className="text-[11px] text-zinc-500 mb-2">
-                          <span className="font-semibold">Phone:</span> {user.phone}
-                        </div>
-                      )}
+              {/* Account */}
+              <div className="relative">
+                <button
+                  onClick={() => user ? setIsUserMenuOpen(!isUserMenuOpen) : triggerLoginModal()}
+                  className="p-1.5 text-gray-600 hover:text-[#C5A059] transition-colors"
+                  aria-label="Account"
+                >
+                  <span className="material-symbols-outlined text-[20px]">person</span>
+                </button>
 
-                      {user.address && (
-                        <div className="bg-surface-dim/40 p-2 rounded-sm mb-3">
-                          <span className="font-label-caps text-[8px] text-zinc-400 block tracking-wider">SHIPPING ATELIER</span>
-                          <p className="text-[11px] text-zinc-700 truncate" title={`${user.address}, ${user.city}, ${user.zip}`}>
-                            {user.address}, {user.city}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex flex-col gap-2 pt-1">
-                        {isAdmin && (
-                          <Link 
-                            href="/admin" 
-                            onClick={() => setIsUserMenuOpen(false)}
-                            className="w-full text-center bg-gold-leaf text-obsidian-charcoal py-2 font-label-caps text-[10px] tracking-widest font-semibold hover:bg-gold-leaf/90 transition-all rounded-sm"
-                          >
-                            CRM ADMIN PORTAL
-                          </Link>
-                        )}
-                        <button 
-                          onClick={() => {
-                            logout();
-                            setIsUserMenuOpen(false);
-                          }}
-                          className="w-full text-center border border-on-surface/20 py-2 font-label-caps text-[10px] tracking-widest font-semibold hover:bg-zinc-50 transition-all rounded-sm"
-                        >
-                          SIGN OUT
-                        </button>
-                      </div>
+                {user && isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-60 bg-white border border-gray-100 shadow-xl rounded-sm z-[150] py-2">
+                    <div className="px-4 py-3 border-b border-gray-50">
+                      <p className="text-[11px] text-[#C5A059] font-semibold tracking-widest uppercase mb-0.5">Signed in as</p>
+                      <p className="font-semibold text-[14px] text-gray-900 truncate">{user.name}</p>
+                      <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
                     </div>
-                  )}
-                </div>
+                    <div className="px-2 pt-2 space-y-1">
+                      {isAdmin && (
+                        <Link href="/admin" onClick={() => setIsUserMenuOpen(false)}
+                          className="block w-full text-left px-3 py-2 text-[12px] font-semibold tracking-widest uppercase text-[#C5A059] hover:bg-gray-50 rounded-sm transition-colors">
+                          Admin Portal
+                        </Link>
+                      )}
+                      <button onClick={() => { logout(); setIsUserMenuOpen(false); }}
+                        className="block w-full text-left px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 rounded-sm transition-colors">
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </nav>
       </header>
-      
-      {/* Spacer to push content down initially (matches full header height) */}
-      <div className="h-28" />
 
-      {/* Cart Slide-out Drawer */}
+      {/* Spacer */}
+      <div className={`${isScrolled ? 'h-14' : 'h-[calc(2.5rem+4rem)]'} transition-all duration-300`} />
+
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </>
   );

@@ -59,6 +59,39 @@ export interface UserProfile {
 
 // Initial seed products representing the Stag Beetle brand with Indian luxury touch
 const SEED_PRODUCTS: Product[] = [
+  // ── MEN ──────────────────────────────────────────────────────────────────
+  {
+    id: "prod_linen_kurta",
+    title: "Structured Linen Kurta",
+    price: 6800,
+    category: "Men",
+    material: "Jaipur Handloom Linen",
+    description: "A contemporary take on the classic kurta, cut from crisp handloom linen woven in Jaipur. Mandarin collar, concealed placket, and side slits give it a clean architectural silhouette. Finished with hand-stitched buttonholes and a relaxed straight hem.",
+    images: [
+      "https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80",
+      "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80",
+      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Ivory White", "Slate Grey", "Indigo"],
+    rating: 4.7
+  },
+  {
+    id: "prod_bandhgala_jacket",
+    title: "Bandhgala Jacket",
+    price: 12500,
+    category: "Men",
+    material: "Wool-Silk Blend, Bengaluru Atelier",
+    description: "A Nehru-collar bandhgala jacket tailored in our Bengaluru atelier from a fine wool-silk blend. Slim-fit silhouette with a single-button closure, welt pockets, and a full Mashru silk lining. Equally at home at a formal dinner or a gallery opening.",
+    images: [
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
+      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80",
+      "https://images.unsplash.com/photo-1617137968427-85924c800a22?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL"],
+    colors: ["Midnight Black", "Ivory Cream", "Forest Green"],
+    rating: 4.9
+  },
   {
     id: "prod_mesh_shirt",
     title: "Geometric Mesh Shirt",
@@ -67,9 +100,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Hand-spun Banarasi Silk Blend",
     description: "An editorial silhouette made from an ultra-lightweight hand-spun Banarasi silk and cotton blend, featuring geometric structural knit patterns and premium ribbed finishing. Hand-woven by master craftsmen in Varanasi and tailored in our Bengaluru atelier with delicate stitching that echoes the natural carapace divisions of the stag beetle.",
     images: [
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDmDzvAzJTmIHatCZxgSwlf1MmkVNyI4RiZnvsR2btkk-BB3MMifvBE5_p0Gnn8nmIB6Gl_FxOhmkNwmBzUvhZkCeBqkiKZtCXJf4yYQuqi8BHDChaHWqO-tIzBeNz43uIDnDloxVnK4VbbxtByCx90O7inKWzPtNsjIxUDOTdxTzdCGGRfowmN_GVzEYW4FDkRmxVRWHXWFKLQ0Ayo4P3i2fvQMgBjOz8tGHVAVupVEQaXcaIgoixS--KNwdqL5cg3yKEgCEeDOw",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCQ59ihterty67pzcAe4ayHiVOkTeMY5kAEsVoXzom_OrdNmNA_JRhlND4x5JrzlEvio5hZlZ3OCdXeYCTb9hyl6Cvvm6GPPC31pXpwf54S1j4QuvHr9E1R6S7-zkFTGnQ68W_mw-3dZ5Sa7uwi-qgKh20csPF5bzM-x2IpzX59fCId9ok5OxXLyDh5ECEWqDBkG4D5S4yuE7cKmsloyQexdSxmqao_E7BXOrv8YYmiWoIsnfG4bb8YgFikXsF1Bf9wlEfYCZ_wdg",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCXapvFHkOcx0WEucYZ-9tnMC1HH1a73LBj8kAzho0zr7iMjbZDHbDKOZfUEjz75_HRWLBFh-pd3JnUJCVYX04qIf6yd_26c--BD44-8Svegf6k1FaJ__T6H9oZI8XHOG7kRYaJ0YCxttox0uKgQ85slc__d2aN6NZZUig0h8_5srqYGO4-MEPZDdZu0dJdE6QDKOlhsfC69ak_xAuj5MYbCLx4V25Soq0B_GY4ApqGUVX6xcqw0hbPNdZC-lkbHn6CYowSwkEdiQ"
+      "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&q=80",
+      "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80",
+      "https://images.unsplash.com/photo-1571945153237-4929e783af4a?w=800&q=80"
     ],
     sizes: ["S", "M", "L", "XL"],
     colors: ["Obsidian Black", "Iridescent Silver", "Beetle Navy"],
@@ -83,29 +116,77 @@ const SEED_PRODUCTS: Product[] = [
     material: "Handloom Mulberry Silk",
     description: "An elegant, architectural blouse crafted from double-weight mulberry handloom silk from South India. The sleeves feature layered pleats resembling the organic segments of beetle armor, catching light with a high-end subtle pearlized finish.",
     images: [
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuD5e7Egs-WS54MBmdSXmNf_sktfUb4amxVc_IYDsJcgU914G1Yf_4MiacNatA957y1qBVLCpTNTAAZp2hhroZyHXUdw_Fw6k8E3BNP6TC2Gbj_cjmcofiU8eec6zTCSTXN-_HACfXBdhRSc5MPDnUXvHSL7knNdZk0ArOcB062vN1_syBPMo6vCpDvDqSnoib4lSuHT5VXaoNPhQelStsygck-demcFfAkmpCy_lfJkMyLOJQkcZpwkUDHDwjFpUG85CJxA6tv1ig",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDKTIPLINvzy8rl4Jv9mJRusZvRqrzeuDZA-jUMJ_mZdVunjXCqWtixJqChxDBoemXJlQkSkItaNVAmoCMKIbtVB_CID03e0SZD4NnAmZak4npW3Ro4CQy4CVHLun3zKaDyb5Ff0tTFySx4GgcwhGevUIAsm91UYmOc15k0hz8cxYt0frkuCAeQT8sYTXyJQXnyR26KWfYLX2qiu4-Tl3DCc6DD10toHv0hKszb44QLvqQh2LWGJyMOAps-rYO1Vl5NZeN7uzIJIQ",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCF5Um0vG8hZDTlYGLD_QWO5Qoh7AeroSEEZlxaFZD2ePP1vZT-G8CBD_98y2tV-1egMQ4bXGOfLkiKTWxy0kz793zOiC-SfihaYaypM_HaBVNGgPQBTK7TSBW5YkZ55FhyLGlgEQ9pU7cPTVOAg35kSG27XnRoGXblLtQJ2PFYo6CvYzFzV2u9nSlAZdVcxuUfckCNPA1twhmb76abZ-GvC2HjWX82eZ-AIK453oJ1e2s-2DqCeXyiPcwbAMWxWxBV1F-0tz3TOQ"
+      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80",
+      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80",
+      "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80"
     ],
     sizes: ["XS", "S", "M", "L"],
     colors: ["Champagne Gold", "Iridescent Silver", "Ivory Cream"],
     rating: 4.9
   },
   {
-    id: "prod_sovereign_pin",
-    title: "Sovereign Pin",
-    price: 5200,
-    category: "Accessories",
-    material: "Mysore Rosewood & 18k Gold Plated Brass",
-    description: "Signature accessory of the Stag Beetle collection. Individually hand-carved Mysore rosewood accents set in heavy 18k gold-plated brass. Crafted by local artisans in Karnataka, featuring intricate beetle anatomy detailing.",
+    id: "prod_anarkali_gown",
+    title: "Anarkali Silk Gown",
+    price: 18500,
+    category: "Women",
+    material: "Pure Banarasi Silk",
+    description: "A floor-length Anarkali gown in pure Banarasi silk with a fitted bodice and a dramatically flared skirt. Intricate zari embroidery at the neckline and cuffs, with a matching dupatta in sheer organza. Handcrafted in our Bengaluru atelier over 40 hours.",
     images: [
-      "https://lh3.googleusercontent.com/aida/ADBb0ujuI2_8xrZraVJUnvd0iMQhTBBGvO71ZKMNA7L_2DF2hMX7OoG5aTr2Ok__rSo5vB0hbinoZmKueQlo8Yp5bJHGUAFXkxSGWEG4vtJT2TWCgA449ufY9Rfz8Eb87ZEJ2Akff7ketGf3Zjn-ClMVjagRiHEhYD1aE2RUxGSt6WapI9nFZdmht7TuClPMbi3T9rYAZo9J2ACYt2D4mvgvPCq_qMb8BCaVPtJ4Kf7OAHACgHsVf_qB_C-lsw",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBIwkP4JUVEwGzJ45XcprVDwHKhS42AgqyueYItiyU0NG78lDp3prZHcWi-GC0qUk9_mwzfcmGaTNOXvrG-xHbmh1B6fVssXs1KqjblJ9G7bthDFoi_hQ-dtitLOuw3thVNZR6v1KpGeP-GlqufYdutBbE5qhfQ0C4DeG3AzoANvg8MfCFnEezQyM2F0_2xRw0XwLxKJHvLAT1nyHz7HPhD6Snwt6We686LRezw80SpkI59icKW4GIDoFU0hsTXOy74YoQJjxiCTw",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuD-XAJYyw_4lInrQySV7ztvYtTm_CaUecoHtqA7yCHtHdlx-AdzpowZiufiYfyi07l4pqEHFfY8rVx5QhNmB-8AJ99CGqb22GOjDvF0_vYwi5rQZ_PEsGFwj0UMW-rc-DPvWFLabTohsLMfXY4IVx-6_mpyg_K789KiDk6RUbkNXhdRdkZjirif3ECufmqgfGMwZYHNaxRqPJnwjeGGUKB3kuRmIQo9c7ucwXngyBMlCOBy0drYO3Eq2Tg9ccjczOeQ8g2PO8CFTw"
+      "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80",
+      "https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80",
+      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80"
     ],
-    sizes: ["One Size"],
-    colors: ["Gold Leaf / Mysore Rosewood", "Silver / Mysore Rosewood"],
+    sizes: ["XS", "S", "M", "L", "XL"],
+    colors: ["Deep Crimson", "Midnight Blue", "Champagne Gold"],
+    rating: 5.0
+  },
+  {
+    id: "prod_drape_saree",
+    title: "Architectural Drape Saree",
+    price: 22000,
+    category: "Women",
+    material: "Kanjivaram Silk",
+    description: "A contemporary pre-draped saree in heavyweight Kanjivaram silk with a structured pleated front panel. The pallu features a bold geometric border in contrasting zari. Comes with a fitted sleeveless blouse with a deep back. A modern heirloom.",
+    images: [
+      "https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80",
+      "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80",
+      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80"
+    ],
+    sizes: ["XS", "S", "M", "L"],
+    colors: ["Peacock Teal", "Ivory & Gold", "Burgundy"],
+    rating: 4.9
+  },
+  {
+    id: "prod_linen_coord",
+    title: "Linen Co-ord Set",
+    price: 11200,
+    category: "Women",
+    material: "Handloom Linen, Kutch Embroidery",
+    description: "A relaxed co-ord set comprising a boxy cropped jacket and wide-leg trousers in handloom linen. The jacket features hand-embroidered Kutch mirror-work at the collar and cuffs. Effortlessly elegant for day or evening.",
+    images: [
+      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80",
+      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80",
+      "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80"
+    ],
+    sizes: ["XS", "S", "M", "L", "XL"],
+    colors: ["Natural Ecru", "Sage Green", "Dusty Rose"],
     rating: 4.7
+  },
+  {
+    id: "prod_linen_trousers_women",
+    title: "Wide-Leg Linen Trousers",
+    price: 7800,
+    category: "Women",
+    material: "Handloom Linen, Jaipur",
+    description: "Relaxed wide-leg trousers in crisp handloom linen from Jaipur. High-rise waist with a wide waistband, side pockets, and a clean straight hem. Pairs effortlessly with the Linen Co-ord jacket or a simple silk blouse.",
+    images: [
+      "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80",
+      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80",
+      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80"
+    ],
+    sizes: ["XS", "S", "M", "L", "XL"],
+    colors: ["Natural Ecru", "Slate Blue", "Terracotta"],
+    rating: 4.8
   },
   {
     id: "prod_obsidian_overcoat",
@@ -115,13 +196,29 @@ const SEED_PRODUCTS: Product[] = [
     material: "Fine Kashmir Wool & Silk",
     description: "A double-breasted structured overcoat constructed from ultra-dense premium Kashmir wool and lined with pure Mashru silk. Designed with a tall, protective collar, deep side slits, and a bespoke inner-lining displaying custom anatomical sketches.",
     images: [
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCXapvFHkOcx0WEucYZ-9tnMC1HH1a73LBj8kAzho0zr7iMjbZDHbDKOZfUEjz75_HRWLBFh-pd3JnUJCVYX04qIf6yd_26c--BD44-8Svegf6k1FaJ__T6H9oZI8XHOG7kRYaJ0YCxttox0uKgQ85slc__d2aN6NZZUig0h8_5srqYGO4-MEPZDdZu0dJdE6QDKOlhsfC69ak_xAuj5MYbCLx4V25Soq0B_GY4ApqGUVX6xcqw0hbPNdZC-lkbHn6CYowSwkEdiQ",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDnOmwMIE60ezysrVHLyPkkH7HSVRMP8a84q7z5wXkHkgB5h0PT8JstN7gp9Lno91of4-iqEtKNcDCnuZcqPt5ZPYMBgvOSitZTdyt5RhAD8VgA5HxQGqtlOcisVBfWChp-dp0Of9--STBgHMqkDg4ZKzM_hooAfJJ4FJXb-6ppn0_au6UWypGHjSEeKUThHzDL7fwVrqLWJsYB-Syfk6XUC10TGZtPuds87CrfpWcca6o-P1mrn0v8AMVitUFx5z4g2iInyTGGQA",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCQ59ihterty67pzcAe4ayHiVOkTeMY5kAEsVoXzom_OrdNmNA_JRhlND4x5JrzlEvio5hZlZ3OCdXeYCTb9hyl6Cvvm6GPPC31pXpwf54S1j4QuvHr9E1R6S7-zkFTGnQ68W_mw-3dZ5Sa7uwi-qgKh20csPF5bzM-x2IpzX59fCId9ok5OxXLyDh5ECEWqDBkG4D5S4yuE7cKmsloyQexdSxmqao_E7BXOrv8YYmiWoIsnfG4bb8YgFikXsF1Bf9wlEfYCZ_wdg"
+      "https://images.unsplash.com/photo-1617137968427-85924c800a22?w=800&q=80",
+      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80",
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80"
     ],
     sizes: ["M", "L", "XL"],
     colors: ["Obsidian Black", "Charcoal Gray"],
     rating: 5.0
+  },
+  {
+    id: "prod_silk_shirt",
+    title: "Ikat Silk Shirt",
+    price: 9200,
+    category: "Men",
+    material: "Pochampally Ikat Silk",
+    description: "A statement shirt woven from authentic Pochampally ikat silk — each piece unique due to the resist-dyeing process. Relaxed fit with a camp collar, mother-of-pearl buttons, and a curved hem. A wearable piece of Telangana craft heritage.",
+    images: [
+      "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&q=80",
+      "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80",
+      "https://images.unsplash.com/photo-1571945153237-4929e783af4a?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL"],
+    colors: ["Indigo & Gold", "Rust & Ivory", "Teal & Black"],
+    rating: 4.8
   },
   {
     id: "prod_armor_trousers",
@@ -131,28 +228,28 @@ const SEED_PRODUCTS: Product[] = [
     material: "Jaipur Handloom Linen-Wool",
     description: "Mid-rise trousers crafted from a bespoke hand-woven Jaipur linen and wool blend. Features signature sharp double front pleats and side belt loops in structural shapes, with adjustable gold buckle details that let you define the fit at the waist.",
     images: [
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDnOmwMIE60ezysrVHLyPkkH7HSVRMP8a84q7z5wXkHkgB5h0PT8JstN7gp9Lno91of4-iqEtKNcDCnuZcqPt5ZPYMBgvOSitZTdyt5RhAD8VgA5HxQGqtlOcisVBfWChp-dp0Of9--STBgHMqkDg4ZKzM_hooAfJJ4FJXb-6ppn0_au6UWypGHjSEeKUThHzDL7fwVrqLWJsYB-Syfk6XUC10TGZtPuds87CrfpWcca6o-P1mrn0v8AMVitUFx5z4g2iInyTGGQA",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCQ59ihterty67pzcAe4ayHiVOkTeMY5kAEsVoXzom_OrdNmNA_JRhlND4x5JrzlEvio5hZlZ3OCdXeYCTb9hyl6Cvvm6GPPC31pXpwf54S1j4QuvHr9E1R6S7-zkFTGnQ68W_mw-3dZ5Sa7uwi-qgKh20csPF5bzM-x2IpzX59fCId9ok5OxXLyDh5ECEWqDBkG4D5S4yuE7cKmsloyQexdSxmqao_E7BXOrv8YYmiWoIsnfG4bb8YgFikXsF1Bf9wlEfYCZ_wdg",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDmDzvAzJTmIHatCZxgSwlf1MmkVNyI4RiZnvsR2btkk-BB3MMifvBE5_p0Gnn8nmIB6Gl_FxOhmkNwmBzUvhZkCeBqkiKZtCXJf4yYQuqi8BHDChaHWqO-tIzBeNz43uIDnDloxVnK4VbbxtByCx90O7inKWzPtNsjIxUDOTdxTzdCGGRfowmN_GVzEYW4FDkRmxVRWHXWFKLQ0Ayo4P3i2fvQMgBjOz8tGHVAVupVEQaXcaIgoixS--KNwdqL5cg3yKEgCEeDOw"
+      "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=800&q=80",
+      "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80",
+      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80"
     ],
     sizes: ["S", "M", "L", "XL"],
-    colors: ["Charcoal Gray", "Obsidian Black"],
+    colors: ["Charcoal Gray", "Obsidian Black", "Khaki"],
     rating: 4.6
   },
   {
     id: "prod_mulberry_silk_scarf",
-    title: "Carapace Silk Scarf",
-    price: 2800,
-    category: "Accessories",
+    title: "Silk Kurta",
+    price: 5800,
+    category: "Men",
     material: "100% Banarasi Mulberry Silk",
-    description: "A gorgeous, shimmering accessory showing stylized hand-sketched diagrams of beetle wings and anatomy. Printed on premium 100% Mulberry silk handloom woven in Varanasi, with delicate hand-rolled edges.",
+    description: "A classic straight-cut kurta in pure Banarasi mulberry silk. Subtle self-woven texture, mandarin collar, and side slits. Pairs beautifully with churidar or straight trousers for festive occasions.",
     images: [
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBIwkP4JUVEwGzJ45XcprVDwHKhS42AgqyueYItiyU0NG78lDp3prZHcWi-GC0qUk9_mwzfcmGaTNOXvrG-xHbmh1B6fVssXs1KqjblJ9G7bthDFoi_hQ-dtitLOuw3thVNZR6v1KpGeP-GlqufYdutBbE5qhfQ0C4DeG3AzoANvg8MfCFnEezQyM2F0_2xRw0XwLxKJHvLAT1nyHz7HPhD6Snwt6We686LRezw80SpkI59icKW4GIDoFU0hsTXOy74YoQJjxiCTw",
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuD-XAJYyw_4lInrQySV7ztvYtTm_CaUecoHtqA7yCHtHdlx-AdzpowZiufiYfyi07l4pqEHFfY8rVx5QhNmB-8AJ99CGqb22GOjDvF0_vYwi5rQZ_PEsGFwj0UMW-rc-DPvWFLabTohsLMfXY4IVx-6_mpyg_K789KiDk6RUbkNXhdRdkZjirif3ECufmqgfGMwZYHNaxRqPJnwjeGGUKB3kuRmIQo9c7ucwXngyBMlCOBy0drYO3Eq2Tg9ccjczOeQ8g2PO8CFTw",
-      "https://lh3.googleusercontent.com/aida/ADBb0ujuI2_8xrZraVJUnvd0iMQhTBBGvO71ZKMNA7L_2DF2hMX7OoG5aTr2Ok__rSo5vB0hbinoZmKueQlo8Yp5bJHGUAFXkxSGWEG4vtJT2TWCgA449ufY9Rfz8Eb87ZEJ2Akff7ketGf3Zjn-ClMVjagRiHEhYD1aE2RUxGSt6WapI9nFZdmht7TuClPMbi3T9rYAZo9J2ACYt2D4mvgvPCq_qMb8BCaVPtJ4Kf7OAHACgHsVf_qB_C-lsw"
+      "https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80",
+      "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80",
+      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80"
     ],
-    sizes: ["One Size"],
-    colors: ["Champagne Gold", "Obsidian / Silver"],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Ivory White", "Champagne Gold", "Midnight Blue"],
     rating: 4.8
   }
 ];
@@ -165,12 +262,16 @@ const SEED_COUPONS: Coupon[] = [
 ];
 
 // Initialize Supabase Client
+// Supports both NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (new) and NEXT_PUBLIC_SUPABASE_ANON_KEY (legacy)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  '';
 
-const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
-export const supabase = isSupabaseConfigured 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
+const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 // =========================================================================
@@ -461,13 +562,9 @@ export const getSuggestions = async (cartProductIds: string[]): Promise<Product[
   const products = await getProducts();
   const filtered = products.filter(p => !cartProductIds.includes(p.id));
   
-  // Return up to 3 recommendations (prefer accessories or lower-priced items first as impulse buys)
+  // Return up to 3 recommendations (prefer lower-priced items first as impulse buys)
   return filtered
-    .sort((a, b) => {
-      if (a.category === 'Accessories' && b.category !== 'Accessories') return -1;
-      if (b.category === 'Accessories' && a.category !== 'Accessories') return 1;
-      return a.price - b.price;
-    })
+    .sort((a, b) => a.price - b.price)
     .slice(0, 3);
 };
 

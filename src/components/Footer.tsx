@@ -25,29 +25,32 @@ export default function Footer() {
             <h4 className="font-label-caps text-[10px] text-gold-leaf mb-6 tracking-[0.3em]">SHOP</h4>
             <ul className="space-y-4 text-[13px] text-on-surface-variant">
               <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=all">New Arrivals</Link></li>
-              <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=men">Men's Edit</Link></li>
-              <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=women">Women's Edit</Link></li>
-              <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=accessories">Accessories</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=men">Men&apos;s Edit</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=women">Women&apos;s Edit</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="font-label-caps text-[10px] text-gold-leaf mb-6 tracking-[0.3em]">CLIENT SERVICE</h4>
             <ul className="space-y-4 text-[13px] text-on-surface-variant">
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Shipping & Deliveries</a></li>
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Returns & Exchanges</a></li>
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Garment Care Guide</a></li>
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Atelier Booking</a></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/shipping">Shipping &amp; Deliveries</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/returns">Returns &amp; Exchanges</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/care">Garment Care Guide</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/atelier">Atelier Booking</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="font-label-caps text-[10px] text-gold-leaf mb-6 tracking-[0.3em]">CONNECT</h4>
             <ul className="space-y-4 text-[13px] text-on-surface-variant">
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Instagram</a></li>
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Pinterest</a></li>
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Quarterly Journal</a></li>
-              <li><a className="hover:text-gold-leaf transition-colors" href="#">Atelier Locations</a></li>
+              <li>
+                <a className="hover:text-gold-leaf transition-colors" href="https://www.instagram.com" target="_blank" rel="noopener noreferrer">Instagram</a>
+              </li>
+              <li>
+                <a className="hover:text-gold-leaf transition-colors" href="https://www.pinterest.com" target="_blank" rel="noopener noreferrer">Pinterest</a>
+              </li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/journal">Quarterly Journal</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/atelier">Atelier Locations</Link></li>
             </ul>
           </div>
 
@@ -56,9 +59,9 @@ export default function Footer() {
         <div className="pt-8 border-t border-on-surface/5 flex flex-col md:flex-row justify-between items-center gap-6">
           <p className="text-[11px] text-on-surface-variant/60 uppercase tracking-widest">© 2026 Stag Beetle. Crafting the Sovereign.</p>
           <div className="flex gap-8 text-[11px] font-label-caps tracking-widest text-on-surface-variant/60">
-            <a className="hover:text-gold-leaf" href="#">PRIVACY POLICY</a>
-            <a className="hover:text-gold-leaf" href="#">TERMS OF USE</a>
-            <a className="hover:text-gold-leaf" href="#">COOKIE PREFERENCES</a>
+            <Link className="hover:text-gold-leaf" href="/privacy">PRIVACY POLICY</Link>
+            <Link className="hover:text-gold-leaf" href="/terms">TERMS OF USE</Link>
+            <Link className="hover:text-gold-leaf" href="/cookies">COOKIE PREFERENCES</Link>
           </div>
         </div>
       </div>
