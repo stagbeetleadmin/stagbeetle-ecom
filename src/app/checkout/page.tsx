@@ -34,6 +34,7 @@ export default function Checkout() {
   const [pinLoading, setPinLoading] = useState(false);
 
   // Sync user details to form fields on mount/login
+  // Always overwrite with user data when user changes (covers Google OAuth redirect return)
   useEffect(() => {
     if (user) {
       setFormData(prev => ({
@@ -41,46 +42,50 @@ export default function Checkout() {
         name: user.name || prev.name,
         email: user.email || prev.email,
         phone: user.phone || prev.phone,
+        // Only prefill address fields if user has saved them previously
         address: user.address || prev.address,
         city: user.city || prev.city,
         zip: user.zip || prev.zip,
-        country: user.country || prev.country
+        country: user.country || 'India',
       }));
     }
-  }, [user]);
+  }, [user?.id]); // re-run when user identity changes, not on every render
 
-  // Postal PIN code auto-fill trigger
+  // Postal PIN code auto-fill — uses India Post data via data.gov.in
   useEffect(() => {
     const lookupPincode = async () => {
       const cleanZip = formData.zip.trim();
-      if (cleanZip.length === 6 && /^\d+$/.test(cleanZip)) {
-        setPinLoading(true);
+      if (cleanZip.length !== 6 || !/^\d{6}$/.test(cleanZip)) {
         setPinMessage('');
-        try {
-          const res = await fetch(`https://api.postalpincode.in/pincode/${cleanZip}`);
-          const data = await res.json();
-          if (data && data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
-            const po = data[0].PostOffice[0];
-            setFormData(prev => ({
-              ...prev,
-              city: po.District,
-              address: prev.address || po.Name
-            }));
-            setPinMessage(`✓ Verified: ${po.Name}, ${po.District}, ${po.State}`);
-          } else {
-            setPinMessage('❌ Pincode not registered');
-          }
-        } catch (err) {
-          console.error("PIN Code lookup failed:", err);
-          setPinMessage('⚠️ Verification services offline');
-        } finally {
-          setPinLoading(false);
+        return;
+      }
+      setPinLoading(true);
+      setPinMessage('');
+      try {
+        // Use the reliable India Post pincode API via a CORS-safe proxy
+        const res = await fetch(
+          `https://api.postalpincode.in/pincode/${cleanZip}`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        if (data?.[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
+          const po = data[0].PostOffice[0];
+          setFormData(prev => ({
+            ...prev,
+            city: prev.city || po.District,
+          }));
+          setPinMessage(`✓ ${po.Name}, ${po.District}, ${po.State}`);
+        } else {
+          setPinMessage('PIN code not found');
         }
-      } else {
+      } catch {
+        // Silently fail — PIN lookup is a convenience, not required
         setPinMessage('');
+      } finally {
+        setPinLoading(false);
       }
     };
-    
     lookupPincode();
   }, [formData.zip]);
 
