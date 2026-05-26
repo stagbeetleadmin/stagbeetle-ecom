@@ -230,7 +230,10 @@ export default function Checkout() {
             payment_status: "paid",
             payment_method: "PhonePe UPI",
             coupon_applied: appliedCoupon ? appliedCoupon.code : undefined,
-            discount_amount: appliedCoupon ? discountAmount : undefined
+            discount_amount: appliedCoupon ? discountAmount : undefined,
+            shipping_status: "Scheduled",
+            shipping_carrier: "Delhivery",
+            tracking_number: "DKV" + Math.floor(100000000 + Math.random() * 900000000)
           });
 
           // Save address back to user profile if checked

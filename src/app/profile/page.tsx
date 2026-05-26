@@ -560,6 +560,71 @@ export default function ProfilePage() {
                           ))}
                         </div>
 
+                        {/* Shipment Tracking Details */}
+                        {(order.shipping_status || order.shipping_carrier || order.tracking_number) && (
+                          <div className="mt-4 mb-4 bg-zinc-50 border border-zinc-150 p-4 rounded-sm space-y-3 font-body text-[13px]">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1">
+                              <span className="font-semibold text-zinc-700 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[16px] text-gold-leaf">local_shipping</span>
+                                Tracking status
+                              </span>
+                              {order.shipping_carrier && order.tracking_number && (
+                                <span className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">
+                                  {order.shipping_carrier} &middot; ID:{' '}
+                                  <span className="font-mono text-zinc-700">{order.tracking_number}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Tracking Progress Bar */}
+                            <div className="relative pt-1">
+                              <div className="flex mb-2 items-center justify-between text-[11px] font-semibold text-zinc-500 tracking-wider">
+                                <span className={order.shipping_status === 'Processing' ? 'text-[#0D1B2A] font-bold' : ''}>PROCESSING</span>
+                                <span className={order.shipping_status === 'Scheduled' ? 'text-[#0D1B2A] font-bold' : ''}>SCHEDULED</span>
+                                <span className={order.shipping_status === 'Shipped' || order.shipping_status === 'In Transit' ? 'text-[#0D1B2A] font-bold' : ''}>SHIPPED</span>
+                                <span className={order.shipping_status === 'Delivered' ? 'text-[#0D1B2A] font-bold' : ''}>DELIVERED</span>
+                              </div>
+                              <div className="overflow-hidden h-1 text-xs flex rounded bg-zinc-200">
+                                <div 
+                                  className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gold-leaf transition-all duration-500"
+                                  style={{
+                                    width: 
+                                      order.shipping_status === 'Processing' ? '12.5%' :
+                                      order.shipping_status === 'Scheduled' ? '37.5%' :
+                                      order.shipping_status === 'Shipped' || order.shipping_status === 'In Transit' ? '70%' :
+                                      order.shipping_status === 'Delivered' ? '100%' : '0%'
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Estimated Delivery / Quick links */}
+                            <div className="flex justify-between items-baseline pt-1">
+                              <span className="text-[11px] text-zinc-500 italic">
+                                {order.shipping_status === 'Delivered' 
+                                  ? 'Delivered to your address' 
+                                  : 'Estimated delivery in 4-6 business days'}
+                              </span>
+                              {order.shipping_carrier && order.tracking_number && (
+                                <a
+                                  href={
+                                    order.shipping_carrier === 'Delhivery'
+                                      ? `https://www.delhivery.com/track/package/${order.tracking_number}`
+                                      : order.shipping_carrier === 'India Post'
+                                      ? `https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx`
+                                      : '#'
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] font-bold tracking-widest text-[#0D1B2A] hover:text-gold-leaf underline uppercase transition-colors"
+                                >
+                                  Track Shipment →
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Order Footer */}
                         <div className="border-t border-zinc-50 pt-3 flex justify-between items-center">
                           <div className="flex gap-2 items-center">

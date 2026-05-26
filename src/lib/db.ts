@@ -36,6 +36,9 @@ export interface Order {
   payment_method: string;
   coupon_applied?: string;
   discount_amount?: number;
+  shipping_status?: 'Processing' | 'Scheduled' | 'Shipped' | 'In Transit' | 'Delivered';
+  shipping_carrier?: 'India Post' | 'Delhivery' | 'Blue Dart' | 'DHL';
+  tracking_number?: string;
 }
 
 export interface Coupon {
@@ -542,6 +545,25 @@ export const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>): 
     try {
       const { data, error } = await supabase.from('orders').insert([newOrder]).select().single();
       if (!error && data) return data as Order;
+
+      // Handle missing shipping columns retry (Postgres code 42703 is undefined_column)
+      if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
+        console.warn("Supabase orders table missing shipping columns, retrying insert without them...");
+        const { shipping_status, shipping_carrier, tracking_number, ...strippedOrderData } = newOrder as any;
+        const { data: retryData, error: retryError } = await supabase
+          .from('orders')
+          .insert([strippedOrderData])
+          .select()
+          .single();
+        if (!retryError && retryData) {
+          // Return the full order (including shipping details) so the client has them
+          return newOrder;
+        } else if (retryError) {
+          console.error("Retry insert failed:", retryError.message);
+        }
+      } else if (error) {
+        console.error("Supabase insert error:", error.message);
+      }
     } catch (e) {
       console.warn("Supabase createOrder failed, falling back to mock:", e);
     }
@@ -555,6 +577,50 @@ export const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>): 
   }
 
   return newOrder;
+};
+
+export const updateOrderShipping = async (
+  id: string,
+  shipping_carrier: 'India Post' | 'Delhivery' | 'Blue Dart' | 'DHL',
+  tracking_number: string,
+  shipping_status: 'Processing' | 'Scheduled' | 'Shipped' | 'In Transit' | 'Delivered'
+): Promise<Order | null> => {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .update({ shipping_carrier, tracking_number, shipping_status })
+        .eq('id', id)
+        .select()
+        .single();
+      if (!error && data) return data as Order;
+
+      // Check if error is due to missing columns
+      if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
+        console.warn("Supabase orders table missing shipping columns, skipping DB write during update.");
+      }
+    } catch (e) {
+      console.warn(`Supabase updateOrderShipping failed for id ${id}:`, e);
+    }
+  }
+
+  // Fallback: Update in LocalStorage
+  if (typeof window !== 'undefined') {
+    const localOrders = JSON.parse(localStorage.getItem('stag_beetle_orders') || '[]');
+    const index = localOrders.findIndex((o: Order) => o.id === id);
+    if (index > -1) {
+      const updatedOrder = {
+        ...localOrders[index],
+        shipping_carrier,
+        tracking_number,
+        shipping_status
+      };
+      localOrders[index] = updatedOrder;
+      localStorage.setItem('stag_beetle_orders', JSON.stringify(localOrders));
+      return updatedOrder;
+    }
+  }
+  return null;
 };
 
 // Shopify-style recommendations engine

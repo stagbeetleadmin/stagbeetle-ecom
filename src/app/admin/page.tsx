@@ -9,7 +9,7 @@ import {
   Product, Coupon, Order, 
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
-  getOrders
+  getOrders, updateOrderShipping
 } from '@/lib/db';
 
 export default function AdminDashboard() {
@@ -707,6 +707,81 @@ export default function AdminDashboard() {
                                 <div className="text-right flex items-baseline gap-2">
                                   <span className="text-on-surface-variant text-[11px] font-label-caps">Total Charged:</span>
                                   <span className="text-gold-leaf font-bold text-[18px]">₹{order.total_price}</span>
+                                </div>
+                              </div>
+
+                              {/* Shipment Controls */}
+                              <div className="border-t border-on-surface/5 pt-4 mt-4 space-y-3 bg-zinc-50/50 p-4 rounded-sm text-[13px]">
+                                <h4 className="text-[10px] font-label-caps font-semibold text-zinc-400">SHIPMENT TRACKING DETAILS</h4>
+                                <div className="flex flex-wrap gap-4 items-end">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Carrier</label>
+                                    <select
+                                      value={order.shipping_carrier || 'Delhivery'}
+                                      onChange={async (e) => {
+                                        const carrier = e.target.value as any;
+                                        await updateOrderShipping(
+                                          order.id,
+                                          carrier,
+                                          order.tracking_number || `DEL${Math.floor(100000000 + Math.random() * 900000000)}`,
+                                          order.shipping_status || 'Scheduled'
+                                        );
+                                        loadData();
+                                      }}
+                                      className="bg-white border border-zinc-200 rounded-sm py-1.5 px-3 text-[12px] outline-none"
+                                    >
+                                      <option value="Delhivery">Delhivery</option>
+                                      <option value="India Post">India Post</option>
+                                      <option value="Blue Dart">Blue Dart</option>
+                                      <option value="DHL">DHL</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Status</label>
+                                    <select
+                                      value={order.shipping_status || 'Scheduled'}
+                                      onChange={async (e) => {
+                                        const status = e.target.value as any;
+                                        await updateOrderShipping(
+                                          order.id,
+                                          order.shipping_carrier || 'Delhivery',
+                                          order.tracking_number || `DEL${Math.floor(100000000 + Math.random() * 900000000)}`,
+                                          status
+                                        );
+                                        loadData();
+                                      }}
+                                      className="bg-white border border-zinc-200 rounded-sm py-1.5 px-3 text-[12px] outline-none font-semibold text-zinc-700"
+                                    >
+                                      <option value="Processing">Processing</option>
+                                      <option value="Scheduled">Scheduled</option>
+                                      <option value="Shipped">Shipped</option>
+                                      <option value="In Transit">In Transit</option>
+                                      <option value="Delivered">Delivered</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1 flex-1 min-w-[200px]">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Tracking ID</label>
+                                    <input
+                                      type="text"
+                                      defaultValue={order.tracking_number || ''}
+                                      placeholder="e.g. DKV123456789"
+                                      onBlur={async (e) => {
+                                        const val = e.target.value.trim();
+                                        if (val && val !== order.tracking_number) {
+                                          await updateOrderShipping(
+                                            order.id,
+                                            order.shipping_carrier || 'Delhivery',
+                                            val,
+                                            order.shipping_status || 'Scheduled'
+                                          );
+                                          loadData();
+                                        }
+                                      }}
+                                      className="bg-white border border-zinc-200 rounded-sm py-1.5 px-3 text-[12px] outline-none w-full"
+                                    />
+                                  </div>
                                 </div>
                               </div>
 

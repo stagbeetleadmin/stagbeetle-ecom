@@ -152,8 +152,20 @@ CREATE TABLE IF NOT EXISTS public.orders (
     payment_method   TEXT NOT NULL DEFAULT 'card',
     coupon_applied   TEXT,
     discount_amount  NUMERIC,
-    user_id          UUID REFERENCES auth.users(id) ON DELETE SET NULL
+    user_id          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    shipping_status  TEXT DEFAULT 'Scheduled',
+    shipping_carrier TEXT DEFAULT 'Delhivery',
+    tracking_number  TEXT
 );
+
+-- ============================================================
+-- SHIPPING SCHEMA MIGRATION SCRIPT
+-- Execute the following SQL directly in your Supabase SQL Editor if you are updating an existing DB:
+-- 
+-- ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shipping_status TEXT DEFAULT 'Scheduled';
+-- ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shipping_carrier TEXT DEFAULT 'Delhivery';
+-- ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tracking_number TEXT;
+-- ============================================================
 
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
