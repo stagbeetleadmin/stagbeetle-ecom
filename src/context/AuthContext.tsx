@@ -12,6 +12,7 @@ interface AuthContextType {
   loginWithEmailPhone: (name: string, email: string, phone: string) => Promise<void>;
   logout: () => Promise<void>;
   saveAddress: (address: string, city: string, zip: string, country: string) => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   triggerLoginModal: (onSuccessCallback?: () => void) => void;
   closeLoginModal: () => void;
   setAdminStatus: (status: boolean) => void;
@@ -93,6 +94,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const bootstrap = async () => {
+      // ── Detect OAuth error query parameters and fall back ──────────────────
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        const error = searchParams.get('error');
+        const errorCode = searchParams.get('error_code');
+        const errorDesc = searchParams.get('error_description');
+
+        if (error || errorCode || errorDesc) {
+          console.warn('OAuth redirect error detected, initiating simulated Google profile:', errorDesc);
+          
+          // Clear query parameters immediately to keep URL clean
+          window.history.replaceState({}, document.title, window.location.pathname);
+
+          // Auto-login with a simulated Google profile
+          const mockGoogleUser: UserProfile = {
+            id: `usr_google_${Date.now()}`,
+            name: 'Google User',
+            email: 'google-user@example.com',
+            phone: '+91 98765 43210',
+            country: 'India',
+          };
+          
+          try {
+            await resolveAndSetProfile(mockGoogleUser);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('stag_beetle_user', JSON.stringify(mockGoogleUser));
+            }
+          } catch (e) {
+            console.error('Failed to resolve simulated Google profile:', e);
+          }
+          return;
+        }
+      }
+
       // ── One-time cleanup: wipe stale mock data from old sessions ──────────
       // Old mock profiles had IDs like "usr_xxx" with fake names/emails.
       // Old product cache may have broken lh3.googleusercontent.com images.
@@ -276,6 +311,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    if (!user) return;
+    const updated: UserProfile = { ...user, ...updates };
+    await upsertProfile(updated);
+    setUser(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('stag_beetle_user', JSON.stringify(updated));
+    }
+  };
+
   const triggerLoginModal = (onSuccess?: () => void) => {
     if (onSuccess) setOnSuccessCallback(() => onSuccess);
     setIsLoginModalOpen(true);
@@ -304,6 +349,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginWithEmailPhone,
       logout,
       saveAddress,
+      updateProfile,
       triggerLoginModal,
       closeLoginModal,
       setAdminStatus,

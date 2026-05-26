@@ -120,6 +120,10 @@ export default function Header() {
                           Admin Portal
                         </Link>
                       )}
+                      <Link href="/profile" onClick={() => setIsUserMenuOpen(false)}
+                        className="block w-full text-left px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 rounded-sm transition-colors">
+                        My Profile
+                      </Link>
                       <button onClick={() => { logout(); setIsUserMenuOpen(false); }}
                         className="block w-full text-left px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 rounded-sm transition-colors">
                         Sign Out
