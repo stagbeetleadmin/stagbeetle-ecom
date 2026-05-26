@@ -68,9 +68,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Jaipur Handloom Linen",
     description: "A contemporary take on the classic kurta, cut from crisp handloom linen woven in Jaipur. Mandarin collar, concealed placket, and side slits give it a clean architectural silhouette. Finished with hand-stitched buttonholes and a relaxed straight hem.",
     images: [
-      "https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80",
       "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80",
-      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80"
+      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80",
+      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Ivory White", "Slate Grey", "Indigo"],
@@ -133,8 +133,8 @@ const SEED_PRODUCTS: Product[] = [
     description: "A floor-length Anarkali gown in pure Banarasi silk with a fitted bodice and a dramatically flared skirt. Intricate zari embroidery at the neckline and cuffs, with a matching dupatta in sheer organza. Handcrafted in our Bengaluru atelier over 40 hours.",
     images: [
       "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80",
-      "https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80",
-      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80"
+      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80",
+      "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80"
     ],
     sizes: ["XS", "S", "M", "L", "XL"],
     colors: ["Deep Crimson", "Midnight Blue", "Champagne Gold"],
@@ -148,9 +148,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Kanjivaram Silk",
     description: "A contemporary pre-draped saree in heavyweight Kanjivaram silk with a structured pleated front panel. The pallu features a bold geometric border in contrasting zari. Comes with a fitted sleeveless blouse with a deep back. A modern heirloom.",
     images: [
-      "https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80",
       "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80",
-      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80"
+      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80",
+      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80"
     ],
     sizes: ["XS", "S", "M", "L"],
     colors: ["Peacock Teal", "Ivory & Gold", "Burgundy"],
@@ -244,9 +244,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "100% Banarasi Mulberry Silk",
     description: "A classic straight-cut kurta in pure Banarasi mulberry silk. Subtle self-woven texture, mandarin collar, and side slits. Pairs beautifully with churidar or straight trousers for festive occasions.",
     images: [
-      "https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80",
       "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80",
-      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80"
+      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80",
+      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Ivory White", "Champagne Gold", "Midnight Blue"],

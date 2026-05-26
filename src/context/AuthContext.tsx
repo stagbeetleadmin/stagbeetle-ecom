@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Old mock profiles had IDs like "usr_xxx" with fake names/emails.
       // Old product cache may have broken lh3.googleusercontent.com images.
       // We version the cache with a key — bump this string to force a wipe.
-      const CACHE_VERSION = 'v2';
+      const CACHE_VERSION = 'v3';
       if (typeof window !== 'undefined') {
         const cachedVersion = localStorage.getItem('stag_beetle_cache_version');
         if (cachedVersion !== CACHE_VERSION) {
