@@ -1,11 +1,12 @@
 -- ============================================================
 -- Stag Beetle E-commerce — Supabase Schema
--- Run this in your Supabase SQL Editor (Dashboard → SQL Editor)
--- Safe to re-run: uses IF NOT EXISTS and ON CONFLICT DO UPDATE
+-- SAFE RE-RUNNABLE VERSION
 -- ============================================================
 
--- ── 1. PROFILES ─────────────────────────────────────────────
--- Linked to auth.users via UUID. Auto-populated on Google OAuth.
+-- ============================================================
+-- 1. PROFILES
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS public.profiles (
     id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name        TEXT NOT NULL DEFAULT '',
@@ -20,51 +21,80 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Users can read and update their own profile
+-- Drop existing policies before recreating
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Service role full access to profiles" ON public.profiles;
+
+-- Policies
 CREATE POLICY "Users can view own profile"
-    ON public.profiles FOR SELECT
-    USING (auth.uid() = id);
+ON public.profiles
+FOR SELECT
+USING (auth.uid() = id);
 
 CREATE POLICY "Users can update own profile"
-    ON public.profiles FOR UPDATE
-    USING (auth.uid() = id);
+ON public.profiles
+FOR UPDATE
+USING (auth.uid() = id);
 
 CREATE POLICY "Users can insert own profile"
-    ON public.profiles FOR INSERT
-    WITH CHECK (auth.uid() = id);
+ON public.profiles
+FOR INSERT
+WITH CHECK (auth.uid() = id);
 
--- Service role (used by server-side code) can do everything
 CREATE POLICY "Service role full access to profiles"
-    ON public.profiles FOR ALL
-    USING (auth.role() = 'service_role');
+ON public.profiles
+FOR ALL
+USING (auth.role() = 'service_role');
 
--- ── Trigger: auto-create profile on new auth.users row ──────
--- This fires when a user signs up via Google OAuth or any provider.
+
+-- ============================================================
+-- AUTO CREATE PROFILE ON SIGNUP
+-- ============================================================
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
-    INSERT INTO public.profiles (id, name, email, phone)
+    INSERT INTO public.profiles (
+        id,
+        name,
+        email,
+        phone
+    )
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1), 'User'),
+        COALESCE(
+            NEW.raw_user_meta_data->>'full_name',
+            NEW.raw_user_meta_data->>'name',
+            split_part(NEW.email, '@', 1),
+            'User'
+        ),
         COALESCE(NEW.email, ''),
         COALESCE(NEW.phone, '')
     )
     ON CONFLICT (id) DO NOTHING;
+
     RETURN NEW;
 END;
 $$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
 CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_user();
 
 
--- ── 2. PRODUCTS ─────────────────────────────────────────────
+-- ============================================================
+-- 2. PRODUCTS
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS public.products (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL,
@@ -80,18 +110,36 @@ CREATE TABLE IF NOT EXISTS public.products (
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
+-- Drop old policies
+DROP POLICY IF EXISTS "Public read products" ON public.products;
+DROP POLICY IF EXISTS "Service role manages products" ON public.products;
+DROP POLICY IF EXISTS "Authenticated users manage products" ON public.products;
+
+-- Public can read
 CREATE POLICY "Public read products"
-    ON public.products FOR SELECT USING (true);
+ON public.products
+FOR SELECT
+USING (true);
 
+-- Backend/service role full access
 CREATE POLICY "Service role manages products"
-    ON public.products FOR ALL USING (auth.role() = 'service_role');
+ON public.products
+FOR ALL
+USING (auth.role() = 'service_role');
 
--- Allow anon/authenticated to manage products (for admin CRM without service role)
-CREATE POLICY "Authenticated admin manages products"
-    ON public.products FOR ALL USING (true);
+-- Authenticated admins/users only
+CREATE POLICY "Authenticated users manage products"
+ON public.products
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
 
 
--- ── 3. ORDERS ───────────────────────────────────────────────
+-- ============================================================
+-- 3. ORDERS
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS public.orders (
     id               TEXT PRIMARY KEY,
     created_at       TIMESTAMPTZ DEFAULT now() NOT NULL,
@@ -109,24 +157,42 @@ CREATE TABLE IF NOT EXISTS public.orders (
 
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- Anyone can place an order (checkout)
+-- Drop policies
+DROP POLICY IF EXISTS "Public can insert orders" ON public.orders;
+DROP POLICY IF EXISTS "Users can view own orders" ON public.orders;
+DROP POLICY IF EXISTS "Service role manages orders" ON public.orders;
+
+-- Checkout allowed
 CREATE POLICY "Public can insert orders"
-    ON public.orders FOR INSERT WITH CHECK (true);
+ON public.orders
+FOR INSERT
+WITH CHECK (true);
 
--- Users can view their own orders; admins via service role see all
+-- Users view only their orders
 CREATE POLICY "Users can view own orders"
-    ON public.orders FOR SELECT
-    USING (auth.uid() = user_id OR auth.role() = 'service_role');
+ON public.orders
+FOR SELECT
+USING (
+    auth.uid() = user_id
+    OR auth.role() = 'service_role'
+);
 
--- Allow anon select for admin CRM
-CREATE POLICY "Admin CRM can view all orders"
-    ON public.orders FOR SELECT USING (true);
+-- Backend full access
+CREATE POLICY "Service role manages orders"
+ON public.orders
+FOR ALL
+USING (auth.role() = 'service_role');
 
 
--- ── 4. COUPONS ──────────────────────────────────────────────
+-- ============================================================
+-- 4. COUPONS
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS public.coupons (
     code             TEXT PRIMARY KEY,
-    discount_type    TEXT NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+    discount_type    TEXT NOT NULL CHECK (
+        discount_type IN ('percentage', 'fixed')
+    ),
     discount_value   NUMERIC NOT NULL,
     min_order_value  NUMERIC,
     active           BOOLEAN NOT NULL DEFAULT true
@@ -134,102 +200,138 @@ CREATE TABLE IF NOT EXISTS public.coupons (
 
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 
+-- Drop policies
+DROP POLICY IF EXISTS "Public read active coupons" ON public.coupons;
+DROP POLICY IF EXISTS "Service role manages coupons" ON public.coupons;
+
+-- Public can read
 CREATE POLICY "Public read active coupons"
-    ON public.coupons FOR SELECT USING (true);
+ON public.coupons
+FOR SELECT
+USING (true);
 
-CREATE POLICY "Admin manages coupons"
-    ON public.coupons FOR ALL USING (true);
+-- Backend manages
+CREATE POLICY "Service role manages coupons"
+ON public.coupons
+FOR ALL
+USING (auth.role() = 'service_role');
 
 
--- ── 5. SEED PRODUCTS (updated Unsplash images) ──────────────
-INSERT INTO public.products (id, title, price, category, material, description, images, sizes, colors, rating)
-VALUES
-(
-    'prod_linen_kurta', 'Structured Linen Kurta', 6800, 'Men', 'Jaipur Handloom Linen',
-    'A contemporary take on the classic kurta, cut from crisp handloom linen woven in Jaipur. Mandarin collar, concealed placket, and side slits give it a clean architectural silhouette.',
-    ARRAY['https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80','https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80','https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80'],
-    ARRAY['S','M','L','XL','XXL'], ARRAY['Ivory White','Slate Grey','Indigo'], 4.7
-),
-(
-    'prod_bandhgala_jacket', 'Bandhgala Jacket', 12500, 'Men', 'Wool-Silk Blend, Bengaluru Atelier',
-    'A Nehru-collar bandhgala jacket tailored in our Bengaluru atelier from a fine wool-silk blend. Slim-fit with single-button closure, welt pockets, and full Mashru silk lining.',
-    ARRAY['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80','https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80','https://images.unsplash.com/photo-1617137968427-85924c800a22?w=800&q=80'],
-    ARRAY['S','M','L','XL'], ARRAY['Midnight Black','Ivory Cream','Forest Green'], 4.9
-),
-(
-    'prod_mesh_shirt', 'Geometric Mesh Shirt', 4500, 'Men', 'Hand-spun Banarasi Silk Blend',
-    'An editorial silhouette in ultra-lightweight Banarasi silk and cotton blend with geometric structural knit patterns. Hand-woven in Varanasi, tailored in our Bengaluru atelier.',
-    ARRAY['https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&q=80','https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80','https://images.unsplash.com/photo-1571945153237-4929e783af4a?w=800&q=80'],
-    ARRAY['S','M','L','XL'], ARRAY['Obsidian Black','Iridescent Silver','Beetle Navy'], 4.8
-),
-(
-    'prod_silk_shirt', 'Ikat Silk Shirt', 9200, 'Men', 'Pochampally Ikat Silk',
-    'A statement shirt woven from authentic Pochampally ikat silk — each piece unique due to the resist-dyeing process. Camp collar, mother-of-pearl buttons, curved hem.',
-    ARRAY['https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&q=80','https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80','https://images.unsplash.com/photo-1571945153237-4929e783af4a?w=800&q=80'],
-    ARRAY['S','M','L','XL'], ARRAY['Indigo & Gold','Rust & Ivory','Teal & Black'], 4.8
-),
-(
-    'prod_obsidian_overcoat', 'Obsidian Overcoat', 14500, 'Men', 'Fine Kashmir Wool & Silk',
-    'Double-breasted structured overcoat in ultra-dense Kashmir wool lined with pure Mashru silk. Tall protective collar, deep side slits, bespoke anatomical inner-lining.',
-    ARRAY['https://images.unsplash.com/photo-1617137968427-85924c800a22?w=800&q=80','https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80','https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80'],
-    ARRAY['M','L','XL'], ARRAY['Obsidian Black','Charcoal Gray'], 5.0
-),
-(
-    'prod_armor_trousers', 'Armor Trousers', 7200, 'Men', 'Jaipur Handloom Linen-Wool',
-    'Mid-rise trousers in bespoke Jaipur linen-wool blend. Sharp double front pleats, structural belt loops, adjustable gold buckle details.',
-    ARRAY['https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=800&q=80','https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80','https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80'],
-    ARRAY['S','M','L','XL'], ARRAY['Charcoal Gray','Obsidian Black','Khaki'], 4.6
-),
-(
-    'prod_mulberry_silk_kurta', 'Silk Kurta', 5800, 'Men', '100% Banarasi Mulberry Silk',
-    'Classic straight-cut kurta in pure Banarasi mulberry silk. Subtle self-woven texture, mandarin collar, side slits. Pairs beautifully with churidar or straight trousers.',
-    ARRAY['https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80','https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80','https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80'],
-    ARRAY['S','M','L','XL','XXL'], ARRAY['Ivory White','Champagne Gold','Midnight Blue'], 4.8
-),
-(
-    'prod_carapace_blouse', 'Carapace Blouse', 8900, 'Women', 'Handloom Mulberry Silk',
-    'Architectural blouse in double-weight mulberry handloom silk. Layered pleated sleeves catch light with a pearlized finish. Handcrafted in our Bengaluru atelier.',
-    ARRAY['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80','https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80','https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80'],
-    ARRAY['XS','S','M','L'], ARRAY['Champagne Gold','Iridescent Silver','Ivory Cream'], 4.9
-),
-(
-    'prod_anarkali_gown', 'Anarkali Silk Gown', 18500, 'Women', 'Pure Banarasi Silk',
-    'Floor-length Anarkali gown in pure Banarasi silk. Fitted bodice, dramatically flared skirt, intricate zari embroidery at neckline and cuffs. Handcrafted over 40 hours.',
-    ARRAY['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80','https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80','https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80'],
-    ARRAY['XS','S','M','L','XL'], ARRAY['Deep Crimson','Midnight Blue','Champagne Gold'], 5.0
-),
-(
-    'prod_drape_saree', 'Architectural Drape Saree', 22000, 'Women', 'Kanjivaram Silk',
-    'Contemporary pre-draped saree in heavyweight Kanjivaram silk. Structured pleated front panel, bold geometric zari border. Comes with fitted sleeveless blouse.',
-    ARRAY['https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80','https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80','https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80'],
-    ARRAY['XS','S','M','L'], ARRAY['Peacock Teal','Ivory & Gold','Burgundy'], 4.9
-),
-(
-    'prod_linen_coord', 'Linen Co-ord Set', 11200, 'Women', 'Handloom Linen, Kutch Embroidery',
-    'Boxy cropped jacket and wide-leg trousers in handloom linen. Hand-embroidered Kutch mirror-work at collar and cuffs. Effortlessly elegant for day or evening.',
-    ARRAY['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80','https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80','https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80'],
-    ARRAY['XS','S','M','L','XL'], ARRAY['Natural Ecru','Sage Green','Dusty Rose'], 4.7
-),
-(
-    'prod_linen_trousers_women', 'Wide-Leg Linen Trousers', 7800, 'Women', 'Handloom Linen, Jaipur',
-    'Relaxed wide-leg trousers in crisp handloom linen. High-rise waist, wide waistband, side pockets, clean straight hem.',
-    ARRAY['https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80','https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80','https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80'],
-    ARRAY['XS','S','M','L','XL'], ARRAY['Natural Ecru','Slate Blue','Terracotta'], 4.8
+-- ============================================================
+-- 5. SEED PRODUCTS
+-- ============================================================
+
+INSERT INTO public.products (
+    id,
+    title,
+    price,
+    category,
+    material,
+    description,
+    images,
+    sizes,
+    colors,
+    rating
 )
-ON CONFLICT (id) DO UPDATE SET
-    title = EXCLUDED.title, price = EXCLUDED.price, category = EXCLUDED.category,
-    material = EXCLUDED.material, description = EXCLUDED.description,
-    images = EXCLUDED.images, sizes = EXCLUDED.sizes,
-    colors = EXCLUDED.colors, rating = EXCLUDED.rating;
-
-
--- ── 6. SEED COUPONS ─────────────────────────────────────────
-INSERT INTO public.coupons (code, discount_type, discount_value, min_order_value, active)
 VALUES
-    ('WELCOME10',    'percentage', 10,   NULL, true),
-    ('STAGBEETLE20', 'percentage', 20,   NULL, true),
-    ('FESTIVE1000',  'fixed',      1000, 5000, true)
-ON CONFLICT (code) DO UPDATE SET
+
+(
+    'prod_linen_kurta',
+    'Structured Linen Kurta',
+    6800,
+    'Men',
+    'Jaipur Handloom Linen',
+    'A contemporary take on the classic kurta.',
+    ARRAY[
+        'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80',
+        'https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80'
+    ],
+    ARRAY['S','M','L','XL'],
+    ARRAY['Ivory White','Slate Grey'],
+    4.7
+),
+
+(
+    'prod_bandhgala_jacket',
+    'Bandhgala Jacket',
+    12500,
+    'Men',
+    'Wool-Silk Blend',
+    'A Nehru-collar bandhgala jacket.',
+    ARRAY[
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
+        'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80'
+    ],
+    ARRAY['S','M','L','XL'],
+    ARRAY['Midnight Black','Forest Green'],
+    4.9
+),
+
+(
+    'prod_drape_saree',
+    'Architectural Drape Saree',
+    22000,
+    'Women',
+    'Kanjivaram Silk',
+    'Contemporary pre-draped saree.',
+    ARRAY[
+        'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80',
+        'https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80'
+    ],
+    ARRAY['XS','S','M','L'],
+    ARRAY['Peacock Teal','Burgundy'],
+    4.9
+)
+
+ON CONFLICT (id)
+DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    category = EXCLUDED.category,
+    material = EXCLUDED.material,
+    description = EXCLUDED.description,
+    images = EXCLUDED.images,
+    sizes = EXCLUDED.sizes,
+    colors = EXCLUDED.colors,
+    rating = EXCLUDED.rating;
+
+
+-- ============================================================
+-- 6. SEED COUPONS
+-- ============================================================
+
+INSERT INTO public.coupons (
+    code,
+    discount_type,
+    discount_value,
+    min_order_value,
+    active
+)
+VALUES
+(
+    'WELCOME10',
+    'percentage',
+    10,
+    NULL,
+    true
+),
+(
+    'STAGBEETLE20',
+    'percentage',
+    20,
+    NULL,
+    true
+),
+(
+    'FESTIVE1000',
+    'fixed',
+    1000,
+    5000,
+    true
+)
+
+ON CONFLICT (code)
+DO UPDATE SET
     discount_type = EXCLUDED.discount_type,
     discount_value = EXCLUDED.discount_value,
     min_order_value = EXCLUDED.min_order_value,

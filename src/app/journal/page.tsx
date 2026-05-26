@@ -22,7 +22,7 @@ const articles = [
     issue: 'Issue V · Spring 2026',
     title: 'Varanasi at Dawn: A Visit to the Banarasi Silk Weavers',
     excerpt: 'We spent three days with the Ansari family in Varanasi, watching the Jacquard loom produce the silk that becomes our Carapace Blouse. A story of patience, precision, and pride.',
-    image: 'https://images.unsplash.com/photo-1583391733956-6c78276477e2?w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80',
     category: 'HERITAGE',
     readTime: '12 min read',
   },
