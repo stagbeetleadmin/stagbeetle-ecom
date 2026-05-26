@@ -1,14 +1,28 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import CartDrawer from './CartDrawer';
 import Logo from './Logo';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
 
-export default function Header() {
+const SUBCATEGORIES = [
+  { name: 'Discover', href: '/?category=all' },
+  { name: 'Shirts', href: '/?subcategory=Shirts' },
+  { name: 'T-shirts', href: '/?subcategory=T-shirts' },
+  { name: 'Jeans', href: '/?subcategory=Jeans' },
+  { name: 'Trousers', href: '/?subcategory=Trousers' },
+  { name: 'Cargo Pants', href: '/?subcategory=Cargo Pants' },
+  { name: 'Shoes', href: '/?subcategory=Shoes' },
+  { name: 'Overshirt', href: '/?subcategory=Overshirt' },
+  { name: 'Shorts', href: '/?subcategory=Shorts' },
+  { name: 'Sunglasses', href: '/?subcategory=Sunglasses' },
+  { name: 'Perfumes', href: '/?subcategory=Perfumes' },
+];
+
+function HeaderInner() {
   const { cartCount } = useCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -16,9 +30,13 @@ export default function Header() {
   const [searchTerm, setSearchTerm] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const { user, isAdmin, triggerLoginModal, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  const activeCategory = searchParams.get('category') || '';
+  const activeSubcategory = searchParams.get('subcategory') || '';
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 30);
@@ -71,7 +89,6 @@ export default function Header() {
                 <>
                   <Link href="/?category=all" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">New Arrivals</Link>
                   <Link href="/?category=men" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Men</Link>
-                  <Link href="/?category=women" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Women</Link>
                   <Link href="/about" className="text-[12px] font-semibold tracking-[0.12em] text-gray-800 hover:text-[#C5A059] transition-colors uppercase">Our Story</Link>
                 </>
               )}
@@ -87,7 +104,7 @@ export default function Header() {
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     placeholder="Search..."
-                    className="text-[13px] outline-none bg-transparent py-1 px-2 w-36 md:w-48"
+                    className="text-[13px] outline-none bg-transparent py-1 px-2 w-36 md:w-48 text-gray-800"
                   />
                   <button type="button" onClick={() => setSearchOpen(false)} className="p-1 text-gray-400 hover:text-gray-700">
                     <span className="material-symbols-outlined text-[18px]">close</span>
@@ -150,12 +167,43 @@ export default function Header() {
             </div>
           </div>
         </nav>
+
+        {/* Subcategory Bar (Snitch style) */}
+        {!isAdmin && (
+          <div className="w-full bg-white border-b border-gray-100 py-3 overflow-x-auto hide-scrollbar">
+            <div className="flex gap-6 md:gap-8 px-4 max-w-[1400px] mx-auto whitespace-nowrap justify-start md:justify-center">
+              {SUBCATEGORIES.map((sub) => {
+                const isActive = (sub.name === 'Discover' && !activeSubcategory && activeCategory !== 'men') ||
+                                 (sub.name !== 'Discover' && activeSubcategory.toLowerCase() === sub.name.toLowerCase());
+                return (
+                  <Link
+                    key={sub.name}
+                    href={sub.href}
+                    className={`text-[11px] font-bold tracking-widest uppercase transition-colors relative pb-1 ${
+                      isActive ? 'text-[#0D1B2A] border-b border-[#0D1B2A]' : 'text-gray-500 hover:text-[#C5A059]'
+                    }`}
+                  >
+                    {sub.name}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Spacer */}
-      <div className={`${isScrolled ? 'h-14' : isAdmin ? 'h-16' : 'h-[calc(2.5rem+4rem)]'} transition-all duration-300`} />
+      <div className={isAdmin ? (isScrolled ? 'h-14' : 'h-16') : (isScrolled ? 'h-[92px]' : 'h-[130px]')} />
 
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </>
+  );
+}
+
+export default function Header() {
+  return (
+    <Suspense fallback={<div className="h-16 bg-white border-b border-gray-100" />}>
+      <HeaderInner />
+    </Suspense>
   );
 }

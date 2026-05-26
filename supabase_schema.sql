@@ -277,23 +277,23 @@ VALUES
     ARRAY['S','M','L','XL'],
     ARRAY['Midnight Black','Forest Green'],
     4.9
-),
-
-(
-    'prod_drape_saree',
-    'Architectural Drape Saree',
-    22000,
-    'Women',
-    'Kanjivaram Silk',
-    'Contemporary pre-draped saree.',
-    ARRAY[
-        'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80',
-        'https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80'
-    ],
-    ARRAY['XS','S','M','L'],
-    ARRAY['Peacock Teal','Burgundy'],
-    4.9
 )
+
+-- (
+--     'prod_drape_saree',
+--     'Architectural Drape Saree',
+--     22000,
+--     'Women',
+--     'Kanjivaram Silk',
+--     'Contemporary pre-draped saree.',
+--     ARRAY[
+--         'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80',
+--         'https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80'
+--     ],
+--     ARRAY['XS','S','M','L'],
+--     ARRAY['Peacock Teal','Burgundy'],
+--     4.9
+-- )
 
 ON CONFLICT (id)
 DO UPDATE SET

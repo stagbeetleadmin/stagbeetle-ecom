@@ -6,6 +6,7 @@ export interface Product {
   title: string;
   price: number;
   category: string;
+  subcategory?: string; // e.g. "Shirts", "T-shirts", "Jeans", "Trousers", etc.
   material: string;
   description: string;
   images: string[]; // [Front, Back, Detail/Side]
@@ -111,6 +112,7 @@ const SEED_PRODUCTS: Product[] = [
     colors: ["Obsidian Black", "Iridescent Silver", "Beetle Navy"],
     rating: 4.8
   },
+  /*
   {
     id: "prod_carapace_blouse",
     title: "Carapace Blouse",
@@ -190,12 +192,14 @@ const SEED_PRODUCTS: Product[] = [
     sizes: ["XS", "S", "M", "L", "XL"],
     colors: ["Natural Ecru", "Slate Blue", "Terracotta"],
     rating: 4.8
-  },
+  }
+  */
   {
     id: "prod_obsidian_overcoat",
     title: "Obsidian Overcoat",
     price: 14500,
     category: "Men",
+    subcategory: "Jackets",
     material: "Fine Kashmir Wool & Silk",
     description: "A double-breasted structured overcoat constructed from ultra-dense premium Kashmir wool and lined with pure Mashru silk. Designed with a tall, protective collar, deep side slits, and a bespoke inner-lining displaying custom anatomical sketches.",
     images: [
@@ -212,6 +216,7 @@ const SEED_PRODUCTS: Product[] = [
     title: "Ikat Silk Shirt",
     price: 9200,
     category: "Men",
+    subcategory: "Shirts",
     material: "Pochampally Ikat Silk",
     description: "A statement shirt woven from authentic Pochampally ikat silk — each piece unique due to the resist-dyeing process. Relaxed fit with a camp collar, mother-of-pearl buttons, and a curved hem. A wearable piece of Telangana craft heritage.",
     images: [
@@ -228,6 +233,7 @@ const SEED_PRODUCTS: Product[] = [
     title: "Armor Trousers",
     price: 7200,
     category: "Men",
+    subcategory: "Trousers",
     material: "Jaipur Handloom Linen-Wool",
     description: "Mid-rise trousers crafted from a bespoke hand-woven Jaipur linen and wool blend. Features signature sharp double front pleats and side belt loops in structural shapes, with adjustable gold buckle details that let you define the fit at the waist.",
     images: [
@@ -244,6 +250,7 @@ const SEED_PRODUCTS: Product[] = [
     title: "Silk Kurta",
     price: 5800,
     category: "Men",
+    subcategory: "Shirts",
     material: "100% Banarasi Mulberry Silk",
     description: "A classic straight-cut kurta in pure Banarasi mulberry silk. Subtle self-woven texture, mandarin collar, and side slits. Pairs beautifully with churidar or straight trousers for festive occasions.",
     images: [
@@ -254,6 +261,167 @@ const SEED_PRODUCTS: Product[] = [
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Ivory White", "Champagne Gold", "Midnight Blue"],
     rating: 4.8
+  },
+  {
+    id: "prod_retro_tshirt",
+    title: "Retro Oversized Graphic Tee",
+    price: 999,
+    category: "Men",
+    subcategory: "T-shirts",
+    material: "100% Heavyweight Cotton",
+    description: "An oversized streetwear t-shirt with a vintage graphic print. Drop shoulders and double-needle stitching for a relaxed, robust look.",
+    images: [
+      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&q=80",
+      "https://images.unsplash.com/photo-1554568218-0f1715e72254?w=800&q=80",
+      "https://images.unsplash.com/photo-1527719327859-c6ce802585e4?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL"],
+    colors: ["Off-White", "Vintage Black"],
+    rating: 4.8
+  },
+  {
+    id: "prod_flared_jeans",
+    title: "Flared Fit Washed Jeans",
+    price: 1899,
+    category: "Men",
+    subcategory: "Jeans",
+    material: "Premium Rigid Denim",
+    description: "Throwback flared fit jeans with a classic mid-rise and heavily washed light indigo shade. Finished with signature pocket rivets and raw edges.",
+    images: [
+      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80",
+      "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800&q=80"
+    ],
+    sizes: ["30", "32", "34", "36"],
+    colors: ["Washed Indigo", "Charcoal Blue"],
+    rating: 4.9
+  },
+  {
+    id: "prod_bootcut_jeans",
+    title: "Bootcut Stretch Washed Jeans",
+    price: 1999,
+    category: "Men",
+    subcategory: "Jeans",
+    material: "Stretch Cotton Denim",
+    description: "Bootcut leg profile with a touch of stretch for day-long comfort. Clean dark wash with light whiskers and a zip-fly.",
+    images: [
+      "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80",
+      "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&q=80"
+    ],
+    sizes: ["30", "32", "34", "36"],
+    colors: ["Dark Blue", "Solid Black"],
+    rating: 4.7
+  },
+  {
+    id: "prod_cargo_pants",
+    title: "Tactical Utility Cargo Pants",
+    price: 2199,
+    category: "Men",
+    subcategory: "Cargo Pants",
+    material: "Durable Ripstop Cotton",
+    description: "Modern cargo pants cut from durable ripstop cotton. Equipped with multiple secure utility pockets, a relaxed silhouette, and drawcord adjustable cuffs.",
+    images: [
+      "https://images.unsplash.com/photo-1517423568366-8b83523034fd?w=800&q=80",
+      "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL"],
+    colors: ["Olive Green", "Desert Sand"],
+    rating: 4.9
+  },
+  {
+    id: "prod_knit_polo",
+    title: "Cable-Knit Summer Polo",
+    price: 1499,
+    category: "Men",
+    subcategory: "Polos",
+    material: "100% Knit Cotton",
+    description: "Retro summer vibe polo styled with a classic collar and cable-knit texture. Super breathable and holds its structure perfectly.",
+    images: [
+      "https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=800&q=80",
+      "https://images.unsplash.com/photo-1578932750294-f5075e85f44a?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL"],
+    colors: ["Mustard Yellow", "Ecru Cream"],
+    rating: 4.8
+  },
+  {
+    id: "prod_denim_overshirt",
+    title: "Heavyweight Denim Overshirt",
+    price: 2299,
+    category: "Men",
+    subcategory: "Overshirt",
+    material: "12oz Organic Denim",
+    description: "A heavyweight denim overshirt that functions as a light jacket. Boxy fit, dual chest flap pockets, and metallic shank buttons.",
+    images: [
+      "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&q=80",
+      "https://images.unsplash.com/photo-1611312449412-6cefac5dc3e4?w=800&q=80"
+    ],
+    sizes: ["M", "L", "XL"],
+    colors: ["Light Indigo", "Acid Black"],
+    rating: 4.9
+  },
+  {
+    id: "prod_retro_sunglasses",
+    title: "Vintage Square Sunglasses",
+    price: 999,
+    category: "Men",
+    subcategory: "Sunglasses",
+    material: "Premium Acetate & Alloy",
+    description: "Retro square frames inspired by 70s eyewear. Featuring tinted UV400 lenses and golden side accents for a sleek, bold profile.",
+    images: [
+      "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&q=80",
+      "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=800&q=80"
+    ],
+    sizes: ["One Size"],
+    colors: ["Tortoiseshell Brown", "Glossy Black"],
+    rating: 4.6
+  },
+  {
+    id: "prod_noir_perfume",
+    title: "Noir Intense Eau De Parfum",
+    price: 1799,
+    category: "Men",
+    subcategory: "Perfumes",
+    material: "Natural Essential Oils & Bergamot",
+    description: "An intense, woody fragrance combining base notes of cedarwood and patchouli with top notes of bergamot and dry amber. Long-lasting performance.",
+    images: [
+      "https://images.unsplash.com/photo-1541643600914-78b084683601?w=800&q=80",
+      "https://images.unsplash.com/photo-1594035910387-fea47794261f?w=800&q=80"
+    ],
+    sizes: ["100ml"],
+    colors: ["Matte Black"],
+    rating: 4.8
+  },
+  {
+    id: "prod_suede_loafers",
+    title: "Classic Suede Loafers",
+    price: 3499,
+    category: "Men",
+    subcategory: "Shoes",
+    material: "Italian Suede Leather",
+    description: "Slip-on suede loafers crafted with clean apron stitching and a cushioned leather footbed. Sleek and perfect for both smart-casual and formal ensembles.",
+    images: [
+      "https://images.unsplash.com/photo-1533867617858-e7b97e060509?w=800&q=80",
+      "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=800&q=80"
+    ],
+    sizes: ["7", "8", "9", "10"],
+    colors: ["Navy Blue", "Sandy Beige"],
+    rating: 4.7
+  },
+  {
+    id: "prod_knit_shorts",
+    title: "Tailored Drawstring Shorts",
+    price: 1199,
+    category: "Men",
+    subcategory: "Shorts",
+    material: "Premium Waffle Cotton",
+    description: "Relaxed fit shorts in a structured waffle knit. Equipped with an elastic waistband, cotton drawstrings, and deep side slash pockets.",
+    images: [
+      "https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=800&q=80",
+      "https://images.unsplash.com/photo-1591195854013-d485f30999de?w=800&q=80"
+    ],
+    sizes: ["S", "M", "L", "XL"],
+    colors: ["Sage Green", "Charcoal Gray"],
+    rating: 4.5
   }
 ];
 

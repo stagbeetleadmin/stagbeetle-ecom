@@ -610,15 +610,15 @@ function AdminDashboardContent() {
                     const paymentFailedCount = orders.filter(o => (o.payment_status || '').toLowerCase() !== 'paid').length;
 
                     // 2. Category Sales Calculations
-                    const categoryCounts: Record<string, number> = { Men: 0, Women: 0, Accessories: 0 };
-                    const categoryRevenue: Record<string, number> = { Men: 0, Women: 0, Accessories: 0 };
+                    const categoryCounts: Record<string, number> = { Men: 0, Accessories: 0 };
+                    const categoryRevenue: Record<string, number> = { Men: 0, Accessories: 0 };
                     let totalItemsSold = 0;
 
                     orders.forEach(o => {
                       o.items?.forEach(item => {
                         const prod = products.find(p => p.id === item.product_id);
                         const cat = prod?.category || 'Men';
-                        const resolvedCat = ['Men', 'Women', 'Accessories'].includes(cat) ? cat : 'Men';
+                        const resolvedCat = ['Men', 'Accessories'].includes(cat) ? cat : 'Men';
                         categoryCounts[resolvedCat] += item.quantity;
                         categoryRevenue[resolvedCat] += item.price * item.quantity;
                         totalItemsSold += item.quantity;
@@ -793,7 +793,7 @@ function AdminDashboardContent() {
                                 SHARE BY CATEGORY
                               </h3>
                               <div className="space-y-3.5 text-[12px] font-medium">
-                                {['Men', 'Women', 'Accessories'].map(cat => {
+                                {['Men', 'Accessories'].map(cat => {
                                   const count = categoryCounts[cat] || 0;
                                   const rev = categoryRevenue[cat] || 0;
                                   const pct = totalItemsSold > 0 ? Math.round((count / totalItemsSold) * 100) : 0;
@@ -1522,7 +1522,7 @@ function AdminDashboardContent() {
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   >
                     <option value="Men">Men</option>
-                    <option value="Women">Women</option>
+                    {/* <option value="Women">Women</option> */}
                     <option value="Accessories">Accessories</option>
                   </select>
                 </div>

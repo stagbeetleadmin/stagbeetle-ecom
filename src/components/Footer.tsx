@@ -26,7 +26,7 @@ export default function Footer() {
             <ul className="space-y-4 text-[13px] text-on-surface-variant">
               <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=all">New Arrivals</Link></li>
               <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=men">Men&apos;s Edit</Link></li>
-              <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=women">Women&apos;s Edit</Link></li>
+              {/* <li><Link className="hover:text-gold-leaf transition-colors" href="/?category=women">Women&apos;s Edit</Link></li> */}
             </ul>
           </div>
           
