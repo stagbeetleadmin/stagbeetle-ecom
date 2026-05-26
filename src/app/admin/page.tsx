@@ -10,7 +10,7 @@ import {
   Product, Coupon, Order, 
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
-  getOrders, updateOrderShipping
+  getOrders, updateOrderShipping, uploadGarmentImage
 } from '@/lib/db';
 
 function AdminDashboardContent() {
@@ -99,6 +99,33 @@ function AdminDashboardContent() {
     sizes: 'S, M, L, XL',
     colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
   });
+
+  // Image Uploading States
+  const [uploadingStates, setUploadingStates] = useState({
+    image1: false,
+    image2: false,
+    image3: false
+  });
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: 'image1' | 'image2' | 'image3') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingStates(prev => ({ ...prev, [fieldName]: true }));
+    try {
+      const publicUrl = await uploadGarmentImage(file);
+      if (publicUrl) {
+        setProductForm(prev => ({ ...prev, [fieldName]: publicUrl }));
+        triggerFeedback('success', 'Image uploaded successfully.');
+      } else {
+        triggerFeedback('error', 'Image upload failed. Fallback did not resolve.');
+      }
+    } catch (err: any) {
+      triggerFeedback('error', `Image upload failed: ${err.message || err}`);
+    } finally {
+      setUploadingStates(prev => ({ ...prev, [fieldName]: false }));
+    }
+  };
 
   // Coupon Form State
   const [couponForm, setCouponForm] = useState({
@@ -1551,32 +1578,121 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Images */}
-                <div className="sm:col-span-2 space-y-3">
-                  <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">IMAGE ANGLE URLS (MAIN + SIDES)</span>
+                <div className="sm:col-span-2 space-y-4">
+                  <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">GARMENT IMAGES (MAIN + SIDES)</span>
                   
-                  <div className="space-y-2">
-                    <input 
-                      type="text" 
-                      required
-                      value={productForm.image1}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, image1: e.target.value }))}
-                      placeholder="Front View Image URL"
-                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
-                    />
-                    <input 
-                      type="text" 
-                      value={productForm.image2}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, image2: e.target.value }))}
-                      placeholder="Back View Image URL (Optional)"
-                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
-                    />
-                    <input 
-                      type="text" 
-                      value={productForm.image3}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, image3: e.target.value }))}
-                      placeholder="Detail/Side View Image URL (Optional)"
-                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Image 1 */}
+                    <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Front View (Main) *</label>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <input 
+                          type="text" 
+                          required
+                          value={productForm.image1}
+                          onChange={(e) => setProductForm(prev => ({ ...prev, image1: e.target.value }))}
+                          placeholder="Paste image URL..."
+                          className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-1.5 px-2.5 text-[12px] outline-none"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
+                            <span className="material-symbols-outlined text-[12px]">upload</span>
+                            Upload File
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              className="hidden" 
+                              onChange={(e) => handleImageUpload(e, 'image1')}
+                            />
+                          </label>
+                          {uploadingStates.image1 && (
+                            <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
+                          )}
+                          {productForm.image1 && (
+                            <div className="w-8 h-10 border rounded-sm overflow-hidden shrink-0">
+                              <img src={productForm.image1} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Image 2 */}
+                    <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Back View (Optional)</label>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <input 
+                          type="text" 
+                          value={productForm.image2}
+                          onChange={(e) => setProductForm(prev => ({ ...prev, image2: e.target.value }))}
+                          placeholder="Paste image URL..."
+                          className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-1.5 px-2.5 text-[12px] outline-none"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
+                            <span className="material-symbols-outlined text-[12px]">upload</span>
+                            Upload File
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              className="hidden" 
+                              onChange={(e) => handleImageUpload(e, 'image2')}
+                            />
+                          </label>
+                          {uploadingStates.image2 && (
+                            <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
+                          )}
+                          {productForm.image2 && (
+                            <div className="w-8 h-10 border rounded-sm overflow-hidden shrink-0">
+                              <img src={productForm.image2} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Image 3 */}
+                    <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Detail View (Optional)</label>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <input 
+                          type="text" 
+                          value={productForm.image3}
+                          onChange={(e) => setProductForm(prev => ({ ...prev, image3: e.target.value }))}
+                          placeholder="Paste image URL..."
+                          className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-1.5 px-2.5 text-[12px] outline-none"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
+                            <span className="material-symbols-outlined text-[12px]">upload</span>
+                            Upload File
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              className="hidden" 
+                              onChange={(e) => handleImageUpload(e, 'image3')}
+                            />
+                          </label>
+                          {uploadingStates.image3 && (
+                            <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
+                          )}
+                          {productForm.image3 && (
+                            <div className="w-8 h-10 border rounded-sm overflow-hidden shrink-0">
+                              <img src={productForm.image3} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

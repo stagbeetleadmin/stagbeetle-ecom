@@ -277,6 +277,13 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+export const supabaseTimeout = (promise: any, ms = 4000): Promise<any> => {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), ms))
+  ]);
+};
+
 // =========================================================================
 // MOCK LOCALSTORAGE DATABASE STORAGE HELPERS
 // =========================================================================
@@ -325,22 +332,30 @@ const setLocalCoupons = (coupons: Coupon[]) => {
 export const getProducts = async (): Promise<Product[]> => {
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.from('products').select('*');
-      if (!error && data && data.length > 0) return data as Product[];
-    } catch (e) {
-      console.warn("Supabase failed, falling back to mock database:", e);
+      console.log("[Atelier DB] Fetching products from Supabase...");
+      const { data, error } = await supabaseTimeout(supabase.from('products').select('*'));
+      if (!error && data && data.length > 0) {
+        console.log("[Atelier DB] Successfully loaded products from Supabase.");
+        return data as Product[];
+      }
+      if (error) console.warn("[Atelier DB] Supabase products query error:", error.message);
+    } catch (e: any) {
+      console.warn("[Atelier DB] Supabase products failed or timed out:", e.message || e);
     }
   }
+  console.log("[Atelier DB] Returning local mock products.");
   return getLocalProducts();
 };
 
 export const getProductById = async (id: string): Promise<Product | null> => {
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+      console.log(`[Atelier DB] Fetching product ${id} from Supabase...`);
+      const { data, error } = await supabaseTimeout(supabase.from('products').select('*').eq('id', id).single());
       if (!error && data) return data as Product;
-    } catch (e) {
-      console.warn(`Supabase getProductById failed for id ${id}, falling back to mock:`, e);
+      if (error) console.warn("[Atelier DB] Supabase product error:", error.message);
+    } catch (e: any) {
+      console.warn(`[Atelier DB] Supabase getProductById failed or timed out for ${id}:`, e.message || e);
     }
   }
   return getLocalProducts().find(p => p.id === id) || null;
@@ -435,12 +450,18 @@ export const bulkUploadProducts = async (newProducts: Omit<Product, 'id'>[]): Pr
 export const getCoupons = async (): Promise<Coupon[]> => {
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.from('coupons').select('*');
-      if (!error && data && data.length > 0) return data as Coupon[];
-    } catch (e) {
-      console.warn("Supabase failed fetching coupons, falling back to mock:", e);
+      console.log("[Atelier DB] Fetching coupons from Supabase...");
+      const { data, error } = await supabaseTimeout(supabase.from('coupons').select('*'));
+      if (!error && data && data.length > 0) {
+        console.log("[Atelier DB] Successfully loaded coupons from Supabase.");
+        return data as Coupon[];
+      }
+      if (error) console.warn("[Atelier DB] Supabase coupons error:", error.message);
+    } catch (e: any) {
+      console.warn("[Atelier DB] Supabase coupons failed or timed out:", e.message || e);
     }
   }
+  console.log("[Atelier DB] Returning local mock coupons.");
   return getLocalCoupons();
 };
 
@@ -512,21 +533,27 @@ export const validateCoupon = async (code: string, orderValue: number): Promise<
 export const getOrders = async (): Promise<Order[]> => {
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      if (!error && data) return data as Order[];
-    } catch (e) {
-      console.warn("Supabase failed fetching orders, falling back to mock:", e);
+      console.log("[Atelier DB] Fetching orders from Supabase...");
+      const { data, error } = await supabaseTimeout(
+        supabase.from('orders').select('*').order('created_at', { ascending: false })
+      );
+      if (!error && data) {
+        console.log(`[Atelier DB] Successfully loaded ${data.length} orders from Supabase.`);
+        return data as Order[];
+      }
+      if (error) console.warn("[Atelier DB] Supabase orders error:", error.message);
+    } catch (e: any) {
+      console.warn("Supabase failed fetching orders or timed out, falling back to mock:", e.message || e);
     }
   }
-
-  if (typeof window !== 'undefined') {
+  console.log("[Atelier DB] Returning local mock orders.");
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem('stag_beetle_orders');
+  if (stored) {
     try {
-      const stored = localStorage.getItem('stag_beetle_orders');
-      if (stored) {
-        return JSON.parse(stored).sort((a: any, b: any) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      }
+      return JSON.parse(stored).sort((a: any, b: any) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     } catch (e) {
       console.error(e);
     }
@@ -641,10 +668,12 @@ export const getSuggestions = async (cartProductIds: string[]): Promise<Product[
 export const getProfile = async (id: string): Promise<UserProfile | null> => {
   if (isSupabaseConfigured && supabase && !id.startsWith('usr_')) {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+      console.log(`[Atelier DB] Fetching profile ${id} from Supabase...`);
+      const { data, error } = await supabaseTimeout(supabase.from('profiles').select('*').eq('id', id).single());
       if (!error && data) return data as UserProfile;
-    } catch (e) {
-      console.warn(`Supabase getProfile failed for id ${id}, falling back to mock:`, e);
+      if (error) console.warn("[Atelier DB] Supabase getProfile error:", error.message);
+    } catch (e: any) {
+      console.warn(`Supabase getProfile failed or timed out for id ${id}, falling back to mock:`, e.message || e);
     }
   }
 
@@ -665,10 +694,12 @@ export const getProfile = async (id: string): Promise<UserProfile | null> => {
 export const upsertProfile = async (profile: UserProfile): Promise<UserProfile> => {
   if (isSupabaseConfigured && supabase && !profile.id.startsWith('usr_')) {
     try {
-      const { data, error } = await supabase.from('profiles').upsert([profile]).select().single();
+      console.log(`[Atelier DB] Upserting profile ${profile.id} to Supabase...`);
+      const { data, error } = await supabaseTimeout(supabase.from('profiles').upsert([profile]).select().single());
       if (!error && data) return data as UserProfile;
-    } catch (e) {
-      console.warn("Supabase upsertProfile failed, falling back to mock:", e);
+      if (error) console.warn("[Atelier DB] Supabase upsertProfile error:", error.message);
+    } catch (e: any) {
+      console.warn("Supabase upsertProfile failed or timed out, falling back to mock:", e.message || e);
     }
   }
 
@@ -691,4 +722,44 @@ export const upsertProfile = async (profile: UserProfile): Promise<UserProfile> 
     localStorage.setItem('stag_beetle_profiles', JSON.stringify(profiles));
   }
   return profile;
+};
+
+export const uploadGarmentImage = async (file: File): Promise<string> => {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 11)}_${Date.now()}.${fileExt}`;
+      const filePath = `products/${fileName}`;
+
+      console.log(`[Atelier Storage] Uploading ${file.name} to Supabase bucket 'garment-images'...`);
+      const { data, error } = await supabase.storage
+        .from('garment-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.warn("[Atelier Storage] Supabase upload failed:", error.message);
+        throw error;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('garment-images')
+        .getPublicUrl(filePath);
+
+      console.log("[Atelier Storage] Public URL resolved:", urlData.publicUrl);
+      return urlData.publicUrl;
+    } catch (e: any) {
+      console.warn("[Atelier Storage] Supabase upload timed out or failed, using Base64 data URL fallback:", e.message || e);
+    }
+  }
+
+  // Local fallback: convert to Base64
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 };

@@ -43,9 +43,11 @@ export default function Header() {
     <>
       <header className="fixed top-0 left-0 w-full z-[100] flex flex-col">
         {/* Announcement Banner */}
-        <div className={`w-full bg-[#0D1B2A] text-white text-[10px] font-medium tracking-[0.2em] text-center transition-all duration-500 overflow-hidden ${isScrolled ? 'h-0 py-0 opacity-0' : 'py-2.5 opacity-100'}`}>
-          FREE SHIPPING ACROSS INDIA &nbsp;·&nbsp; USE CODE <span className="text-[#C5A059] font-bold">WELCOME10</span> FOR 10% OFF
-        </div>
+        {!isAdmin && (
+          <div className={`w-full bg-[#0D1B2A] text-white text-[10px] font-medium tracking-[0.2em] text-center transition-all duration-500 overflow-hidden ${isScrolled ? 'h-0 py-0 opacity-0' : 'py-2.5 opacity-100'}`}>
+            FREE SHIPPING ACROSS INDIA &nbsp;·&nbsp; USE CODE <span className="text-[#C5A059] font-bold">WELCOME10</span> FOR 10% OFF
+          </div>
+        )}
 
         {/* Main Nav */}
         <nav className={`w-full bg-white border-b border-gray-100 transition-all duration-300 ${isScrolled ? 'shadow-sm' : ''}`}>
@@ -151,7 +153,7 @@ export default function Header() {
       </header>
 
       {/* Spacer */}
-      <div className={`${isScrolled ? 'h-14' : 'h-[calc(2.5rem+4rem)]'} transition-all duration-300`} />
+      <div className={`${isScrolled ? 'h-14' : isAdmin ? 'h-16' : 'h-[calc(2.5rem+4rem)]'} transition-all duration-300`} />
 
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </>

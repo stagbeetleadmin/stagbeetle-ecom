@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserProfile, upsertProfile, supabase } from '@/lib/db';
+import { UserProfile, upsertProfile, supabase, supabaseTimeout } from '@/lib/db';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -45,13 +45,21 @@ function profileFromSupabaseUser(supabaseUser: {
 async function fetchProfile(id: string): Promise<UserProfile | null> {
   if (!supabase) return null;
   if (id.startsWith('usr_')) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', id)
-    .single();
-  if (error || !data) return null;
-  return data as UserProfile;
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single(),
+      4000
+    );
+    if (error || !data) return null;
+    return data as UserProfile;
+  } catch (e) {
+    console.warn("fetchProfile query timed out or failed:", e);
+    return null;
+  }
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -172,12 +180,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ── Supabase path ──────────────────────────────────────────────────────
       if (supabase) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await supabaseTimeout(supabase.auth.getSession(), 4000);
           if (session?.user && mounted) {
             await resolveAndSetProfile(session.user);
           }
         } catch (e) {
-          console.warn('Supabase session bootstrap failed:', e);
+          console.warn('Supabase session bootstrap failed or timed out:', e);
         }
       }
 
