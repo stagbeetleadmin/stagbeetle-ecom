@@ -6,8 +6,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { 
-  Product, Coupon, Order, 
+import {
+  Product, Coupon, Order,
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage
@@ -27,7 +27,7 @@ function AdminDashboardContent() {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
-  
+
   // Database States
   const [products, setProducts] = useState<Product[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -59,7 +59,7 @@ function AdminDashboardContent() {
     e.preventDefault();
     setLoginError('');
     setLoginLoading(false); // Reset just in case
-    
+
     if (!adminEmail.trim() || !adminPassword.trim()) {
       setLoginError('Please enter both email and password.');
       return;
@@ -86,7 +86,7 @@ function AdminDashboardContent() {
   // Form Modals
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  
+
   // Product Form Input State
   const [productForm, setProductForm] = useState({
     title: '',
@@ -128,7 +128,7 @@ function AdminDashboardContent() {
       const compressedFile = await compressImage(file);
       console.log(`[Admin Portal] Uploading compressed image to Supabase storage...`);
       const publicUrl = await uploadGarmentImage(compressedFile, productForm.sku, imgIndex);
-      
+
       if (publicUrl) {
         setProductForm(prev => ({ ...prev, [fieldName]: publicUrl }));
         if (publicUrl.startsWith('data:')) {
@@ -189,10 +189,10 @@ function AdminDashboardContent() {
     return (
       <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
         <Header />
-        
+
         <main className="flex-1 flex items-center justify-center py-20 relative z-10 bg-white">
           <div className="fixed inset-0 marble-overlay z-0"></div>
-          
+
           <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
             <div className="text-center mb-6">
               <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
@@ -207,22 +207,20 @@ function AdminDashboardContent() {
               <button
                 type="button"
                 onClick={() => { setActiveGateTab('login'); setLoginError(''); setPasscodeError(''); }}
-                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${
-                  activeGateTab === 'login'
+                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${activeGateTab === 'login'
                     ? 'border-gold-leaf text-on-surface'
                     : 'border-transparent text-zinc-400 hover:text-zinc-600'
-                }`}
+                  }`}
               >
                 Admin Sign In
               </button>
               <button
                 type="button"
                 onClick={() => { setActiveGateTab('passcode'); setLoginError(''); setPasscodeError(''); }}
-                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${
-                  activeGateTab === 'passcode'
+                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${activeGateTab === 'passcode'
                     ? 'border-gold-leaf text-on-surface'
                     : 'border-transparent text-zinc-400 hover:text-zinc-600'
-                }`}
+                  }`}
               >
                 Atelier Passcode
               </button>
@@ -232,8 +230,8 @@ function AdminDashboardContent() {
               <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     placeholder="admin@stagbeetle.co.in"
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
@@ -244,8 +242,8 @@ function AdminDashboardContent() {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     placeholder="••••••••"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
@@ -273,8 +271,8 @@ function AdminDashboardContent() {
               <form onSubmit={handlePasscodeSubmit} className="space-y-5">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSCODE</label>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     placeholder="••••••••••••••"
                     value={passcode}
                     onChange={(e) => setPasscode(e.target.value)}
@@ -303,7 +301,7 @@ function AdminDashboardContent() {
             </div>
           </div>
         </main>
-        
+
         <Footer />
       </div>
     );
@@ -464,7 +462,7 @@ function AdminDashboardContent() {
         min_order_value: couponForm.min_order_value > 0 ? Number(couponForm.min_order_value) : undefined,
         active: couponForm.active
       });
-      
+
       triggerFeedback('success', `Promo code ${couponForm.code.toUpperCase()} registered!`);
       setCouponForm({
         code: '',
@@ -513,14 +511,14 @@ function AdminDashboardContent() {
         <div className="fixed inset-0 marble-overlay z-0"></div>
 
         <div className="max-w-container-max mx-auto px-6 md:px-12 relative z-10">
-          
+
           {/* Page Title & Status */}
           <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-on-surface/10 pb-6 mb-8 gap-4">
             <div>
               <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
               <h1 className="font-display text-[32px] font-semibold text-on-surface">Atelier Dashboard</h1>
             </div>
-            
+
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">
                 <span className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></span>
@@ -528,7 +526,7 @@ function AdminDashboardContent() {
                   ACTIVE ATELIER DEV ENGINE
                 </span>
               </div>
-              
+
               <button
                 type="button"
                 onClick={async () => {
@@ -545,27 +543,25 @@ function AdminDashboardContent() {
 
           {/* Feedback Messages */}
           {feedbackMsg.text && (
-            <div className={`mb-6 p-4 rounded-sm border text-[13px] font-medium transition-all ${
-              feedbackMsg.type === 'success' 
-                ? 'bg-green-50 border-green-200 text-green-800' 
+            <div className={`mb-6 p-4 rounded-sm border text-[13px] font-medium transition-all ${feedbackMsg.type === 'success'
+                ? 'bg-green-50 border-green-200 text-green-800'
                 : 'bg-red-50 border-red-200 text-red-800'
-            }`}>
+              }`}>
               {feedbackMsg.text}
             </div>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
+
             {/* Sidebar Navigation */}
             <div className="lg:col-span-3 bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-2">
               <button
                 type="button"
                 onClick={() => router.push('/admin?tab=analytics')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
-                  activeTab === 'analytics'
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'analytics'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-[18px]">query_stats</span>
                 ATELIER ANALYTICS
@@ -574,23 +570,21 @@ function AdminDashboardContent() {
               <button
                 type="button"
                 onClick={() => router.push('/admin?tab=products')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
-                  activeTab === 'products'
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'products'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-[18px]">apparel</span>
                 GARMENT CATALOG
               </button>
-              
+
               <button
                 onClick={() => router.push('/admin?tab=coupons')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
-                  activeTab === 'coupons'
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'coupons'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-[18px]">sell</span>
                 DISCOUNT COUPONS
@@ -598,11 +592,10 @@ function AdminDashboardContent() {
 
               <button
                 onClick={() => router.push('/admin?tab=orders')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
-                  activeTab === 'orders'
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'orders'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-[18px]">receipt_long</span>
                 ORDER REGISTRY
@@ -611,7 +604,7 @@ function AdminDashboardContent() {
 
             {/* Dashboard Workspace */}
             <div className="lg:col-span-9 bg-white border border-on-surface/5 p-6 md:p-8 min-h-[500px]">
-              
+
               {loading ? (
                 <div className="flex justify-center py-24">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-leaf"></div>
@@ -624,10 +617,10 @@ function AdminDashboardContent() {
                     const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
                     const totalOrders = orders.length;
                     const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
-                    
+
                     const returnedOrders = orders.filter(o => o.shipping_status === 'Returned').length;
                     const returnRate = totalOrders > 0 ? ((returnedOrders / totalOrders) * 100).toFixed(1) : '0.0';
-                    
+
                     const deliveredOrders = orders.filter(o => o.shipping_status === 'Delivered').length;
                     const processingOrders = orders.filter(o => o.shipping_status === 'Processing' || !o.shipping_status).length;
                     const transitOrders = orders.filter(o => o.shipping_status === 'Shipped' || o.shipping_status === 'In Transit' || o.shipping_status === 'Scheduled').length;
@@ -696,7 +689,7 @@ function AdminDashboardContent() {
                     const chartWidth = 500;
                     const chartHeight = 150;
                     const maxRevenue = Math.max(...dailyStats.map(d => d.revenue), 1000);
-                    
+
                     const chartPoints = dailyStats.map((d, index) => {
                       const x = (index / (dailyStats.length - 1)) * chartWidth;
                       // Max height minus padding
@@ -766,7 +759,7 @@ function AdminDashboardContent() {
 
                         {/* Chart & Category Distribution */}
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                          
+
                           {/* Daily Sales Trend SVG Chart */}
                           <div className="lg:col-span-8 border border-on-surface/5 p-6 rounded-sm space-y-4 shadow-sm bg-white">
                             <div className="flex justify-between items-center pb-2 border-b border-zinc-50">
@@ -775,21 +768,21 @@ function AdminDashboardContent() {
                               </h3>
                               <span className="text-[10px] bg-gold-leaf/10 text-gold-leaf font-bold px-2 py-0.5 rounded-sm">7-Day Horizon</span>
                             </div>
-                            
+
                             <div className="w-full relative pt-2">
                               {/* Responsive SVG Chart */}
                               <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full overflow-visible">
                                 <defs>
                                   <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#C5A059" stopOpacity="0.4"/>
-                                    <stop offset="100%" stopColor="#C5A059" stopOpacity="0.0"/>
+                                    <stop offset="0%" stopColor="#C5A059" stopOpacity="0.4" />
+                                    <stop offset="100%" stopColor="#C5A059" stopOpacity="0.0" />
                                   </linearGradient>
                                 </defs>
 
                                 {/* Grid Lines */}
                                 <line x1="0" y1="20" x2={chartWidth} y2="20" stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
-                                <line x1="0" y1={chartHeight/2} x2={chartWidth} y2={chartHeight/2} stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
-                                <line x1="0" y1={chartHeight-20} x2={chartWidth} y2={chartHeight-20} stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
+                                <line x1="0" y1={chartHeight / 2} x2={chartWidth} y2={chartHeight / 2} stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
+                                <line x1="0" y1={chartHeight - 20} x2={chartWidth} y2={chartHeight - 20} stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 4" />
 
                                 {/* Filled Area */}
                                 {areaD && <path d={areaD} fill="url(#chartGradient)" />}
@@ -832,8 +825,8 @@ function AdminDashboardContent() {
                                         <span>₹{rev.toLocaleString('en-IN')} ({pct}%)</span>
                                       </div>
                                       <div className="h-1.5 w-full bg-zinc-150 rounded-full overflow-hidden">
-                                        <div 
-                                          className="h-full bg-gold-leaf transition-all duration-500" 
+                                        <div
+                                          className="h-full bg-gold-leaf transition-all duration-500"
                                           style={{ width: `${pct}%` }}
                                         />
                                       </div>
@@ -862,13 +855,13 @@ function AdminDashboardContent() {
 
                               const R = 36;
                               const C = 2 * Math.PI * R; // ~226.195
-                              
+
                               const dashDelivered = `${(deliveredPct / 100) * C} ${C}`;
                               const offsetDelivered = 0;
-                              
+
                               const dashUndelivered = `${(undeliveredPct / 100) * C} ${C}`;
                               const offsetUndelivered = -((deliveredPct / 100) * C);
-                              
+
                               const dashReturned = `${(returnedPct / 100) * C} ${C}`;
                               const offsetReturned = -(((deliveredPct + undeliveredPct) / 100) * C);
 
@@ -987,7 +980,7 @@ function AdminDashboardContent() {
 
                               const R = 36;
                               const C = 2 * Math.PI * R;
-                              
+
                               const dashSuccess = `${(paymentSuccessPct / 100) * C} ${C}`;
                               const offsetSuccess = 0;
 
@@ -1107,7 +1100,8 @@ function AdminDashboardContent() {
                         </div>
 
                       </div>
-                    )})()}
+                    )
+                  })()}
 
                   {/* TAB 1: PRODUCT CATALOG */}
                   {activeTab === 'products' && (
@@ -1138,10 +1132,10 @@ function AdminDashboardContent() {
                             {products.map(prod => (
                               <tr key={prod.id} className="hover:bg-surface-dim/20 transition-colors">
                                 <td className="py-4 flex items-center gap-3">
-                                  <img 
-                                    src={prod.images[0]} 
-                                    alt={prod.title} 
-                                    className="w-10 h-13 object-cover aspect-[3/4] border bg-zinc-50" 
+                                  <img
+                                    src={prod.images[0]}
+                                    alt={prod.title}
+                                    className="w-10 h-13 object-cover aspect-[3/4] border bg-zinc-50"
                                   />
                                   <div>
                                     <div className="font-bold text-on-surface text-[14px]">{prod.title}</div>
@@ -1179,7 +1173,7 @@ function AdminDashboardContent() {
                         <p className="text-[12px] text-on-surface-variant leading-relaxed font-body">
                           Paste a JSON array of products to seed or bulk-update your shopify-style inventory catalog.
                         </p>
-                        
+
                         <textarea
                           rows={6}
                           placeholder={`[\n  {\n    "title": "Product Title",\n    "price": 1000,\n    ...\n  }\n]`}
@@ -1195,7 +1189,7 @@ function AdminDashboardContent() {
                           >
                             LOAD MOCK SAMPLE JSON
                           </button>
-                          
+
                           <button
                             onClick={handleBulkUpload}
                             className="bg-primary text-white px-6 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
@@ -1235,8 +1229,8 @@ function AdminDashboardContent() {
 
                           <div className="space-y-1">
                             <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">COUPON CODE</label>
-                            <input 
-                              type="text" 
+                            <input
+                              type="text"
                               placeholder="e.g. WELCOME30"
                               value={couponForm.code}
                               onChange={(e) => setCouponForm(prev => ({ ...prev, code: e.target.value }))}
@@ -1260,8 +1254,8 @@ function AdminDashboardContent() {
                             <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">
                               DISCOUNT VALUE {couponForm.discount_type === 'percentage' ? '(%)' : '(₹)'}
                             </label>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               value={couponForm.discount_value || ''}
                               onChange={(e) => setCouponForm(prev => ({ ...prev, discount_value: Number(e.target.value) }))}
                               placeholder={couponForm.discount_type === 'percentage' ? 'e.g. 20' : 'e.g. 1000'}
@@ -1271,8 +1265,8 @@ function AdminDashboardContent() {
 
                           <div className="space-y-1">
                             <label className="text-[10px] font-label-caps font-semibold text-on-surface-variant">MIN ORDER AMOUNT REQUIRED (₹)</label>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               value={couponForm.min_order_value || ''}
                               onChange={(e) => setCouponForm(prev => ({ ...prev, min_order_value: Number(e.target.value) }))}
                               placeholder="e.g. 3000 (Optional)"
@@ -1293,7 +1287,7 @@ function AdminDashboardContent() {
                           <h3 className="font-label-caps text-[11px] text-zinc-500 tracking-[0.2em] font-semibold uppercase">
                             ACTIVE PROMO CODES
                           </h3>
-                          
+
                           <div className="border border-on-surface/5 rounded-sm divide-y divide-on-surface/5 text-[13px]">
                             {coupons.map(coupon => (
                               <div key={coupon.code} className="p-4 flex items-center justify-between hover:bg-surface-dim/20 transition-colors">
@@ -1309,7 +1303,7 @@ function AdminDashboardContent() {
                                     {coupon.min_order_value && ` | Min Order: ₹${coupon.min_order_value}`}
                                   </p>
                                 </div>
-                                
+
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteCoupon(coupon.code)}
@@ -1341,7 +1335,7 @@ function AdminDashboardContent() {
                         <div className="space-y-6">
                           {orders.map(order => (
                             <div key={order.id} className="border border-on-surface/5 p-5 bg-surface-dim/10 rounded-sm space-y-4 text-[13px]">
-                              
+
                               {/* Order Header */}
                               <div className="flex justify-between items-baseline border-b border-on-surface/10 pb-2.5">
                                 <div className="space-y-0.5">
@@ -1392,7 +1386,7 @@ function AdminDashboardContent() {
                                     </span>
                                   )}
                                 </div>
-                                
+
                                 <div className="text-right flex items-baseline gap-2">
                                   <span className="text-on-surface-variant text-[11px] font-label-caps">Total Charged:</span>
                                   <span className="text-gold-leaf font-bold text-[18px]">₹{order.total_price}</span>
@@ -1496,14 +1490,14 @@ function AdminDashboardContent() {
       {/* PRODUCT FORM MODAL (Add/Edit)                                            */}
       {/* ========================================================================= */}
       {showProductModal && (
-        <div className="fixed inset-0 z-[200] overflow-y-auto flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800">
-            
+        <div className="fixed inset-0 z-[200] overflow-y-auto flex items-start justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800 my-auto">
+
             <div className="px-6 py-4 border-b border-on-surface/10 bg-surface-dim/40 flex justify-between items-center">
               <h3 className="font-display text-[18px] font-semibold text-on-surface">
                 {editingProduct ? `Edit Garment Specifications: ${editingProduct.title}` : 'Add New Garment to Catalog'}
               </h3>
-              <button 
+              <button
                 onClick={() => setShowProductModal(false)}
                 className="material-symbols-outlined text-[20px] text-zinc-400 hover:text-zinc-600"
               >
@@ -1511,15 +1505,15 @@ function AdminDashboardContent() {
               </button>
             </div>
 
-            <form onSubmit={handleProductSubmit} className="p-6 space-y-6">
-              
+            <form onSubmit={handleProductSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
+
                 {/* Title */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT NAME</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={productForm.title}
                     onChange={(e) => setProductForm(prev => ({ ...prev, title: e.target.value }))}
@@ -1531,8 +1525,8 @@ function AdminDashboardContent() {
                 {/* SKU */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SKU NUMBER</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={productForm.sku}
                     onChange={(e) => setProductForm(prev => ({ ...prev, sku: e.target.value }))}
@@ -1544,8 +1538,8 @@ function AdminDashboardContent() {
                 {/* Price */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">PRICE IN RUPEES (₹)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     required
                     value={productForm.price || ''}
                     onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
@@ -1600,8 +1594,8 @@ function AdminDashboardContent() {
                 {/* Material */}
                 <div className="space-y-1.5 sm:col-span-2">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">FABRIC SPECIFICATION</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={productForm.material}
                     onChange={(e) => setProductForm(prev => ({ ...prev, material: e.target.value }))}
@@ -1613,7 +1607,7 @@ function AdminDashboardContent() {
                 {/* Description */}
                 <div className="sm:col-span-2 space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">DESCRIPTION</label>
-                  <textarea 
+                  <textarea
                     rows={3}
                     required
                     value={productForm.description}
@@ -1626,8 +1620,8 @@ function AdminDashboardContent() {
                 {/* Colors */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">COLORS (COMMA SEPARATED)</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={productForm.colors}
                     onChange={(e) => setProductForm(prev => ({ ...prev, colors: e.target.value }))}
                     placeholder="e.g. Ivory White, Sky Blue"
@@ -1638,8 +1632,8 @@ function AdminDashboardContent() {
                 {/* Sizes */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SIZES (COMMA SEPARATED)</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={productForm.sizes}
                     onChange={(e) => setProductForm(prev => ({ ...prev, sizes: e.target.value }))}
                     placeholder="e.g. S, M, L, XL"
@@ -1650,17 +1644,17 @@ function AdminDashboardContent() {
                 {/* Images */}
                 <div className="sm:col-span-2 space-y-4">
                   <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">GARMENT IMAGES (MAIN + SIDES)</span>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Image 1 */}
                     <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
                       <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Front View (Main) *</label>
                       </div>
-                      
+
                       <div className="space-y-2">
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           required
                           value={productForm.image1}
                           onChange={(e) => setProductForm(prev => ({ ...prev, image1: e.target.value }))}
@@ -1671,10 +1665,10 @@ function AdminDashboardContent() {
                           <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
                             <span className="material-symbols-outlined text-[12px]">upload</span>
                             Upload File
-                            <input 
-                              type="file" 
+                            <input
+                              type="file"
                               accept="image/*"
-                              className="hidden" 
+                              className="hidden"
                               onChange={(e) => handleImageUpload(e, 'image1')}
                             />
                           </label>
@@ -1695,10 +1689,10 @@ function AdminDashboardContent() {
                       <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Back View (Optional)</label>
                       </div>
-                      
+
                       <div className="space-y-2">
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={productForm.image2}
                           onChange={(e) => setProductForm(prev => ({ ...prev, image2: e.target.value }))}
                           placeholder="Paste image URL..."
@@ -1708,10 +1702,10 @@ function AdminDashboardContent() {
                           <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
                             <span className="material-symbols-outlined text-[12px]">upload</span>
                             Upload File
-                            <input 
-                              type="file" 
+                            <input
+                              type="file"
                               accept="image/*"
-                              className="hidden" 
+                              className="hidden"
                               onChange={(e) => handleImageUpload(e, 'image2')}
                             />
                           </label>
@@ -1732,10 +1726,10 @@ function AdminDashboardContent() {
                       <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Detail View (Optional)</label>
                       </div>
-                      
+
                       <div className="space-y-2">
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={productForm.image3}
                           onChange={(e) => setProductForm(prev => ({ ...prev, image3: e.target.value }))}
                           placeholder="Paste image URL..."
@@ -1745,10 +1739,10 @@ function AdminDashboardContent() {
                           <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
                             <span className="material-symbols-outlined text-[12px]">upload</span>
                             Upload File
-                            <input 
-                              type="file" 
+                            <input
+                              type="file"
                               accept="image/*"
-                              className="hidden" 
+                              className="hidden"
                               onChange={(e) => handleImageUpload(e, 'image3')}
                             />
                           </label>
