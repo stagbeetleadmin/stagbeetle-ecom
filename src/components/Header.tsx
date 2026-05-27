@@ -10,16 +10,12 @@ import { useAuth } from '@/context/AuthContext';
 
 const SUBCATEGORIES = [
   { name: 'Discover', href: '/?category=all' },
-  { name: 'Shirts', href: '/?subcategory=Shirts' },
-  { name: 'T-shirts', href: '/?subcategory=T-shirts' },
+  { name: 'Shirt', href: '/?subcategory=Shirt' },
   { name: 'Jeans', href: '/?subcategory=Jeans' },
-  { name: 'Trousers', href: '/?subcategory=Trousers' },
-  { name: 'Cargo Pants', href: '/?subcategory=Cargo Pants' },
-  { name: 'Shoes', href: '/?subcategory=Shoes' },
-  { name: 'Overshirt', href: '/?subcategory=Overshirt' },
+  { name: 'Tshirt', href: '/?subcategory=Tshirt' },
+  { name: 'Track pant', href: '/?subcategory=Track pant' },
   { name: 'Shorts', href: '/?subcategory=Shorts' },
-  { name: 'Sunglasses', href: '/?subcategory=Sunglasses' },
-  { name: 'Perfumes', href: '/?subcategory=Perfumes' },
+  { name: 'Jacket', href: '/?subcategory=Jacket' },
 ];
 
 function HeaderInner() {

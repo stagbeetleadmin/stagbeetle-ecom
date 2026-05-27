@@ -262,23 +262,20 @@ function ProductCarousel({ title, products, onQuickAdd }: {
 
 // ─── Snitch Mock Content Lists ─────────────────────────────────────────────────
 const FEATURED_CATEGORIES = [
-  { name: 'SHIRTS', image: 'https://images.unsplash.com/photo-1603252109303-2751441dd157?w=500&q=80', href: '/?subcategory=Shirts' },
-  { name: 'TROUSERS', image: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=500&q=80', href: '/?subcategory=Trousers' },
-  { name: 'POLOS', image: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=500&q=80', href: '/?subcategory=Polos' },
+  { name: 'SHIRT', image: 'https://images.unsplash.com/photo-1603252109303-2751441dd157?w=500&q=80', href: '/?subcategory=Shirt' },
   { name: 'JEANS', image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&q=80', href: '/?subcategory=Jeans' },
-  { name: 'CARGOS', image: 'https://images.unsplash.com/photo-1517423568366-8b83523034fd?w=500&q=80', href: '/?subcategory=Cargo Pants' },
-  { name: 'T-SHIRTS', image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&q=80', href: '/?subcategory=T-shirts' },
+  { name: 'TSHIRT', image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&q=80', href: '/?subcategory=Tshirt' },
+  { name: 'TRACK PANT', image: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=500&q=80', href: '/?subcategory=Track pant' },
   { name: 'SHORTS', image: 'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=500&q=80', href: '/?subcategory=Shorts' },
-  { name: 'PLUS SIZE', image: 'https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=500&q=80', href: '/?subcategory=Shirts' },
-  { name: 'SHOES', image: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?w=500&q=80', href: '/?subcategory=Shoes' },
+  { name: 'JACKET', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500&q=80', href: '/?subcategory=Jacket' },
 ];
 
 const MOODS = [
   { name: 'TRENDING', highlight: 'NOW', image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&q=80', href: '/?category=men' },
-  { name: 'LUXURY', highlight: 'REFINED', image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&q=80', href: '/?subcategory=Jackets' },
-  { name: 'BASICS', highlight: 'DAILY', image: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=600&q=80', href: '/?subcategory=T-shirts' },
+  { name: 'LUXURY', highlight: 'REFINED', image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&q=80', href: '/?subcategory=Jacket' },
+  { name: 'BASICS', highlight: 'DAILY', image: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=600&q=80', href: '/?subcategory=Tshirt' },
   { name: 'HOLIDAY', highlight: 'ENERGY', image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=600&q=80', href: '/?subcategory=Shorts' },
-  { name: 'FORMAL', highlight: 'WEAR', image: 'https://images.unsplash.com/photo-1593032465175-481ac7f401a0?w=600&q=80', href: '/?subcategory=Trousers' },
+  { name: 'FORMAL', highlight: 'WEAR', image: 'https://images.unsplash.com/photo-1593032465175-481ac7f401a0?w=600&q=80', href: '/?subcategory=Track pant' },
 ];
 
 const STEALS = [
@@ -292,28 +289,28 @@ const STEALS = [
     href: '/?category=all'
   },
   {
-    title: 'Shirts',
+    title: 'Shirt',
     label: 'Under',
     price: '₹999',
     image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&q=80',
     isBanner: false,
-    href: '/?subcategory=Shirts'
+    href: '/?subcategory=Shirt'
   },
   {
-    title: 'T-shirts',
+    title: 'Tshirt',
     label: 'Starting at',
     price: '₹499',
     image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
     isBanner: false,
-    href: '/?subcategory=T-shirts'
+    href: '/?subcategory=Tshirt'
   },
   {
-    title: 'Sunglasses',
-    label: 'Flat',
-    price: '₹999',
-    image: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=600&q=80',
+    title: 'Jeans',
+    label: 'Starting at',
+    price: '₹1899',
+    image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=600&q=80',
     isBanner: false,
-    href: '/?subcategory=Sunglasses'
+    href: '/?subcategory=Jeans'
   },
 ];
 
@@ -493,7 +490,7 @@ function StorefrontContent() {
 
             {/* Filter Tabs */}
             <div className="flex flex-wrap justify-center gap-2 mt-6">
-              {['all', 'Shirts', 'Jeans', 'T-shirts', 'Trousers', 'Shoes', 'Shorts', 'Jackets'].map(tab => {
+              {['all', 'Shirt', 'Jeans', 'Tshirt', 'Track pant', 'Shorts', 'Jacket'].map(tab => {
                 const isActive = (tab === 'all' && !subcategoryParam) || (subcategoryParam.toLowerCase() === tab.toLowerCase());
                 return (
                   <button

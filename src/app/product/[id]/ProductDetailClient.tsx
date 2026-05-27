@@ -129,6 +129,16 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                 <p className="text-[12px] text-gray-500 mt-2">
                   Material: <span className="font-semibold text-gray-700">{product.material}</span>
                 </p>
+                {product.sku && (
+                  <p className="text-[12px] text-gray-500 mt-1">
+                    SKU: <span className="font-semibold text-gray-700 uppercase">{product.sku}</span>
+                  </p>
+                )}
+                {product.sleeve_type && (
+                  <p className="text-[12px] text-gray-500 mt-1">
+                    Sleeves: <span className="font-semibold text-gray-700">{product.sleeve_type}</span>
+                  </p>
+                )}
               </div>
 
               {/* Description */}

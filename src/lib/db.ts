@@ -6,7 +6,9 @@ export interface Product {
   title: string;
   price: number;
   category: string;
-  subcategory?: string; // e.g. "Shirts", "T-shirts", "Jeans", "Trousers", etc.
+  subcategory?: string; // e.g. "Shirt", "Jeans", "Tshirt", "Track pant", "Shorts", "Jacket"
+  sleeve_type?: 'Half Sleeves' | 'Full Sleeves'; // applicable for Shirts
+  sku?: string;
   material: string;
   description: string;
   images: string[]; // [Front, Back, Detail/Side]
@@ -69,6 +71,9 @@ const SEED_PRODUCTS: Product[] = [
     title: "Structured Linen Kurta",
     price: 6800,
     category: "Men",
+    subcategory: "Shirt",
+    sleeve_type: "Full Sleeves",
+    sku: "SB-LN-KT-01",
     material: "Jaipur Handloom Linen",
     description: "A contemporary take on the classic kurta, cut from crisp handloom linen woven in Jaipur. Mandarin collar, concealed placket, and side slits give it a clean architectural silhouette. Finished with hand-stitched buttonholes and a relaxed straight hem.",
     images: [
@@ -85,6 +90,8 @@ const SEED_PRODUCTS: Product[] = [
     title: "Bandhgala Jacket",
     price: 12500,
     category: "Men",
+    subcategory: "Jacket",
+    sku: "SB-BG-JK-02",
     material: "Wool-Silk Blend, Bengaluru Atelier",
     description: "A Nehru-collar bandhgala jacket tailored in our Bengaluru atelier from a fine wool-silk blend. Slim-fit silhouette with a single-button closure, welt pockets, and a full Mashru silk lining. Equally at home at a formal dinner or a gallery opening.",
     images: [
@@ -101,6 +108,9 @@ const SEED_PRODUCTS: Product[] = [
     title: "Geometric Mesh Shirt",
     price: 4500,
     category: "Men",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves",
+    sku: "SB-GM-SH-03",
     material: "Hand-spun Banarasi Silk Blend",
     description: "An editorial silhouette made from an ultra-lightweight hand-spun Banarasi silk and cotton blend, featuring geometric structural knit patterns and premium ribbed finishing. Hand-woven by master craftsmen in Varanasi and tailored in our Bengaluru atelier with delicate stitching that echoes the natural carapace divisions of the stag beetle.",
     images: [
@@ -199,7 +209,8 @@ const SEED_PRODUCTS: Product[] = [
     title: "Obsidian Overcoat",
     price: 14500,
     category: "Men",
-    subcategory: "Jackets",
+    subcategory: "Jacket",
+    sku: "SB-MEN-OB-OC-04",
     material: "Fine Kashmir Wool & Silk",
     description: "A double-breasted structured overcoat constructed from ultra-dense premium Kashmir wool and lined with pure Mashru silk. Designed with a tall, protective collar, deep side slits, and a bespoke inner-lining displaying custom anatomical sketches.",
     images: [
@@ -216,7 +227,9 @@ const SEED_PRODUCTS: Product[] = [
     title: "Ikat Silk Shirt",
     price: 9200,
     category: "Men",
-    subcategory: "Shirts",
+    subcategory: "Shirt",
+    sleeve_type: "Full Sleeves",
+    sku: "SB-MEN-IK-SH-05",
     material: "Pochampally Ikat Silk",
     description: "A statement shirt woven from authentic Pochampally ikat silk — each piece unique due to the resist-dyeing process. Relaxed fit with a camp collar, mother-of-pearl buttons, and a curved hem. A wearable piece of Telangana craft heritage.",
     images: [
@@ -233,7 +246,8 @@ const SEED_PRODUCTS: Product[] = [
     title: "Armor Trousers",
     price: 7200,
     category: "Men",
-    subcategory: "Trousers",
+    subcategory: "Track pant",
+    sku: "SB-MEN-AR-TR-06",
     material: "Jaipur Handloom Linen-Wool",
     description: "Mid-rise trousers crafted from a bespoke hand-woven Jaipur linen and wool blend. Features signature sharp double front pleats and side belt loops in structural shapes, with adjustable gold buckle details that let you define the fit at the waist.",
     images: [
@@ -250,7 +264,9 @@ const SEED_PRODUCTS: Product[] = [
     title: "Silk Kurta",
     price: 5800,
     category: "Men",
-    subcategory: "Shirts",
+    subcategory: "Shirt",
+    sleeve_type: "Full Sleeves",
+    sku: "SB-MEN-SL-KT-07",
     material: "100% Banarasi Mulberry Silk",
     description: "A classic straight-cut kurta in pure Banarasi mulberry silk. Subtle self-woven texture, mandarin collar, and side slits. Pairs beautifully with churidar or straight trousers for festive occasions.",
     images: [
@@ -267,7 +283,8 @@ const SEED_PRODUCTS: Product[] = [
     title: "Retro Oversized Graphic Tee",
     price: 999,
     category: "Men",
-    subcategory: "T-shirts",
+    subcategory: "Tshirt",
+    sku: "SB-MEN-RT-TS-08",
     material: "100% Heavyweight Cotton",
     description: "An oversized streetwear t-shirt with a vintage graphic print. Drop shoulders and double-needle stitching for a relaxed, robust look.",
     images: [
@@ -285,6 +302,7 @@ const SEED_PRODUCTS: Product[] = [
     price: 1899,
     category: "Men",
     subcategory: "Jeans",
+    sku: "SB-MEN-FL-JN-09",
     material: "Premium Rigid Denim",
     description: "Throwback flared fit jeans with a classic mid-rise and heavily washed light indigo shade. Finished with signature pocket rivets and raw edges.",
     images: [
@@ -301,6 +319,7 @@ const SEED_PRODUCTS: Product[] = [
     price: 1999,
     category: "Men",
     subcategory: "Jeans",
+    sku: "SB-MEN-BC-JN-10",
     material: "Stretch Cotton Denim",
     description: "Bootcut leg profile with a touch of stretch for day-long comfort. Clean dark wash with light whiskers and a zip-fly.",
     images: [
@@ -316,7 +335,8 @@ const SEED_PRODUCTS: Product[] = [
     title: "Tactical Utility Cargo Pants",
     price: 2199,
     category: "Men",
-    subcategory: "Cargo Pants",
+    subcategory: "Track pant",
+    sku: "SB-MEN-CG-PT-11",
     material: "Durable Ripstop Cotton",
     description: "Modern cargo pants cut from durable ripstop cotton. Equipped with multiple secure utility pockets, a relaxed silhouette, and drawcord adjustable cuffs.",
     images: [
@@ -332,7 +352,8 @@ const SEED_PRODUCTS: Product[] = [
     title: "Cable-Knit Summer Polo",
     price: 1499,
     category: "Men",
-    subcategory: "Polos",
+    subcategory: "Tshirt",
+    sku: "SB-MEN-KN-PL-12",
     material: "100% Knit Cotton",
     description: "Retro summer vibe polo styled with a classic collar and cable-knit texture. Super breathable and holds its structure perfectly.",
     images: [
@@ -348,9 +369,10 @@ const SEED_PRODUCTS: Product[] = [
     title: "Heavyweight Denim Overshirt",
     price: 2299,
     category: "Men",
-    subcategory: "Overshirt",
+    subcategory: "Jacket",
+    sku: "SB-MEN-DN-OS-13",
     material: "12oz Organic Denim",
-    description: "A heavyweight denim overshirt that functions as a light jacket. Boxy fit, dual chest flap pockets, and metallic shank buttons.",
+    description: "A heavyweight denim overshirt that functions as a light jacket. Boxy fit, dual-chest flap pockets, and metallic shank buttons.",
     images: [
       "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&q=80",
       "https://images.unsplash.com/photo-1611312449412-6cefac5dc3e4?w=800&q=80"
@@ -363,8 +385,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "prod_retro_sunglasses",
     title: "Vintage Square Sunglasses",
     price: 999,
-    category: "Men",
-    subcategory: "Sunglasses",
+    category: "Accessories",
     material: "Premium Acetate & Alloy",
     description: "Retro square frames inspired by 70s eyewear. Featuring tinted UV400 lenses and golden side accents for a sleek, bold profile.",
     images: [
@@ -379,8 +400,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "prod_noir_perfume",
     title: "Noir Intense Eau De Parfum",
     price: 1799,
-    category: "Men",
-    subcategory: "Perfumes",
+    category: "Accessories",
     material: "Natural Essential Oils & Bergamot",
     description: "An intense, woody fragrance combining base notes of cedarwood and patchouli with top notes of bergamot and dry amber. Long-lasting performance.",
     images: [
@@ -395,8 +415,7 @@ const SEED_PRODUCTS: Product[] = [
     id: "prod_suede_loafers",
     title: "Classic Suede Loafers",
     price: 3499,
-    category: "Men",
-    subcategory: "Shoes",
+    category: "Accessories",
     material: "Italian Suede Leather",
     description: "Slip-on suede loafers crafted with clean apron stitching and a cushioned leather footbed. Sleek and perfect for both smart-casual and formal ensembles.",
     images: [
@@ -413,11 +432,12 @@ const SEED_PRODUCTS: Product[] = [
     price: 1199,
     category: "Men",
     subcategory: "Shorts",
+    sku: "SB-MEN-KN-SH-14",
     material: "Premium Waffle Cotton",
     description: "Relaxed fit shorts in a structured waffle knit. Equipped with an elastic waistband, cotton drawstrings, and deep side slash pockets.",
     images: [
       "https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=800&q=80",
-      "https://images.unsplash.com/photo-1591195854013-d485f30999de?w=800&q=80"
+      "https://images.unsplash.com/photo-15911954013-d485f30999de?w=800&q=80"
     ],
     sizes: ["S", "M", "L", "XL"],
     colors: ["Sage Green", "Charcoal Gray"],
@@ -892,14 +912,20 @@ export const upsertProfile = async (profile: UserProfile): Promise<UserProfile> 
   return profile;
 };
 
-export const uploadGarmentImage = async (file: File): Promise<string> => {
+export const uploadGarmentImage = async (file: File, sku?: string, index?: number): Promise<string> => {
   if (isSupabaseConfigured && supabase) {
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2, 11)}_${Date.now()}.${fileExt}`;
-      const filePath = `products/${fileName}`;
+      // Clean SKU for safe filename
+      const cleanSku = sku ? sku.trim().replace(/[^a-zA-Z0-9-_]/g, '_') : '';
+      const fileName = cleanSku 
+        ? `${cleanSku}_image${index || 1}_${Date.now()}.${fileExt}`
+        : `${Math.random().toString(36).substring(2, 11)}_${Date.now()}.${fileExt}`;
+      const filePath = cleanSku
+        ? `products/${cleanSku}/${fileName}`
+        : `products/${fileName}`;
 
-      console.log(`[Atelier Storage] Uploading ${file.name} to Supabase bucket 'garment-images'...`);
+      console.log(`[Atelier Storage] Uploading ${file.name} to Supabase bucket 'garment-images' as ${filePath}...`);
       const { data, error } = await supabase.storage
         .from('garment-images')
         .upload(filePath, file, {

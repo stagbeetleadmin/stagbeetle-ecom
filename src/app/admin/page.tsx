@@ -12,6 +12,7 @@ import {
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage
 } from '@/lib/db';
+import { compressImage } from '@/utils/image';
 
 function AdminDashboardContent() {
   const router = useRouter();
@@ -91,6 +92,9 @@ function AdminDashboardContent() {
     title: '',
     price: 0,
     category: 'Men',
+    subcategory: 'Shirt', // default garment type
+    sleeve_type: 'Full Sleeves', // default sleeves for Shirt
+    sku: '', // stock keeping unit
     material: '',
     description: '',
     image1: '',
@@ -111,12 +115,27 @@ function AdminDashboardContent() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const imgIndex = fieldName === 'image1' ? 1 : fieldName === 'image2' ? 2 : 3;
+
+    if (!productForm.sku.trim()) {
+      triggerFeedback('error', 'Please fill in the SKU NUMBER first to automatically name and organize files in the storage bucket.');
+      return;
+    }
+
     setUploadingStates(prev => ({ ...prev, [fieldName]: true }));
     try {
-      const publicUrl = await uploadGarmentImage(file);
+      console.log(`[Admin Portal] Compressing ${file.name} client-side...`);
+      const compressedFile = await compressImage(file);
+      console.log(`[Admin Portal] Uploading compressed image to Supabase storage...`);
+      const publicUrl = await uploadGarmentImage(compressedFile, productForm.sku, imgIndex);
+      
       if (publicUrl) {
         setProductForm(prev => ({ ...prev, [fieldName]: publicUrl }));
-        triggerFeedback('success', 'Image uploaded successfully.');
+        if (publicUrl.startsWith('data:')) {
+          triggerFeedback('success', 'Image processed as base64 fallback (Supabase not connected).');
+        } else {
+          triggerFeedback('success', 'Image uploaded to Supabase successfully.');
+        }
       } else {
         triggerFeedback('error', 'Image upload failed. Fallback did not resolve.');
       }
@@ -304,6 +323,9 @@ function AdminDashboardContent() {
       title: '',
       price: 0,
       category: 'Men',
+      subcategory: 'Shirt',
+      sleeve_type: 'Full Sleeves',
+      sku: '',
       material: '',
       description: '',
       image1: '',
@@ -321,6 +343,9 @@ function AdminDashboardContent() {
       title: prod.title,
       price: prod.price,
       category: prod.category,
+      subcategory: prod.subcategory || 'Shirt',
+      sleeve_type: prod.sleeve_type || 'Full Sleeves',
+      sku: prod.sku || '',
       material: prod.material,
       description: prod.description,
       image1: prod.images[0] || '',
@@ -342,6 +367,9 @@ function AdminDashboardContent() {
       title: productForm.title,
       price: Number(productForm.price),
       category: productForm.category,
+      subcategory: productForm.subcategory,
+      sleeve_type: productForm.subcategory === 'Shirt' ? (productForm.sleeve_type as any) : undefined,
+      sku: productForm.sku.trim() || undefined,
       material: productForm.material,
       description: productForm.description,
       images: imagesArray.length > 0 ? imagesArray : ["https://images.unsplash.com/photo-1539571696357-5a69c17a67c6"], // placeholder fallback
@@ -1495,7 +1523,20 @@ function AdminDashboardContent() {
                     required
                     value={productForm.title}
                     onChange={(e) => setProductForm(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="e.g. Jaipur Summer Kurta"
+                    placeholder="e.g. Structured Linen Kurta"
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  />
+                </div>
+
+                {/* SKU */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SKU NUMBER</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={productForm.sku}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, sku: e.target.value }))}
+                    placeholder="e.g. SB-SHIRT-HS-001"
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   />
                 </div>
@@ -1522,13 +1563,42 @@ function AdminDashboardContent() {
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   >
                     <option value="Men">Men</option>
-                    {/* <option value="Women">Women</option> */}
                     <option value="Accessories">Accessories</option>
                   </select>
                 </div>
 
-                {/* Material */}
+                {/* Garment Type (Subcategory) */}
                 <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT TYPE (SUBCATEGORY)</label>
+                  <select
+                    value={productForm.subcategory}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, subcategory: e.target.value }))}
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  >
+                    <option value="Shirt">Shirt</option>
+                    <option value="Jeans">Jeans</option>
+                    <option value="Tshirt">Tshirt</option>
+                    <option value="Track pant">Track pant</option>
+                    <option value="Shorts">Shorts</option>
+                    <option value="Jacket">Jacket</option>
+                  </select>
+                </div>
+
+                {/* Sleeve Type dropdown - Visible only for Shirts */}
+                <div className={`space-y-1.5 transition-all duration-300 ${productForm.subcategory === 'Shirt' ? 'opacity-100 scale-100 h-auto' : 'opacity-0 scale-95 h-0 overflow-hidden pointer-events-none'}`}>
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SLEEVES</label>
+                  <select
+                    value={productForm.sleeve_type}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, sleeve_type: e.target.value }))}
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  >
+                    <option value="Half Sleeves">Half Sleeves</option>
+                    <option value="Full Sleeves">Full Sleeves</option>
+                  </select>
+                </div>
+
+                {/* Material */}
+                <div className="space-y-1.5 sm:col-span-2">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">FABRIC SPECIFICATION</label>
                   <input 
                     type="text" 
