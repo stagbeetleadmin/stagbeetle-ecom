@@ -592,6 +592,57 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
 };
 
 export const deleteProduct = async (id: string): Promise<boolean> => {
+  let imagesToDelete: string[] = [];
+
+  // 1. Fetch product first to find images to delete
+  if (isSupabaseConfigured && supabase) {
+    try {
+      console.log(`[Atelier DB] Fetching product ${id} images for deletion...`);
+      const { data: prod, error } = await supabase.from('products').select('images').eq('id', id).single();
+      if (!error && prod && prod.images) {
+        imagesToDelete = prod.images;
+      }
+    } catch (e) {
+      console.warn(`[Atelier DB] Failed to fetch product ${id} images for deletion:`, e);
+    }
+  } else {
+    const products = getLocalProducts();
+    const prod = products.find(p => p.id === id);
+    if (prod && prod.images) {
+      imagesToDelete = prod.images;
+    }
+  }
+
+  // 2. Delete images from Supabase storage if they are Supabase storage URLs
+  if (isSupabaseConfigured && supabase && imagesToDelete.length > 0) {
+    const paths = imagesToDelete
+      .map(url => {
+        if (!url) return null;
+        // Match both public and signed URLs and extract the relative path in the bucket
+        const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/garment-images\/(.+)$/);
+        if (match && match[1]) {
+          return match[1].split('?')[0];
+        }
+        return null;
+      })
+      .filter((path): path is string => !!path);
+
+    if (paths.length > 0) {
+      try {
+        console.log(`[Atelier Storage] Deleting associated images from Supabase storage:`, paths);
+        const { data, error } = await supabase.storage.from('garment-images').remove(paths);
+        if (error) {
+          console.warn("[Atelier Storage] Failed to delete images from bucket:", error.message);
+        } else {
+          console.log("[Atelier Storage] Images deleted successfully from bucket:", data);
+        }
+      } catch (err) {
+        console.warn("[Atelier Storage] Error deleting images from storage:", err);
+      }
+    }
+  }
+
+  // 3. Delete product from database
   if (isSupabaseConfigured && supabase) {
     try {
       const { error } = await supabase.from('products').delete().eq('id', id);
