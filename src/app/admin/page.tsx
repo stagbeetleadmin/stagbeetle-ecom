@@ -34,7 +34,7 @@ function AdminDashboardContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const { isAdmin, setAdminStatus, loginWithEmailPassword, logout } = useAuth();
+  const { isAdmin, loading: authLoading, setAdminStatus, loginWithEmailPassword, logout } = useAuth();
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
 
@@ -74,6 +74,7 @@ function AdminDashboardContent() {
         // Successful login, check if they are the admin email
         if (adminEmail.trim().toLowerCase() !== 'admin@stagbeetle.co.in') {
           setLoginError('Access Denied: This account does not have administrative privileges.');
+          await logout();
         }
       }
     } catch (err: any) {
@@ -184,6 +185,14 @@ function AdminDashboardContent() {
       loadData();
     }
   }, [isAdmin]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (
@@ -1490,14 +1499,17 @@ function AdminDashboardContent() {
       {/* PRODUCT FORM MODAL (Add/Edit)                                            */}
       {/* ========================================================================= */}
       {showProductModal && (
-        <div className="fixed inset-0 z-[200] overflow-y-auto flex items-start justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800 my-auto">
-
-            <div className="px-6 py-4 border-b border-on-surface/10 bg-surface-dim/40 flex justify-between items-center">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+          <form
+            onSubmit={handleProductSubmit}
+            className="bg-white w-full max-w-2xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800 max-h-[90vh] flex flex-col"
+          >
+            <div className="px-6 py-4 border-b border-on-surface/10 bg-surface-dim/40 flex justify-between items-center shrink-0">
               <h3 className="font-display text-[18px] font-semibold text-on-surface">
                 {editingProduct ? `Edit Garment Specifications: ${editingProduct.title}` : 'Add New Garment to Catalog'}
               </h3>
               <button
+                type="button"
                 onClick={() => setShowProductModal(false)}
                 className="material-symbols-outlined text-[20px] text-zinc-400 hover:text-zinc-600"
               >
@@ -1505,7 +1517,7 @@ function AdminDashboardContent() {
               </button>
             </div>
 
-            <form onSubmit={handleProductSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -1762,24 +1774,24 @@ function AdminDashboardContent() {
 
               </div>
 
-              <div className="border-t border-on-surface/10 pt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowProductModal(false)}
-                  className="border border-on-surface/15 text-on-surface-variant px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-zinc-50"
-                >
-                  CANCEL
-                </button>
-                <button
-                  type="submit"
-                  className="bg-primary text-white px-8 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
-                >
-                  {editingProduct ? 'SAVE CHANGES' : 'PUBLISH GARMENT'}
-                </button>
-              </div>
+            </div>
 
-            </form>
-          </div>
+            <div className="px-6 py-4 border-t border-on-surface/10 flex justify-end gap-3 bg-white shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowProductModal(false)}
+                className="border border-on-surface/15 text-on-surface-variant px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-zinc-50"
+              >
+                CANCEL
+              </button>
+              <button
+                type="submit"
+                className="bg-primary text-white px-8 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
+              >
+                {editingProduct ? 'SAVE CHANGES' : 'PUBLISH GARMENT'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

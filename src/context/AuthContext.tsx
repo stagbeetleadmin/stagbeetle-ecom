@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdminState] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loading, setLoading] = useState(false); // false by default — modal never blocks on this
+  const [loading, setLoading] = useState(true); // true by default to avoid flickering/stale rendering on mount
   const [onSuccessCallback, setOnSuccessCallback] = useState<(() => void) | null>(null);
 
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
@@ -76,6 +76,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     phone?: string | null;
     user_metadata?: Record<string, string>;
   }) => {
+    // Check admin status immediately before any async network calls to avoid stale state delays
+    const isAdminEmail = supabaseUser.email?.toLowerCase() === 'admin@stagbeetle.co.in';
+    if (isAdminEmail) {
+      setIsAdminState(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('stag_beetle_admin_session', 'true');
+      }
+    } else {
+      setIsAdminState(false);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('stag_beetle_admin_session');
+      }
+    }
+
     // Try to load existing profile first
     let profile = await fetchProfile(supabaseUser.id);
 
@@ -97,20 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setUser(profile);
-
-    const isAdminEmail = supabaseUser.email?.toLowerCase() === 'admin@stagbeetle.co.in';
-    if (isAdminEmail) {
-      setIsAdminState(true);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('stag_beetle_admin_session', 'true');
-      }
-    } else {
-      setIsAdminState(false);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('stag_beetle_admin_session');
-      }
-    }
-
     return profile;
   }, []);
 
@@ -119,106 +119,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const bootstrap = async () => {
-      // ── Detect OAuth error query parameters and fall back ──────────────────
-      if (typeof window !== 'undefined') {
-        const searchParams = new URLSearchParams(window.location.search);
-        
-        // Also check hash (in case it is redirected as a hash fragment)
-        const hashClean = window.location.hash.startsWith('#') 
-          ? window.location.hash.substring(1) 
-          : window.location.hash;
-        const hashParams = new URLSearchParams(hashClean);
-
-        const error = searchParams.get('error') || hashParams.get('error');
-        const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
-        const errorDesc = searchParams.get('error_description') || hashParams.get('error_description');
-
-        if (error || errorCode || errorDesc) {
-          console.warn('OAuth redirect error detected, initiating simulated Google profile fallback:', errorDesc);
+      setLoading(true);
+      try {
+        // ── Detect OAuth error query parameters and fall back ──────────────────
+        if (typeof window !== 'undefined') {
+          const searchParams = new URLSearchParams(window.location.search);
           
-          // Clear query parameters and hash immediately to keep URL clean
-          window.history.replaceState({}, document.title, window.location.pathname);
+          // Also check hash (in case it is redirected as a hash fragment)
+          const hashClean = window.location.hash.startsWith('#') 
+            ? window.location.hash.substring(1) 
+            : window.location.hash;
+          const hashParams = new URLSearchParams(hashClean);
 
-          // Auto-login with a simulated Google profile
-          const mockGoogleUser: UserProfile = {
-            id: `usr_google_${Date.now()}`,
-            name: 'Google User',
-            email: 'google-user@example.com',
-            phone: '+91 98765 43210',
-            country: 'India',
-          };
-          
-          setUser(mockGoogleUser);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('stag_beetle_user', JSON.stringify(mockGoogleUser));
-          }
-          try {
-            await upsertProfile(mockGoogleUser);
-          } catch (e) {
-            console.warn('Upsert simulated Google profile failed:', e);
-          }
-          return;
-        }
-      }
+          const error = searchParams.get('error') || hashParams.get('error');
+          const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
+          const errorDesc = searchParams.get('error_description') || hashParams.get('error_description');
 
-      // ── One-time cleanup: wipe stale mock data from old sessions ──────────
-      // Old mock profiles had IDs like "usr_xxx" with fake names/emails.
-      // Old product cache may have broken lh3.googleusercontent.com images.
-      // We version the cache with a key — bump this string to force a wipe.
-      const CACHE_VERSION = 'v3';
-      if (typeof window !== 'undefined') {
-        const cachedVersion = localStorage.getItem('stag_beetle_cache_version');
-        if (cachedVersion !== CACHE_VERSION) {
-          localStorage.removeItem('stag_beetle_user');
-          localStorage.removeItem('stag_beetle_products');
-          localStorage.removeItem('stag_beetle_profiles');
-          localStorage.removeItem('stag_beetle_admin_session');
-          localStorage.setItem('stag_beetle_cache_version', CACHE_VERSION);
-        }
-      }
+          if (error || errorCode || errorDesc) {
+            console.warn('OAuth redirect error detected, initiating simulated Google profile fallback:', errorDesc);
+            
+            // Clear query parameters and hash immediately to keep URL clean
+            window.history.replaceState({}, document.title, window.location.pathname);
 
-      // ── Supabase path ──────────────────────────────────────────────────────
-      if (supabase) {
-        try {
-          const { data: { session } } = await supabaseTimeout(supabase.auth.getSession(), 4000);
-          if (session?.user && mounted) {
-            await resolveAndSetProfile(session.user);
-          }
-        } catch (e) {
-          console.warn('Supabase session bootstrap failed or timed out:', e);
-        }
-      }
-
-      // ── localStorage fallback (email/phone login or no Supabase) ──────────
-      if (typeof window !== 'undefined') {
-        const storedUser = localStorage.getItem('stag_beetle_user');
-        if (storedUser && mounted) {
-          try {
-            const parsed = JSON.parse(storedUser) as UserProfile;
-            // If Supabase is configured, only trust localStorage for real
-            // email/phone sessions (id starts with 'usr_').
-            // Discard any old mock accounts (those also start with 'usr_' but
-            // were created with fake data — they'll be re-created on next
-            // email/phone login). Never restore a stale mock if Supabase
-            // already confirmed no active session above.
-            if (supabase) {
-              // Supabase is live — only restore email/phone sessions,
-              // never restore old mock Google accounts
-              const isEmailPhoneSession = parsed.id?.startsWith('usr_');
-              if (isEmailPhoneSession) {
-                setUser(prev => prev ?? parsed);
-              } else {
-                // Stale mock Google account — clear it
-                localStorage.removeItem('stag_beetle_user');
-              }
-            } else {
-              // No Supabase — trust whatever is stored
-              setUser(prev => prev ?? parsed);
+            // Auto-login with a simulated Google profile
+            const mockGoogleUser: UserProfile = {
+              id: `usr_google_${Date.now()}`,
+              name: 'Google User',
+              email: 'google-user@example.com',
+              phone: '+91 98765 43210',
+              country: 'India',
+            };
+            
+            setUser(mockGoogleUser);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('stag_beetle_user', JSON.stringify(mockGoogleUser));
             }
-          } catch { /* ignore */ }
+            try {
+              await upsertProfile(mockGoogleUser);
+            } catch (e) {
+              console.warn('Upsert simulated Google profile failed:', e);
+            }
+            return;
+          }
         }
-        if (localStorage.getItem('stag_beetle_admin_session') === 'true' && mounted) {
-          setIsAdminState(true);
+
+        // ── One-time cleanup: wipe stale mock data from old sessions ──────────
+        const CACHE_VERSION = 'v3';
+        if (typeof window !== 'undefined') {
+          const cachedVersion = localStorage.getItem('stag_beetle_cache_version');
+          if (cachedVersion !== CACHE_VERSION) {
+            localStorage.removeItem('stag_beetle_user');
+            localStorage.removeItem('stag_beetle_products');
+            localStorage.removeItem('stag_beetle_profiles');
+            localStorage.removeItem('stag_beetle_admin_session');
+            localStorage.setItem('stag_beetle_cache_version', CACHE_VERSION);
+          }
+        }
+
+        // ── Supabase path ──────────────────────────────────────────────────────
+        if (supabase) {
+          try {
+            const { data: { session } } = await supabaseTimeout(supabase.auth.getSession(), 4000);
+            if (session?.user && mounted) {
+              await resolveAndSetProfile(session.user);
+            }
+          } catch (e) {
+            console.warn('Supabase session bootstrap failed or timed out:', e);
+          }
+        }
+
+        // ── localStorage fallback (email/phone login or no Supabase) ──────────
+        if (typeof window !== 'undefined') {
+          const storedUser = localStorage.getItem('stag_beetle_user');
+          if (storedUser && mounted) {
+            try {
+              const parsed = JSON.parse(storedUser) as UserProfile;
+              if (supabase) {
+                const isEmailPhoneSession = parsed.id?.startsWith('usr_');
+                if (isEmailPhoneSession) {
+                  setUser(prev => prev ?? parsed);
+                } else {
+                  localStorage.removeItem('stag_beetle_user');
+                }
+              } else {
+                setUser(prev => prev ?? parsed);
+              }
+            } catch { /* ignore */ }
+          }
+          if (localStorage.getItem('stag_beetle_admin_session') === 'true' && mounted) {
+            setIsAdminState(true);
+          }
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
         }
       }
     };

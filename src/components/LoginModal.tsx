@@ -44,6 +44,11 @@ export default function LoginModal() {
           setAuthLoading(false);
           return;
         }
+        if (email.trim().toLowerCase() === 'admin@stagbeetle.co.in') {
+          setFormError('Admin accounts cannot log in here. Please use the administrative portal.');
+          setAuthLoading(false);
+          return;
+        }
         const res = await loginWithEmailPassword(email.trim(), password.trim());
         if (res.error) {
           setFormError(res.error);
@@ -51,6 +56,11 @@ export default function LoginModal() {
       } else if (activeTab === 'signup') {
         if (!name.trim() || !email.trim() || !password.trim() || !phone.trim()) {
           setFormError('Please fill in all fields.');
+          setAuthLoading(false);
+          return;
+        }
+        if (email.trim().toLowerCase() === 'admin@stagbeetle.co.in') {
+          setFormError('Admin accounts cannot be registered.');
           setAuthLoading(false);
           return;
         }
@@ -66,6 +76,11 @@ export default function LoginModal() {
       } else if (activeTab === 'guest') {
         if (!name.trim() || !email.trim() || !phone.trim()) {
           setFormError('Please fill in all fields.');
+          setAuthLoading(false);
+          return;
+        }
+        if (email.trim().toLowerCase() === 'admin@stagbeetle.co.in') {
+          setFormError('Admin email cannot be used for guest checkout.');
           setAuthLoading(false);
           return;
         }
