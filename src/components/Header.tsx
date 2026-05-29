@@ -69,7 +69,7 @@ function HeaderInner() {
 
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2 shrink-0">
-              <Logo className="h-8 w-8 text-[#0D1B2A]" showText={true} />
+              <Logo className="h-8 w-auto text-[#0D1B2A]" showText={true} />
             </Link>
 
             {/* Center Nav */}

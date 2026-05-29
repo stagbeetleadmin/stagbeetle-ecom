@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Logo from './Logo';
 
 export default function Footer() {
   return (
@@ -9,12 +10,7 @@ export default function Footer() {
           
           <div className="col-span-2 lg:col-span-2 space-y-6">
             <Link href="/" className="flex items-center gap-3">
-              <img 
-                alt="Stag Beetle" 
-                className="h-8 w-auto grayscale" 
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqKMGePWpDlYjwbusGvce8bRqkShOEkgEABl2XsgVnSR32KGcLJdjQqL8l-S9dViQyA0LojgLpmTyH7uXBBYCGJesXP0QJezENBofBcYJKXJce5oOom7Ix7ZLYhQ-_IgGV1jepTIM0h4MMTvxmiBBvxwyb6a0vreDgFyVIbrQOx2VQNDGeJ4xZLaFO37Zar1skAJB0svdxkkJRxwHcun4LNJg1AgjQC9QY73cCebEStxRntj87eetx4C1gqqDypvWMsCjdVMDjnQ"
-              />
-              <span className="font-label-caps text-label-caps tracking-[0.2em] text-on-surface">STAG BEETLE</span>
+              <Logo className="h-8 w-auto text-on-surface grayscale" />
             </Link>
             <p className="text-[13px] text-on-surface-variant leading-relaxed max-w-sm">
               Modern luxury defined by architectural form and hand-crafted precision. Designed in London, produced in limited quantities with sustainably sourced materials.
