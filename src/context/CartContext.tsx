@@ -74,7 +74,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           quantity: quantity,
           selected_size: size,
           selected_color: color,
-          image: product.images[0]
+          image: (product.images && product.images[0]) || ''
         };
         return [...prevCart, newItem];
       }

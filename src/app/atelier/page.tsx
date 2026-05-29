@@ -13,10 +13,10 @@ const locations = [
   {
     city: 'Bengaluru',
     label: 'FLAGSHIP ATELIER',
-    address: '14, Lavelle Road, Ashok Nagar, Bengaluru — 560 001',
+    address: 'Lalbagh Road, Bangalore-560027',
     hours: 'Tuesday – Saturday, 11 AM – 7 PM',
-    phone: '+91 80 4567 8900',
-    email: 'bengaluru@stagbeetle.co.in',
+    phone: '+91 9035203203',
+    email: 'stagbeetle0629@gmail.com',
     note: 'Walk-ins welcome. Private appointments recommended for bespoke consultations.',
   },
   {
@@ -25,7 +25,7 @@ const locations = [
     address: 'Unit 4B, Kala Ghoda Arts Precinct, Fort, Mumbai — 400 001',
     hours: 'Wednesday – Sunday, 12 PM – 8 PM',
     phone: '+91 22 6789 0123',
-    email: 'mumbai@stagbeetle.co.in',
+    email: 'stagbeetle0629@gmail.com',
     note: 'By appointment only. Seasonal trunk shows and private viewings.',
   },
   {
@@ -34,7 +34,7 @@ const locations = [
     address: 'Shop 7, The Qutub Colonnade, Mehrauli, New Delhi — 110 030',
     hours: 'Thursday – Monday, 11 AM – 7 PM',
     phone: '+91 11 4567 8901',
-    email: 'delhi@stagbeetle.co.in',
+    email: 'stagbeetle0629@gmail.com',
     note: 'By appointment only.',
   },
 ];
@@ -92,7 +92,7 @@ export default function AtelierPage() {
               For bespoke commissions, made-to-measure fittings, or a private viewing of the current collection, write to us and we will arrange a dedicated appointment.
             </p>
             <a
-              href="mailto:appointments@stagbeetle.co.in?subject=Atelier Appointment Request"
+              href="mailto:stagbeetle0629@gmail.com?subject=Atelier Appointment Request"
               className="inline-block bg-gold-leaf text-obsidian-charcoal px-10 py-4 font-label-caps text-[11px] tracking-[0.2em] font-semibold hover:bg-white transition-colors"
             >
               REQUEST AN APPOINTMENT

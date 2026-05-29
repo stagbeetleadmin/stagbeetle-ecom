@@ -46,7 +46,7 @@ export default function ReturnsPage() {
               <h2 className="font-display text-[22px] font-semibold text-on-surface mb-4">How to Initiate a Return</h2>
               <ol className="space-y-4 text-[14px] leading-relaxed list-none">
                 {[
-                  { step: '01', text: 'Email us at care@stagbeetle.co.in with your order number and reason for return. We will respond within 24 hours with a Return Merchandise Authorisation (RMA) number.' },
+                  { step: '01', text: 'Email us at stagbeetle0629@gmail.com with your order number and reason for return. We will respond within 24 hours with a Return Merchandise Authorisation (RMA) number.' },
                   { step: '02', text: 'Pack the garment securely in its original dust bag and box. Write the RMA number clearly on the outer packaging.' },
                   { step: '03', text: 'Drop the parcel at any DTDC or Blue Dart outlet. We will provide a prepaid return label for domestic orders.' },
                   { step: '04', text: 'Once we receive and inspect the garment (2–3 business days), your refund or exchange will be processed within 5–7 business days.' },
@@ -77,7 +77,7 @@ export default function ReturnsPage() {
 
           <div className="mt-16 pt-8 border-t border-on-surface/5">
             <p className="text-[13px] text-on-surface-variant">
-              Need help? Email <a href="mailto:care@stagbeetle.co.in" className="text-gold-leaf hover:underline">care@stagbeetle.co.in</a> or visit our{' '}
+              Need help? Email <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a> or visit our{' '}
               <Link href="/shipping" className="text-gold-leaf hover:underline">Shipping page</Link>.
             </p>
           </div>

@@ -75,15 +75,24 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
 
               {/* Main image — fixed height so it fits in viewport */}
               <div className="flex-1 relative overflow-hidden bg-gray-50 border border-gray-100" style={{ height: 'min(70vh, 560px)' }}>
-                <img
-                  src={product.images[activeImageIndex]}
-                  alt={product.title}
-                  className="w-full h-full object-cover object-top transition-all duration-400"
-                />
-                {/* View label */}
-                <span className="absolute bottom-3 left-3 bg-white/90 text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-1 text-gray-600">
-                  {activeImageIndex === 0 ? 'Front' : activeImageIndex === 1 ? 'Back' : 'Detail'}
-                </span>
+                {product.images && product.images.length > 0 ? (
+                  <>
+                    <img
+                      src={product.images[activeImageIndex]}
+                      alt={product.title}
+                      className="w-full h-full object-cover object-top transition-all duration-400"
+                    />
+                    {/* View label */}
+                    <span className="absolute bottom-3 left-3 bg-white/90 text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-1 text-gray-600">
+                      {activeImageIndex === 0 ? 'Front' : activeImageIndex === 1 ? 'Back' : 'Detail'}
+                    </span>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 text-[13px] font-label-caps tracking-wider">
+                    <span className="material-symbols-outlined text-[48px] text-gray-300 mb-2">image</span>
+                    No Image Available
+                  </div>
+                )}
                 {/* Arrow nav on mobile */}
                 {product.images.length > 1 && (
                   <div className="absolute inset-y-0 right-2 flex flex-col justify-center gap-2 lg:hidden">
@@ -291,11 +300,17 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                   className="group block bg-white border border-gray-100 hover:border-gray-300 transition-all"
                 >
                   <div className="overflow-hidden bg-gray-50" style={{ aspectRatio: '3/4' }}>
-                    <img
-                      src={item.images[0]}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                    {item.images && item.images[0] ? (
+                      <img
+                        src={item.images[0]}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 text-[10px] font-label-caps tracking-wider text-center p-2">
+                        No Image
+                      </div>
+                    )}
                   </div>
                   <div className="p-3">
                     <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-0.5">{item.category}</p>

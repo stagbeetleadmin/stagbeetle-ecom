@@ -418,7 +418,7 @@ function AdminDashboardContent() {
       sku: productForm.sku.trim() || undefined,
       material: productForm.material,
       description: productForm.description,
-      images: imagesArray.length > 0 ? imagesArray : ["https://images.unsplash.com/photo-1539571696357-5a69c17a67c6"], // placeholder fallback
+      images: imagesArray,
       sizes: sizesArray.length > 0 ? sizesArray : ["One Size"],
       colors: colorsArray.length > 0 ? colorsArray : ["Default"]
     };
@@ -473,7 +473,7 @@ function AdminDashboardContent() {
           return;
         }
         if (!item.images || !Array.isArray(item.images)) {
-          item.images = ["https://images.unsplash.com/photo-1539571696357-5a69c17a67c6"];
+          item.images = [];
         }
         if (!item.sizes || !Array.isArray(item.sizes)) {
           item.sizes = ["One Size"];
@@ -1165,53 +1165,75 @@ function AdminDashboardContent() {
                       </div>
 
                       {/* Products list table */}
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-[13px]">
-                          <thead>
-                            <tr className="border-b border-on-surface/10 font-label-caps text-[10px] tracking-wider text-on-surface-variant font-bold">
-                              <th className="pb-3">GARMENT DETAILS</th>
-                              <th className="pb-3">CATEGORY</th>
-                              <th className="pb-3 text-right">PRICE (₹)</th>
-                              <th className="pb-3 text-center">RATING</th>
-                              <th className="pb-3 text-right">CONTROLS</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-on-surface/5">
-                            {products.map(prod => (
-                              <tr key={prod.id} className="hover:bg-surface-dim/20 transition-colors">
-                                <td className="py-4 flex items-center gap-3">
-                                  <img
-                                    src={prod.images[0]}
-                                    alt={prod.title}
-                                    className="w-10 h-13 object-cover aspect-[3/4] border bg-zinc-50"
-                                  />
-                                  <div>
-                                    <div className="font-bold text-on-surface text-[14px]">{prod.title}</div>
-                                    <div className="text-[11px] text-zinc-400 font-medium truncate max-w-sm">{prod.material}</div>
-                                  </div>
-                                </td>
-                                <td className="py-4 font-semibold uppercase text-[11px] text-zinc-500">{prod.category}</td>
-                                <td className="py-4 text-right font-bold text-gold-leaf text-[14px]">₹{prod.price}</td>
-                                <td className="py-4 text-center font-semibold text-on-surface-variant">{prod.rating || 5.0}</td>
-                                <td className="py-4 text-right space-x-2">
-                                  <button
-                                    onClick={() => openEditProduct(prod)}
-                                    className="text-[11px] font-label-caps font-semibold text-primary hover:underline uppercase tracking-wider"
-                                  >
-                                    EDIT
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteProduct(prod.id, prod.title)}
-                                    className="text-[11px] font-label-caps font-semibold text-red-600 hover:underline uppercase tracking-wider"
-                                  >
-                                    DELETE
-                                  </button>
-                                </td>
+                      {products.length === 0 ? (
+                        <div className="text-center py-16 border border-dashed border-zinc-200 bg-zinc-50/50 rounded-sm">
+                          <span className="material-symbols-outlined text-[48px] text-zinc-400 mb-3 block">inventory_2</span>
+                          <p className="text-[14px] text-zinc-600 font-semibold mb-1">Your product catalog is empty</p>
+                          <p className="text-[12px] text-zinc-400 max-w-sm mx-auto mb-4">
+                            Get started by adding a new garment manually or pasting a JSON catalog array in the bulk uploader below.
+                          </p>
+                          <button
+                            onClick={openAddProduct}
+                            className="bg-gold-leaf text-obsidian-charcoal px-4 py-2 text-[10px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf/90 transition-all shadow-sm"
+                          >
+                            ADD YOUR FIRST GARMENT
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-[13px]">
+                            <thead>
+                              <tr className="border-b border-on-surface/10 font-label-caps text-[10px] tracking-wider text-on-surface-variant font-bold">
+                                <th className="pb-3">GARMENT DETAILS</th>
+                                <th className="pb-3">CATEGORY</th>
+                                <th className="pb-3 text-right">PRICE (₹)</th>
+                                <th className="pb-3 text-center">RATING</th>
+                                <th className="pb-3 text-right">CONTROLS</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody className="divide-y divide-on-surface/5">
+                              {products.map(prod => (
+                                <tr key={prod.id} className="hover:bg-surface-dim/20 transition-colors">
+                                  <td className="py-4 flex items-center gap-3">
+                                    {prod.images && prod.images[0] ? (
+                                      <img
+                                        src={prod.images[0]}
+                                        alt={prod.title}
+                                        className="w-10 h-13 object-cover aspect-[3/4] border bg-zinc-50"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-13 border border-dashed border-zinc-300 flex flex-col items-center justify-center bg-zinc-50 text-zinc-400 aspect-[3/4] text-[9px] font-semibold text-center leading-tight">
+                                        No Image
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="font-bold text-on-surface text-[14px]">{prod.title}</div>
+                                      <div className="text-[11px] text-zinc-400 font-medium truncate max-w-sm">{prod.material}</div>
+                                    </div>
+                                  </td>
+                                  <td className="py-4 font-semibold uppercase text-[11px] text-zinc-500">{prod.category}</td>
+                                  <td className="py-4 text-right font-bold text-gold-leaf text-[14px]">₹{prod.price}</td>
+                                  <td className="py-4 text-center font-semibold text-on-surface-variant">{prod.rating || 5.0}</td>
+                                  <td className="py-4 text-right space-x-2">
+                                    <button
+                                      onClick={() => openEditProduct(prod)}
+                                      className="text-[11px] font-label-caps font-semibold text-primary hover:underline uppercase tracking-wider"
+                                    >
+                                      EDIT
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteProduct(prod.id, prod.title)}
+                                      className="text-[11px] font-label-caps font-semibold text-red-600 hover:underline uppercase tracking-wider"
+                                    >
+                                      DELETE
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
 
                       {/* Bulk Catalog Uploader Panel */}
                       <div className="border border-on-surface/5 p-6 bg-surface-dim/40 rounded-sm space-y-4">

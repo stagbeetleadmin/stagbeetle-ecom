@@ -334,8 +334,8 @@ export const getProducts = async (): Promise<Product[]> => {
     try {
       console.log("[Atelier DB] Fetching products from Supabase...");
       const { data, error } = await supabaseTimeout(supabase.from('products').select('*'));
-      if (!error && data && data.length > 0) {
-        console.log("[Atelier DB] Successfully loaded products from Supabase.");
+      if (!error && data) {
+        console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
         return data as Product[];
       }
       if (error) console.warn("[Atelier DB] Supabase products query error:", error.message);

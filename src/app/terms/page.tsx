@@ -75,7 +75,7 @@ export default function TermsPage() {
             <section>
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">6. Intellectual Property</h2>
               <p>
-                All content on this website — including text, images, logos, designs, and code — is the property of Stag Beetle Apparel Private Limited and is protected by Indian and international copyright law. You may not reproduce, distribute, or create derivative works without our prior written consent.
+                All content on this website — including text, images, logos, designs, and code — is the property of Stagbeetle Pvt. Ltd. and is protected by Indian and international copyright law. You may not reproduce, distribute, or create derivative works without our prior written consent.
               </p>
             </section>
 
@@ -97,7 +97,7 @@ export default function TermsPage() {
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">9. Contact</h2>
               <p>
                 For any queries regarding these Terms, contact us at{' '}
-                <a href="mailto:legal@stagbeetle.co.in" className="text-gold-leaf hover:underline">legal@stagbeetle.co.in</a>.
+                <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a>.
               </p>
             </section>
 

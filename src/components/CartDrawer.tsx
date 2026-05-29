@@ -68,11 +68,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                     >
                       {/* Image */}
                       <div className="h-24 w-18 bg-surface-dim overflow-hidden flex-shrink-0 relative aspect-[3/4]">
-                        <img 
-                          src={item.image} 
-                          alt={item.title} 
-                          className="w-full h-full object-cover"
-                        />
+                        {item.image ? (
+                          <img 
+                            src={item.image} 
+                            alt={item.title} 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[9px] font-label-caps tracking-wider p-1 text-center">
+                            No Image
+                          </div>
+                        )}
                       </div>
                       
                       {/* Detail Info */}
@@ -128,11 +134,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       {suggestions.map((product) => (
                         <div key={product.id} className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
-                            <img 
-                              src={product.images[0]} 
-                              alt={product.title} 
-                              className="w-12 h-16 object-cover bg-surface aspect-[3/4]"
-                            />
+                            {product.images && product.images[0] ? (
+                              <img 
+                                src={product.images[0]} 
+                                alt={product.title} 
+                                className="w-12 h-16 object-cover bg-surface aspect-[3/4]"
+                              />
+                            ) : (
+                              <div className="w-12 h-16 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5">
+                                No Image
+                              </div>
+                            )}
                             <div className="min-w-0">
                               <h4 className="font-body text-[13px] font-semibold text-on-surface truncate">{product.title}</h4>
                               <p className="text-[11px] text-gold-leaf font-medium">₹{product.price}</p>

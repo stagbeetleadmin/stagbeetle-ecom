@@ -485,11 +485,17 @@ export default function Checkout() {
                       key={`${item.product_id}-${item.selected_size}-${item.selected_color}`}
                       className="flex items-center gap-4 py-4 first:pt-0"
                     >
-                      <img 
-                        src={item.image} 
-                        alt={item.title} 
-                        className="w-12 h-16 object-cover bg-white aspect-[3/4]"
-                      />
+                      {item.image ? (
+                        <img 
+                          src={item.image} 
+                          alt={item.title} 
+                          className="w-12 h-16 object-cover bg-white aspect-[3/4]"
+                        />
+                      ) : (
+                        <div className="w-12 h-16 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5 aspect-[3/4]">
+                          No Image
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <h4 className="font-body text-[14px] font-semibold truncate text-on-surface">{item.title}</h4>
                         <p className="text-[11px] text-on-surface-variant mt-0.5">
@@ -600,11 +606,17 @@ export default function Checkout() {
                     {suggestions.map((product) => (
                       <div key={product.id} className="flex items-center justify-between gap-4 border-b border-on-surface/5 pb-4 last:border-b-0 last:pb-0">
                         <div className="flex items-center gap-3">
-                          <img 
-                            src={product.images[0]} 
-                            alt={product.title} 
-                            className="w-10 h-13 object-cover bg-white aspect-[3/4]"
-                          />
+                          {product.images && product.images[0] ? (
+                            <img 
+                              src={product.images[0]} 
+                              alt={product.title} 
+                              className="w-10 h-13 object-cover bg-white aspect-[3/4]"
+                            />
+                          ) : (
+                            <div className="w-10 h-13 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5 aspect-[3/4]">
+                              No Image
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <h4 className="font-body text-[13px] font-semibold text-on-surface truncate">{product.title}</h4>
                             <p className="text-[11px] text-gold-leaf font-medium">₹{product.price}</p>

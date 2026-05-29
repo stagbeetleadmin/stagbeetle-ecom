@@ -31,7 +31,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">1. Who We Are</h2>
               <p>
-                Stag Beetle Apparel Private Limited (&quot;Stag Beetle&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the website stagbeetle.co.in and associated services. Our registered office is at 14, Lavelle Road, Ashok Nagar, Bengaluru — 560 001, Karnataka, India.
+                Stagbeetle Pvt. Ltd. (&quot;Stag Beetle&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the website stagbeetle.co.in and associated services. Our registered office is at Lalbagh Road, Bangalore-560027, Karnataka, India.
               </p>
             </section>
 
@@ -99,7 +99,7 @@ export default function PrivacyPage() {
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">7. Your Rights</h2>
               <p className="mb-3">
                 Under applicable Indian data protection law, you have the right to access, correct, or delete your personal data. To exercise these rights, contact us at{' '}
-                <a href="mailto:privacy@stagbeetle.co.in" className="text-gold-leaf hover:underline">privacy@stagbeetle.co.in</a>.
+                <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a>.
               </p>
             </section>
 
@@ -107,8 +107,8 @@ export default function PrivacyPage() {
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">8. Contact Us</h2>
               <p>
                 For any privacy-related queries, write to our Data Protection Officer at{' '}
-                <a href="mailto:privacy@stagbeetle.co.in" className="text-gold-leaf hover:underline">privacy@stagbeetle.co.in</a>{' '}
-                or by post to: Data Protection Officer, Stag Beetle Apparel Private Limited, 14 Lavelle Road, Bengaluru — 560 001.
+                <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a>{' '}
+                or by post to: Data Protection Officer, Stagbeetle Pvt. Ltd., Lalbagh Road, Bangalore-560027.
               </p>
             </section>
 

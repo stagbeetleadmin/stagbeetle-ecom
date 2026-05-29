@@ -102,7 +102,7 @@ export default function CarePage() {
             <h3 className="font-display text-[20px] font-semibold text-on-surface mb-3">Professional Care</h3>
             <p className="text-[14px] text-on-surface-variant leading-relaxed">
               For heirloom pieces or heavily embroidered garments, we recommend our partner dry cleaners in Bengaluru, Mumbai, and Delhi. Contact us at{' '}
-              <a href="mailto:care@stagbeetle.co.in" className="text-gold-leaf hover:underline">care@stagbeetle.co.in</a>{' '}
+              <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a>{' '}
               for a referral.
             </p>
           </div>

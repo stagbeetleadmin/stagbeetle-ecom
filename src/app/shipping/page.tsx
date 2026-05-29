@@ -85,7 +85,7 @@ export default function ShippingPage() {
             <section>
               <h2 className="font-display text-[22px] font-semibold text-on-surface mb-4">Order Tracking</h2>
               <p className="text-body-md leading-relaxed">
-                Once your order is dispatched, you will receive a tracking link via email and SMS. You can also contact our client service team at <a href="mailto:care@stagbeetle.co.in" className="text-gold-leaf hover:underline">care@stagbeetle.co.in</a> for real-time updates.
+                Once your order is dispatched, you will receive a tracking link via email and SMS. You can also contact our client service team at <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a> for real-time updates.
               </p>
             </section>
 
@@ -94,7 +94,7 @@ export default function ShippingPage() {
           <div className="mt-16 pt-8 border-t border-on-surface/5">
             <p className="text-[13px] text-on-surface-variant">
               Questions? Visit our <Link href="/returns" className="text-gold-leaf hover:underline">Returns &amp; Exchanges</Link> page or contact us at{' '}
-              <a href="mailto:care@stagbeetle.co.in" className="text-gold-leaf hover:underline">care@stagbeetle.co.in</a>.
+              <a href="mailto:stagbeetle0629@gmail.com" className="text-gold-leaf hover:underline">stagbeetle0629@gmail.com</a>.
             </p>
           </div>
 

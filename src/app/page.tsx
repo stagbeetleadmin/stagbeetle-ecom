@@ -165,11 +165,18 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
     >
       {/* Image Container */}
       <div className="relative overflow-hidden bg-gray-50 aspect-[3/4]">
-        <img
-          src={hovered && product.images[1] ? product.images[1] : product.images[0]}
-          alt={product.title}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-        />
+        {product.images && product.images[0] ? (
+          <img
+            src={hovered && product.images[1] ? product.images[1] : product.images[0]}
+            alt={product.title}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 border-b border-gray-100 text-gray-400 text-[11px] font-label-caps tracking-wider p-4 text-center">
+            <span className="material-symbols-outlined text-[32px] text-gray-300 mb-1">image</span>
+            No Image Available
+          </div>
+        )}
 
         {/* Wishlist Button */}
         <button
@@ -325,6 +332,7 @@ function StorefrontContent() {
   const searchParam = searchParams.get('search') || '';
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(categoryParam);
   const [searchTerm, setSearchTerm] = useState(searchParam);
 
@@ -332,7 +340,10 @@ function StorefrontContent() {
   useEffect(() => { setSearchTerm(searchParam); }, [searchParam]);
 
   useEffect(() => {
-    getProducts().then(setProducts);
+    getProducts().then(res => {
+      setProducts(res);
+      setIsLoading(false);
+    });
   }, []);
 
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
@@ -527,7 +538,22 @@ function StorefrontContent() {
           </div>
 
           {/* Product Grid */}
-          {displayedProducts.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center items-center py-32">
+              <div className="w-8 h-8 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : products.length === 0 ? (
+            <div className="max-w-[700px] mx-auto px-6 py-24 text-center border border-dashed border-[#C5A059]/25 bg-gray-50/50 rounded-sm my-10">
+              <span className="material-symbols-outlined text-[56px] text-[#C5A059] mb-4">temp_preferences_custom</span>
+              <h2 className="font-display text-[22px] font-bold text-gray-900 tracking-wide uppercase mb-3">ATELIER UNDER CRAFT</h2>
+              <p className="font-body text-[14px] text-gray-500 max-w-md mx-auto leading-relaxed mb-6">
+                Our master craftspeople are currently tailoring the upcoming seasonal collection. No garments are currently listed in our public catalog. Check back soon.
+              </p>
+              <p className="text-[10px] font-label-caps tracking-[0.3em] text-gray-400">
+                STAGBEETLE PVT. LTD. &middot; BENGALURU
+              </p>
+            </div>
+          ) : displayedProducts.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
               <span className="material-symbols-outlined text-[48px] mb-3 block">search_off</span>
               <p className="text-[15px] font-medium">No garments found in this category.</p>
