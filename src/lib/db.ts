@@ -65,383 +65,195 @@ export interface UserProfile {
 
 // Initial seed products representing the Stag Beetle brand with Indian luxury touch
 const SEED_PRODUCTS: Product[] = [
-  // ── MEN ──────────────────────────────────────────────────────────────────
   {
-    id: "prod_linen_kurta",
-    title: "Structured Linen Kurta",
-    price: 6800,
+    id: "prod_dolb8k9sa",
+    title: "Essential Linen Shirt – Stone Gray",
+    price: 2000,
     category: "Men",
-    subcategory: "Shirt",
-    sleeve_type: "Full Sleeves",
-    sku: "SB-LN-KT-01",
-    material: "Jaipur Handloom Linen",
-    description: "A contemporary take on the classic kurta, cut from crisp handloom linen woven in Jaipur. Mandarin collar, concealed placket, and side slits give it a clean architectural silhouette. Finished with hand-stitched buttonholes and a relaxed straight hem.",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80",
-      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80",
-      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80"
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image1_1780089214455.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image2_1780089220272.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image3_1780089227905.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
-    colors: ["Ivory White", "Slate Grey", "Indigo"],
-    rating: 4.7
-  },
-  {
-    id: "prod_bandhgala_jacket",
-    title: "Bandhgala Jacket",
-    price: 12500,
-    category: "Men",
-    subcategory: "Jacket",
-    sku: "SB-BG-JK-02",
-    material: "Wool-Silk Blend, Bengaluru Atelier",
-    description: "A Nehru-collar bandhgala jacket tailored in our Bengaluru atelier from a fine wool-silk blend. Slim-fit silhouette with a single-button closure, welt pockets, and a full Mashru silk lining. Equally at home at a formal dinner or a gallery opening.",
-    images: [
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
-      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80",
-      "https://images.unsplash.com/photo-1617137968427-85924c800a22?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Midnight Black", "Ivory Cream", "Forest Green"],
-    rating: 4.9
-  },
-  {
-    id: "prod_mesh_shirt",
-    title: "Geometric Mesh Shirt",
-    price: 4500,
-    category: "Men",
+    colors: ["Stone Grey"],
+    rating: 5,
+    sku: "SB-LNSH-SGR",
     subcategory: "Shirt",
-    sleeve_type: "Half Sleeves",
-    sku: "SB-GM-SH-03",
-    material: "Hand-spun Banarasi Silk Blend",
-    description: "An editorial silhouette made from an ultra-lightweight hand-spun Banarasi silk and cotton blend, featuring geometric structural knit patterns and premium ribbed finishing. Hand-woven by master craftsmen in Varanasi and tailored in our Bengaluru atelier with delicate stitching that echoes the natural carapace divisions of the stag beetle.",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_tnb3mzq8r",
+    title: "Essential Linen Shirt – Grey",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&q=80",
-      "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80",
-      "https://images.unsplash.com/photo-1571945153237-4929e783af4a?w=800&q=80"
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image1_1780089858705.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image2_1780089866007.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image3_1780089872767.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Grey"],
+    rating: 5,
+    sku: "SB-LNSH-GRY",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_4bmljdxan",
+    title: "Essential Linen Shirt – Arctic White",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image1_1780088998466.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image2_1780089008188.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image3_1780089013944.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Arctic White"],
+    rating: 5,
+    sku: "SB-LNSH-WHT",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_tlgcahpch",
+    title: "Essential Linen Shirt – Sage Mint",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image1_1780089339973.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image2_1780089334654.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image3_1780089351905.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Sage Mint"],
+    rating: 5,
+    sku: "SB-LNSH-SGM",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_rjqwo97qr",
+    title: "Essential Linen Shirt – Forest Olive",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image1_1780089518124.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image2_1780089529662.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image3_1780089535441.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Forest Olive"],
+    rating: 5,
+    sku: "SB-LNSH-FOL",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_7fmjzgpb7",
+    title: "Essential Linen Shirt – Light Blue",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image1_1780090271576.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image2_1780090279476.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image3_1780090286859.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Light Blue"],
+    rating: 5,
+    sku: "SB-LNSH-LBL",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_tab7ur6ks",
+    title: "Essential Linen Shirt – Purple",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image1_1780090779850.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image2_1780090791851.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image3_1780090796628.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Purple"],
+    rating: 5,
+    sku: "SB-LNSH-PRL",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_u6m12m18k",
+    title: "Essential Linen Shirt – Blue",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image1_1780090954862.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image2_1780090961757.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image3_1780090968048.jpg"
+    ],
+    sizes: ["S", "M", "L", "XL", "XXL"],
+    colors: ["Blue"],
+    rating: 5,
+    sku: "SB-LNSH-BLU",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
+  },
+  {
+    id: "prod_diq2vn8lw",
+    title: "Essential Linen Shirt – Black",
+    price: 2000,
+    category: "Men",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
+    images: [
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image1_1780091060064.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image2_1780091065552.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image3_1780091070968.jpg"
     ],
     sizes: ["S", "M", "L", "XL"],
     colors: ["Obsidian Black", "Iridescent Silver", "Beetle Navy"],
-    rating: 4.8
-  },
-  /*
-  {
-    id: "prod_carapace_blouse",
-    title: "Carapace Blouse",
-    price: 8900,
-    category: "Women",
-    material: "Handloom Mulberry Silk",
-    description: "An elegant, architectural blouse crafted from double-weight mulberry handloom silk from South India. The sleeves feature layered pleats resembling the organic segments of beetle armor, catching light with a high-end subtle pearlized finish.",
-    images: [
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80",
-      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80",
-      "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80"
-    ],
-    sizes: ["XS", "S", "M", "L"],
-    colors: ["Champagne Gold", "Iridescent Silver", "Ivory Cream"],
-    rating: 4.9
-  },
-  {
-    id: "prod_anarkali_gown",
-    title: "Anarkali Silk Gown",
-    price: 18500,
-    category: "Women",
-    material: "Pure Banarasi Silk",
-    description: "A floor-length Anarkali gown in pure Banarasi silk with a fitted bodice and a dramatically flared skirt. Intricate zari embroidery at the neckline and cuffs, with a matching dupatta in sheer organza. Handcrafted in our Bengaluru atelier over 40 hours.",
-    images: [
-      "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80",
-      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80",
-      "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80"
-    ],
-    sizes: ["XS", "S", "M", "L", "XL"],
-    colors: ["Deep Crimson", "Midnight Blue", "Champagne Gold"],
-    rating: 5.0
-  },
-  {
-    id: "prod_drape_saree",
-    title: "Architectural Drape Saree",
-    price: 22000,
-    category: "Women",
-    material: "Kanjivaram Silk",
-    description: "A contemporary pre-draped saree in heavyweight Kanjivaram silk with a structured pleated front panel. The pallu features a bold geometric border in contrasting zari. Comes with a fitted sleeveless blouse with a deep back. A modern heirloom.",
-    images: [
-      "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80",
-      "https://images.unsplash.com/photo-1617019114583-affb34d1b3cd?w=800&q=80",
-      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80"
-    ],
-    sizes: ["XS", "S", "M", "L"],
-    colors: ["Peacock Teal", "Ivory & Gold", "Burgundy"],
-    rating: 4.9
-  },
-  {
-    id: "prod_linen_coord",
-    title: "Linen Co-ord Set",
-    price: 11200,
-    category: "Women",
-    material: "Handloom Linen, Kutch Embroidery",
-    description: "A relaxed co-ord set comprising a boxy cropped jacket and wide-leg trousers in handloom linen. The jacket features hand-embroidered Kutch mirror-work at the collar and cuffs. Effortlessly elegant for day or evening.",
-    images: [
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80",
-      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80",
-      "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80"
-    ],
-    sizes: ["XS", "S", "M", "L", "XL"],
-    colors: ["Natural Ecru", "Sage Green", "Dusty Rose"],
-    rating: 4.7
-  },
-  {
-    id: "prod_linen_trousers_women",
-    title: "Wide-Leg Linen Trousers",
-    price: 7800,
-    category: "Women",
-    material: "Handloom Linen, Jaipur",
-    description: "Relaxed wide-leg trousers in crisp handloom linen from Jaipur. High-rise waist with a wide waistband, side pockets, and a clean straight hem. Pairs effortlessly with the Linen Co-ord jacket or a simple silk blouse.",
-    images: [
-      "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80",
-      "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80"
-    ],
-    sizes: ["XS", "S", "M", "L", "XL"],
-    colors: ["Natural Ecru", "Slate Blue", "Terracotta"],
-    rating: 4.8
-  }
-  */
-  {
-    id: "prod_obsidian_overcoat",
-    title: "Obsidian Overcoat",
-    price: 14500,
-    category: "Men",
-    subcategory: "Jacket",
-    sku: "SB-MEN-OB-OC-04",
-    material: "Fine Kashmir Wool & Silk",
-    description: "A double-breasted structured overcoat constructed from ultra-dense premium Kashmir wool and lined with pure Mashru silk. Designed with a tall, protective collar, deep side slits, and a bespoke inner-lining displaying custom anatomical sketches.",
-    images: [
-      "https://images.unsplash.com/photo-1617137968427-85924c800a22?w=800&q=80",
-      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80",
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80"
-    ],
-    sizes: ["M", "L", "XL"],
-    colors: ["Obsidian Black", "Charcoal Gray"],
-    rating: 5.0
-  },
-  {
-    id: "prod_silk_shirt",
-    title: "Ikat Silk Shirt",
-    price: 9200,
-    category: "Men",
+    rating: 5,
+    sku: "SB-LNSH-BLK",
     subcategory: "Shirt",
-    sleeve_type: "Full Sleeves",
-    sku: "SB-MEN-IK-SH-05",
-    material: "Pochampally Ikat Silk",
-    description: "A statement shirt woven from authentic Pochampally ikat silk — each piece unique due to the resist-dyeing process. Relaxed fit with a camp collar, mother-of-pearl buttons, and a curved hem. A wearable piece of Telangana craft heritage.",
-    images: [
-      "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&q=80",
-      "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80",
-      "https://images.unsplash.com/photo-1571945153237-4929e783af4a?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Indigo & Gold", "Rust & Ivory", "Teal & Black"],
-    rating: 4.8
+    sleeve_type: "Half Sleeves"
   },
   {
-    id: "prod_armor_trousers",
-    title: "Armor Trousers",
-    price: 7200,
+    id: "prod_3dnbf87a4",
+    title: "Essential Linen Shirt – Navy Blue",
+    price: 2000,
     category: "Men",
-    subcategory: "Track pant",
-    sku: "SB-MEN-AR-TR-06",
-    material: "Jaipur Handloom Linen-Wool",
-    description: "Mid-rise trousers crafted from a bespoke hand-woven Jaipur linen and wool blend. Features signature sharp double front pleats and side belt loops in structural shapes, with adjustable gold buckle details that let you define the fit at the waist.",
+    material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
+    description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=800&q=80",
-      "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80",
-      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Charcoal Gray", "Obsidian Black", "Khaki"],
-    rating: 4.6
-  },
-  {
-    id: "prod_mulberry_silk_scarf",
-    title: "Silk Kurta",
-    price: 5800,
-    category: "Men",
-    subcategory: "Shirt",
-    sleeve_type: "Full Sleeves",
-    sku: "SB-MEN-SL-KT-07",
-    material: "100% Banarasi Mulberry Silk",
-    description: "A classic straight-cut kurta in pure Banarasi mulberry silk. Subtle self-woven texture, mandarin collar, and side slits. Pairs beautifully with churidar or straight trousers for festive occasions.",
-    images: [
-      "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=800&q=80",
-      "https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=800&q=80",
-      "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80"
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image2_1780090084045.jpg",
+      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image3_1780090090608.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
-    colors: ["Ivory White", "Champagne Gold", "Midnight Blue"],
-    rating: 4.8
-  },
-  {
-    id: "prod_retro_tshirt",
-    title: "Retro Oversized Graphic Tee",
-    price: 999,
-    category: "Men",
-    subcategory: "Tshirt",
-    sku: "SB-MEN-RT-TS-08",
-    material: "100% Heavyweight Cotton",
-    description: "An oversized streetwear t-shirt with a vintage graphic print. Drop shoulders and double-needle stitching for a relaxed, robust look.",
-    images: [
-      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&q=80",
-      "https://images.unsplash.com/photo-1554568218-0f1715e72254?w=800&q=80",
-      "https://images.unsplash.com/photo-1527719327859-c6ce802585e4?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Off-White", "Vintage Black"],
-    rating: 4.8
-  },
-  {
-    id: "prod_flared_jeans",
-    title: "Flared Fit Washed Jeans",
-    price: 1899,
-    category: "Men",
-    subcategory: "Jeans",
-    sku: "SB-MEN-FL-JN-09",
-    material: "Premium Rigid Denim",
-    description: "Throwback flared fit jeans with a classic mid-rise and heavily washed light indigo shade. Finished with signature pocket rivets and raw edges.",
-    images: [
-      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80",
-      "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800&q=80"
-    ],
-    sizes: ["30", "32", "34", "36"],
-    colors: ["Washed Indigo", "Charcoal Blue"],
-    rating: 4.9
-  },
-  {
-    id: "prod_bootcut_jeans",
-    title: "Bootcut Stretch Washed Jeans",
-    price: 1999,
-    category: "Men",
-    subcategory: "Jeans",
-    sku: "SB-MEN-BC-JN-10",
-    material: "Stretch Cotton Denim",
-    description: "Bootcut leg profile with a touch of stretch for day-long comfort. Clean dark wash with light whiskers and a zip-fly.",
-    images: [
-      "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80",
-      "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&q=80"
-    ],
-    sizes: ["30", "32", "34", "36"],
-    colors: ["Dark Blue", "Solid Black"],
-    rating: 4.7
-  },
-  {
-    id: "prod_cargo_pants",
-    title: "Tactical Utility Cargo Pants",
-    price: 2199,
-    category: "Men",
-    subcategory: "Track pant",
-    sku: "SB-MEN-CG-PT-11",
-    material: "Durable Ripstop Cotton",
-    description: "Modern cargo pants cut from durable ripstop cotton. Equipped with multiple secure utility pockets, a relaxed silhouette, and drawcord adjustable cuffs.",
-    images: [
-      "https://images.unsplash.com/photo-1517423568366-8b83523034fd?w=800&q=80",
-      "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Olive Green", "Desert Sand"],
-    rating: 4.9
-  },
-  {
-    id: "prod_knit_polo",
-    title: "Cable-Knit Summer Polo",
-    price: 1499,
-    category: "Men",
-    subcategory: "Tshirt",
-    sku: "SB-MEN-KN-PL-12",
-    material: "100% Knit Cotton",
-    description: "Retro summer vibe polo styled with a classic collar and cable-knit texture. Super breathable and holds its structure perfectly.",
-    images: [
-      "https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=800&q=80",
-      "https://images.unsplash.com/photo-1578932750294-f5075e85f44a?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Mustard Yellow", "Ecru Cream"],
-    rating: 4.8
-  },
-  {
-    id: "prod_denim_overshirt",
-    title: "Heavyweight Denim Overshirt",
-    price: 2299,
-    category: "Men",
-    subcategory: "Jacket",
-    sku: "SB-MEN-DN-OS-13",
-    material: "12oz Organic Denim",
-    description: "A heavyweight denim overshirt that functions as a light jacket. Boxy fit, dual-chest flap pockets, and metallic shank buttons.",
-    images: [
-      "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&q=80",
-      "https://images.unsplash.com/photo-1611312449412-6cefac5dc3e4?w=800&q=80"
-    ],
-    sizes: ["M", "L", "XL"],
-    colors: ["Light Indigo", "Acid Black"],
-    rating: 4.9
-  },
-  {
-    id: "prod_retro_sunglasses",
-    title: "Vintage Square Sunglasses",
-    price: 999,
-    category: "Accessories",
-    material: "Premium Acetate & Alloy",
-    description: "Retro square frames inspired by 70s eyewear. Featuring tinted UV400 lenses and golden side accents for a sleek, bold profile.",
-    images: [
-      "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&q=80",
-      "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=800&q=80"
-    ],
-    sizes: ["One Size"],
-    colors: ["Tortoiseshell Brown", "Glossy Black"],
-    rating: 4.6
-  },
-  {
-    id: "prod_noir_perfume",
-    title: "Noir Intense Eau De Parfum",
-    price: 1799,
-    category: "Accessories",
-    material: "Natural Essential Oils & Bergamot",
-    description: "An intense, woody fragrance combining base notes of cedarwood and patchouli with top notes of bergamot and dry amber. Long-lasting performance.",
-    images: [
-      "https://images.unsplash.com/photo-1541643600914-78b084683601?w=800&q=80",
-      "https://images.unsplash.com/photo-1594035910387-fea47794261f?w=800&q=80"
-    ],
-    sizes: ["100ml"],
-    colors: ["Matte Black"],
-    rating: 4.8
-  },
-  {
-    id: "prod_suede_loafers",
-    title: "Classic Suede Loafers",
-    price: 3499,
-    category: "Accessories",
-    material: "Italian Suede Leather",
-    description: "Slip-on suede loafers crafted with clean apron stitching and a cushioned leather footbed. Sleek and perfect for both smart-casual and formal ensembles.",
-    images: [
-      "https://images.unsplash.com/photo-1533867617858-e7b97e060509?w=800&q=80",
-      "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=800&q=80"
-    ],
-    sizes: ["7", "8", "9", "10"],
-    colors: ["Navy Blue", "Sandy Beige"],
-    rating: 4.7
-  },
-  {
-    id: "prod_knit_shorts",
-    title: "Tailored Drawstring Shorts",
-    price: 1199,
-    category: "Men",
-    subcategory: "Shorts",
-    sku: "SB-MEN-KN-SH-14",
-    material: "Premium Waffle Cotton",
-    description: "Relaxed fit shorts in a structured waffle knit. Equipped with an elastic waistband, cotton drawstrings, and deep side slash pockets.",
-    images: [
-      "https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=800&q=80",
-      "https://images.unsplash.com/photo-15911954013-d485f30999de?w=800&q=80"
-    ],
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Sage Green", "Charcoal Gray"],
-    rating: 4.5
+    colors: ["Navy Blue"],
+    rating: 5,
+    sku: "SB-LNSH-NBL",
+    subcategory: "Shirt",
+    sleeve_type: "Half Sleeves"
   }
 ];
 
@@ -570,12 +382,83 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
   setLocalProducts(products);
   return newProduct;
 };
-
 export const updateProduct = async (id: string, updatedFields: Partial<Product>): Promise<Product | null> => {
+  let finalFields = { ...updatedFields };
+
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.from('products').update(updatedFields).eq('id', id).select().single();
+      // 1. Fetch current product to check if SKU is changing
+      const { data: existingProduct, error: fetchError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (!fetchError && existingProduct) {
+        const oldSku = existingProduct.sku;
+        const newSku = updatedFields.sku;
+        const imagesToProcess = updatedFields.images || existingProduct.images || [];
+
+        if (newSku && oldSku && newSku.trim() !== oldSku.trim() && imagesToProcess.length > 0) {
+          const cleanOldSku = oldSku.trim().replace(/[^a-zA-Z0-9-_]/g, '_');
+          const cleanNewSku = newSku.trim().replace(/[^a-zA-Z0-9-_]/g, '_');
+          
+          console.log(`[Atelier SKU Sync] SKU changed from '${cleanOldSku}' to '${cleanNewSku}'. Moving files...`);
+          
+          const newImages: string[] = [];
+          for (const url of imagesToProcess) {
+            if (!url) continue;
+
+            const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/garment-images\/(.+)$/);
+            if (match && match[1]) {
+              const oldFilePath = match[1].split('?')[0]; // products/OLD_SKU/filename.jpg
+              
+              // Only move if the path indeed belongs to the old SKU folder
+              if (oldFilePath.includes(`products/${cleanOldSku}/`) || oldFilePath.includes(`/${cleanOldSku}_`)) {
+                const oldFileName = oldFilePath.split('/').pop() || '';
+                const newFileName = oldFileName.replace(cleanOldSku, cleanNewSku);
+                const newFilePath = `products/${cleanNewSku}/${newFileName}`;
+
+                try {
+                  console.log(`[Atelier SKU Sync] Moving storage file: ${oldFilePath} -> ${newFilePath}`);
+                  const { error: moveError } = await supabase.storage
+                    .from('garment-images')
+                    .move(oldFilePath, newFilePath);
+
+                  if (!moveError) {
+                    const { data: urlData } = supabase.storage
+                      .from('garment-images')
+                      .getPublicUrl(newFilePath);
+                    newImages.push(urlData.publicUrl);
+                  } else {
+                    console.warn(`[Atelier SKU Sync] Move failed:`, moveError.message);
+                    newImages.push(url);
+                  }
+                } catch (err) {
+                  console.warn(`[Atelier SKU Sync] Error moving file:`, err);
+                  newImages.push(url);
+                }
+              } else {
+                newImages.push(url);
+              }
+            } else {
+              newImages.push(url);
+            }
+          }
+
+          if (newImages.length > 0) {
+            finalFields.images = newImages;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[Atelier DB] Pre-update SKU check failed:`, e);
+    }
+
+    try {
+      const { data, error } = await supabase.from('products').update(finalFields).eq('id', id).select().single();
       if (!error && data) return data as Product;
+      if (error) console.warn("Supabase updateProduct returned error:", error.message);
     } catch (e) {
       console.warn(`Supabase updateProduct failed for id ${id}, falling back to mock:`, e);
     }
@@ -585,7 +468,7 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
   const index = products.findIndex(p => p.id === id);
   if (index === -1) return null;
   
-  const updatedProduct = { ...products[index], ...updatedFields };
+  const updatedProduct = { ...products[index], ...finalFields };
   products[index] = updatedProduct;
   setLocalProducts(products);
   return updatedProduct;
@@ -658,6 +541,23 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
   
   setLocalProducts(filtered);
   return true;
+};
+
+export const deleteStorageImage = async (url: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase || !url) return false;
+  const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/garment-images\/(.+)$/);
+  if (match && match[1]) {
+    const path = match[1].split('?')[0];
+    try {
+      console.log(`[Atelier Storage] Removing image from Supabase storage:`, path);
+      const { error } = await supabase.storage.from('garment-images').remove([path]);
+      if (!error) return true;
+      console.warn("[Atelier Storage] Failed to delete image:", error.message);
+    } catch (e) {
+      console.warn("[Atelier Storage] Error deleting image:", e);
+    }
+  }
+  return false;
 };
 
 export const bulkUploadProducts = async (newProducts: Omit<Product, 'id'>[]): Promise<Product[]> => {

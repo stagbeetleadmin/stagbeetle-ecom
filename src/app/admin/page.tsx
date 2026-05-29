@@ -10,7 +10,7 @@ import {
   Product, Coupon, Order,
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
-  getOrders, updateOrderShipping, uploadGarmentImage
+  getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 
@@ -123,6 +123,17 @@ function AdminDashboardContent() {
       return;
     }
 
+    // Delete existing image if there is already one in this slot (re-upload overwrite)
+    const existingUrl = productForm[fieldName];
+    if (existingUrl && !existingUrl.startsWith('data:')) {
+      console.log(`[Admin Portal] Cleaning up previous image from storage before re-upload: ${existingUrl}`);
+      try {
+        await deleteStorageImage(existingUrl);
+      } catch (err) {
+        console.warn("[Admin Portal] Failed to delete previous image:", err);
+      }
+    }
+
     setUploadingStates(prev => ({ ...prev, [fieldName]: true }));
     try {
       console.log(`[Admin Portal] Compressing ${file.name} client-side...`);
@@ -144,6 +155,34 @@ function AdminDashboardContent() {
       triggerFeedback('error', `Image upload failed: ${err.message || err}`);
     } finally {
       setUploadingStates(prev => ({ ...prev, [fieldName]: false }));
+    }
+  };
+
+  const handleRemoveImage = async (fieldName: 'image1' | 'image2' | 'image3') => {
+    const imageUrl = productForm[fieldName];
+    if (!imageUrl) return;
+
+    if (!confirm('Are you sure you want to delete this image? This action will permanently remove it from storage.')) return;
+
+    // Clear state first
+    setProductForm(prev => ({ ...prev, [fieldName]: '' }));
+
+    if (!imageUrl.startsWith('data:')) {
+      try {
+        console.log(`[Admin Portal] Deleting image from storage: ${imageUrl}`);
+        const ok = await deleteStorageImage(imageUrl);
+        if (ok) {
+          triggerFeedback('success', 'Image removed from Supabase storage.');
+        } else {
+          console.warn('Could not delete image from Supabase storage (might be already deleted).');
+          triggerFeedback('success', 'Image slot cleared.');
+        }
+      } catch (err: any) {
+        console.error('Error deleting image:', err);
+        triggerFeedback('error', `Failed to delete from storage: ${err.message || err}`);
+      }
+    } else {
+      triggerFeedback('success', 'Image slot cleared.');
     }
   };
 
@@ -1688,8 +1727,16 @@ function AdminDashboardContent() {
                             <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
                           )}
                           {productForm.image1 && (
-                            <div className="w-8 h-10 border rounded-sm overflow-hidden shrink-0">
+                            <div className="relative w-8 h-10 border rounded-sm shrink-0">
                               <img src={productForm.image1} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage('image1')}
+                                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md transition-all text-[10px] font-bold z-10"
+                                title="Remove image from storage"
+                              >
+                                &times;
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1725,8 +1772,16 @@ function AdminDashboardContent() {
                             <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
                           )}
                           {productForm.image2 && (
-                            <div className="w-8 h-10 border rounded-sm overflow-hidden shrink-0">
+                            <div className="relative w-8 h-10 border rounded-sm shrink-0">
                               <img src={productForm.image2} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage('image2')}
+                                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md transition-all text-[10px] font-bold z-10"
+                                title="Remove image from storage"
+                              >
+                                &times;
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1762,8 +1817,16 @@ function AdminDashboardContent() {
                             <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
                           )}
                           {productForm.image3 && (
-                            <div className="w-8 h-10 border rounded-sm overflow-hidden shrink-0">
+                            <div className="relative w-8 h-10 border rounded-sm shrink-0">
                               <img src={productForm.image3} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage('image3')}
+                                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md transition-all text-[10px] font-bold z-10"
+                                title="Remove image from storage"
+                              >
+                                &times;
+                              </button>
                             </div>
                           )}
                         </div>
