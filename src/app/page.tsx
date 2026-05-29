@@ -79,6 +79,8 @@ function HeroCarousel() {
           key={i}
           src={s.image}
           alt=""
+          fetchPriority={i === 0 ? "high" : "low"}
+          loading={i === 0 ? "eager" : "lazy"}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${i === current ? 'opacity-100' : 'opacity-0'}`}
         />
       ))}
@@ -169,6 +171,7 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
           <img
             src={hovered && product.images[1] ? product.images[1] : product.images[0]}
             alt={product.title}
+            loading="lazy"
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
@@ -432,7 +435,7 @@ function StorefrontContent() {
                     <span className="text-[11px] font-bold tracking-widest text-gray-800 uppercase">{cat.name}</span>
                   </div>
                   <div className="relative aspect-[3/4] mt-2 overflow-hidden bg-gradient-to-b from-transparent to-gray-50 flex items-end">
-                    <img src={cat.image} alt={cat.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900/10 via-transparent to-transparent pointer-events-none" />
                   </div>
                 </Link>
@@ -448,7 +451,7 @@ function StorefrontContent() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {MOODS.map((mood, idx) => (
                 <Link key={idx} href={mood.href} className="relative group overflow-hidden aspect-[4/5] bg-gray-900 rounded-sm">
-                  <img src={mood.image} alt={mood.name} className="w-full h-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110" />
+                  <img src={mood.image} alt={mood.name} loading="lazy" className="w-full h-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110" />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/60 group-hover:from-black/35 transition-all" />
                   <div className="absolute bottom-6 left-0 right-0 text-center text-white px-2">
                     <h4 className="text-[18px] font-bold leading-tight tracking-wide">{mood.name}</h4>
@@ -477,7 +480,7 @@ function StorefrontContent() {
                   </Link>
                 ) : (
                   <Link key={idx} href={steal.href} className="group relative overflow-hidden bg-gray-50 rounded-sm aspect-[4/5] block">
-                    <img src={steal.image} alt={steal.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <img src={steal.image} alt={steal.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                     <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-all" />
                     <div className="absolute bottom-6 left-6 text-left text-white z-10">
                       <span className="text-[12px] font-medium tracking-wide block uppercase opacity-80">{steal.title}</span>

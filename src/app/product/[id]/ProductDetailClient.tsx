@@ -67,7 +67,7 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                           : 'border-transparent hover:border-gray-300'
                       }`}
                     >
-                      <img src={img} alt={`View ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img src={img} alt={`View ${idx + 1}`} loading="lazy" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -80,6 +80,8 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                     <img
                       src={product.images[activeImageIndex]}
                       alt={product.title}
+                      fetchPriority="high"
+                      loading="eager"
                       className="w-full h-full object-cover object-top transition-all duration-400"
                     />
                     {/* View label */}
@@ -304,6 +306,7 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                       <img
                         src={item.images[0]}
                         alt={item.title}
+                        loading="lazy"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                     ) : (

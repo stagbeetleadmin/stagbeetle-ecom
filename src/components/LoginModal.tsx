@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import Logo from './Logo';
 
 export default function LoginModal() {
   const { 
@@ -102,10 +103,8 @@ export default function LoginModal() {
 
         {/* Header */}
         <div className="px-6 pt-6 pb-4 flex justify-between items-start">
-          <div>
-            <p className="text-[10px] font-bold tracking-[0.3em] text-[#C5A059] uppercase mb-1">
-              Stag Beetle
-            </p>
+          <div className="flex flex-col items-start">
+            <Logo className="h-8 w-auto text-[#0D1B2A] mb-2" showText={true} />
             <h3 className="text-[22px] font-bold text-gray-900 leading-tight">
               Sign in to your account
             </h3>

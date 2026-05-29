@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Playfair_Display, Hanken_Grotesk } from "next/font/google";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
-import LoginModal from "@/components/LoginModal";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -87,7 +86,6 @@ export default function RootLayout({
         <AuthProvider>
           <CartProvider>
             {children}
-            <LoginModal />
           </CartProvider>
         </AuthProvider>
       </body>

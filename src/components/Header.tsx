@@ -4,8 +4,15 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import CartDrawer from './CartDrawer';
+import dynamic from 'next/dynamic';
 import Logo from './Logo';
+
+const CartDrawer = dynamic(() => import('./CartDrawer'), {
+  ssr: false,
+});
+const LoginModal = dynamic(() => import('./LoginModal'), {
+  ssr: false,
+});
 import { useAuth } from '@/context/AuthContext';
 
 const SUBCATEGORIES = [
@@ -69,7 +76,7 @@ function HeaderInner() {
 
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2 shrink-0">
-              <Logo className="h-8 w-auto text-[#0D1B2A]" showText={true} />
+              <Logo className={`w-auto text-[#0D1B2A] transition-all duration-300 ${isScrolled ? 'h-10' : 'h-12'}`} showText={true} />
             </Link>
 
             {/* Center Nav */}
@@ -192,6 +199,7 @@ function HeaderInner() {
       <div className={isAdmin ? (isScrolled ? 'h-14' : 'h-16') : (isScrolled ? 'h-[92px]' : 'h-[130px]')} />
 
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <LoginModal />
     </>
   );
 }

@@ -7,11 +7,12 @@ interface LogoProps {
 }
 
 export default function Logo({ className = "h-8 w-auto", lightMode = false, showText = false }: LogoProps) {
+  const viewBox = showText ? "200 200 520 235" : "200 200 125 220";
   return (
     <div className="flex items-center">
       <svg
         version="1.1"
-        viewBox="0 0 859.18109 612"
+        viewBox={viewBox}
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className={className}

@@ -11,31 +11,34 @@ export const metadata: Metadata = {
 
 const locations = [
   {
-    city: 'Bengaluru',
-    label: 'FLAGSHIP ATELIER',
-    address: 'Lalbagh Road, Bangalore-560027',
-    hours: 'Tuesday – Saturday, 11 AM – 7 PM',
+    name: 'Lalbagh Road (Flagship/Wholesale)',
+    label: 'FLAGSHIP / WHOLESALE OUTLET',
+    address: 'No. 207, 1st Floor, 4th Cross, Lalbagh Road, Bangalore - 560027',
+    hours: 'Monday – Saturday, 10 AM – 7 PM',
     phone: '+91 9035203203',
     email: 'stagbeetle0629@gmail.com',
-    note: 'Walk-ins welcome. Private appointments recommended for bespoke consultations.',
+    mapUrl: 'https://www.google.com/maps/search/?api=1&query=No.+207,+1st+Floor,+4th+Cross,+Lalbagh+Road,+Bangalore+-+560027',
+    note: 'Our flagship studio offering full custom tailoring, bespoke fittings, and wholesale inquiries.',
   },
   {
-    city: 'Mumbai',
-    label: 'STUDIO',
-    address: 'Unit 4B, Kala Ghoda Arts Precinct, Fort, Mumbai — 400 001',
-    hours: 'Wednesday – Sunday, 12 PM – 8 PM',
-    phone: '+91 22 6789 0123',
+    name: 'Kempapura (Sahakara Nagar)',
+    label: 'SAHAKARA NAGAR OUTLET',
+    address: '78/52, 1st Main Road, Netajinagar, G Ramaiah Layout, Kempapura, Bangalore - 560024',
+    hours: 'Monday – Sunday, 10 AM – 8 PM',
+    phone: '+91 9035203203',
     email: 'stagbeetle0629@gmail.com',
-    note: 'By appointment only. Seasonal trunk shows and private viewings.',
+    mapUrl: 'https://www.google.com/maps/search/?api=1&query=78/52,+1st+Main+Road,+Netajinagar,+G+Ramaiah+Layout,+Kempapura,+Bangalore+-+560024',
+    note: 'Premium readymade collection showcasing and bespoke sizing consultations.',
   },
   {
-    city: 'Delhi',
-    label: 'STUDIO',
-    address: 'Shop 7, The Qutub Colonnade, Mehrauli, New Delhi — 110 030',
-    hours: 'Thursday – Monday, 11 AM – 7 PM',
-    phone: '+91 11 4567 8901',
+    name: 'Hegde Nagar',
+    label: 'HEGDE NAGAR OUTLET',
+    address: 'Shop/Door No. 8, Basement, MCECHS Layout Main Road, Sri Balaji Krupa Layout, RK Hegde Nagar, Bangalore - 560077',
+    hours: 'Monday – Sunday, 10 AM – 8 PM',
+    phone: '+91 9035203203',
     email: 'stagbeetle0629@gmail.com',
-    note: 'By appointment only.',
+    mapUrl: 'https://www.google.com/maps/search/?api=1&query=Shop/Door+No.+8,+Basement,+MCECHS+Layout+Main+Road,+Sri+Balaji+Krupa+Layout,+RK+Hegde+Nagar,+Bangalore+-+560077',
+    note: 'Exclusive readymade garments, accessories, and personalization counter.',
   },
 ];
 
@@ -62,11 +65,24 @@ export default function AtelierPage() {
 
           <div className="grid md:grid-cols-1 gap-8 mb-20">
             {locations.map((loc) => (
-              <div key={loc.city} className="border border-on-surface/8 p-8 bg-surface-dim/30 grid md:grid-cols-2 gap-8">
+              <div key={loc.name} className="border border-on-surface/8 p-8 bg-surface-dim/30 grid md:grid-cols-2 gap-8">
                 <div>
                   <span className="font-label-caps text-[9px] text-gold-leaf tracking-[0.3em] block mb-2">{loc.label}</span>
-                  <h2 className="font-display text-[28px] font-semibold text-on-surface mb-4">{loc.city}</h2>
-                  <p className="text-[14px] text-on-surface-variant leading-relaxed mb-2">{loc.address}</p>
+                  <h2 className="font-display text-[24px] font-semibold text-on-surface mb-3">{loc.name}</h2>
+                  <p className="text-[14px] text-on-surface-variant leading-relaxed mb-4">{loc.address}</p>
+                  
+                  {loc.mapUrl && (
+                    <a
+                      href={loc.mapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-label-caps tracking-widest text-[#C5A059] hover:underline mb-4 uppercase"
+                    >
+                      <span className="material-symbols-outlined text-[15px] align-middle">location_on</span>
+                      View on Google Maps
+                    </a>
+                  )}
+                  
                   <p className="text-[13px] text-on-surface-variant/70">{loc.hours}</p>
                 </div>
                 <div className="space-y-4">
