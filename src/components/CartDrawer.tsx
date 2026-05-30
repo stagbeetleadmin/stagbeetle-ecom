@@ -72,7 +72,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                           <img 
                             src={item.image} 
                             alt={item.title} 
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover object-top"
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[9px] font-label-caps tracking-wider p-1 text-center">
@@ -138,7 +138,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                               <img 
                                 src={product.images[0]} 
                                 alt={product.title} 
-                                className="w-12 h-16 object-cover bg-surface aspect-[3/4]"
+                                className="w-12 h-16 object-cover object-top bg-surface aspect-[3/4]"
                               />
                             ) : (
                               <div className="w-12 h-16 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5">

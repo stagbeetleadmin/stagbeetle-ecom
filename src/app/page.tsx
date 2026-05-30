@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import Logo from '@/components/Logo';
 import { getProducts, Product } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 
 // ─── Hero Carousel ────────────────────────────────────────────────────────────
 interface HeroSlide {
-  image: string;
+  image?: string;
+  video?: string;
   tag: string;
   headline: string;
   sub: string;
@@ -22,6 +24,17 @@ interface HeroSlide {
 }
 
 const HERO_SLIDES: HeroSlide[] = [
+  {
+    video: '/assets/people.mp4',
+    image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1600&q=85',
+    tag: 'NEW SEASON',
+    headline: 'Echoes of the\nStreet',
+    sub: 'Tailored luxury meets raw energy. Explore the new capsule collection.',
+    cta: 'Shop Collection',
+    ctaHref: '/?category=all',
+    align: 'left',
+  },
+  /*
   {
     image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=1600&q=85',
     tag: 'LIMITED TIME OFFER',
@@ -49,7 +62,44 @@ const HERO_SLIDES: HeroSlide[] = [
     ctaHref: '/?category=men',
     align: 'left',
   },
+  */
 ];
+
+function VideoSlide({ src, poster, isActive }: { src: string; poster?: string; isActive: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isActive) {
+      video.play().catch((err) => {
+        console.warn("Video autoplay failed or was interrupted:", err);
+      });
+    } else {
+      video.pause();
+    }
+  }, [isActive]);
+
+  return (
+    <div className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${isActive ? 'opacity-100 z-0' : 'opacity-0 -z-10 pointer-events-none'
+      }`}>
+      <video
+        ref={videoRef}
+        src={src}
+        poster={poster}
+        muted
+        loop
+        playsInline
+        className="w-full h-full object-cover object-top"
+      />
+      {/* Brand logo overlay watermark */}
+      <div className="absolute top-6 right-6 md:top-8 md:right-8 z-10 pointer-events-none select-none text-white/30 transition-all duration-300">
+        <Logo className="h-6 md:h-8 w-auto" showText={true} />
+      </div>
+    </div>
+  );
+}
 
 function HeroCarousel() {
   const [current, setCurrent] = useState(0);
@@ -65,24 +115,38 @@ function HeroCarousel() {
   }, [animating]);
 
   useEffect(() => {
-    const t = setInterval(() => goTo((current + 1) % HERO_SLIDES.length), 6000);
+    if (HERO_SLIDES.length <= 1) return;
+    const t = setInterval(() => goTo((current + 1) % HERO_SLIDES.length), 8000);
     return () => clearInterval(t);
   }, [current, goTo]);
 
-  const slide = HERO_SLIDES[current];
+  const slide = HERO_SLIDES[current] || HERO_SLIDES[0];
+
+  if (!slide) return null;
 
   return (
     <div className="relative w-full h-[70vh] min-h-[480px] overflow-hidden bg-gray-900">
-      {/* Background images */}
+      {/* Background media */}
       {HERO_SLIDES.map((s, i) => (
-        <img
-          key={i}
-          src={s.image}
-          alt=""
-          fetchPriority={i === 0 ? "high" : "low"}
-          loading={i === 0 ? "eager" : "lazy"}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${i === current ? 'opacity-100' : 'opacity-0'}`}
-        />
+        s.video ? (
+          <VideoSlide
+            key={i}
+            src={s.video}
+            poster={s.image}
+            isActive={i === current}
+          />
+        ) : (
+          s.image && (
+            <img
+              key={i}
+              src={s.image}
+              alt=""
+              fetchPriority={i === 0 ? "high" : "low"}
+              loading={i === 0 ? "eager" : "lazy"}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${i === current ? 'opacity-100' : 'opacity-0'}`}
+            />
+          )
+        )
       ))}
       {/* Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
@@ -111,26 +175,32 @@ function HeroCarousel() {
       </div>
 
       {/* Dots */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
-        {HERO_SLIDES.map((_, i) => (
-          <button key={i} onClick={() => goTo(i)}
-            className={`w-2 h-2 rounded-full transition-all ${i === current ? 'bg-[#C5A059] w-6' : 'bg-white/50'}`}
-            aria-label={`Slide ${i + 1}`}
-          />
-        ))}
-      </div>
+      {HERO_SLIDES.length > 1 && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+          {HERO_SLIDES.map((_, i) => (
+            <button key={i} onClick={() => goTo(i)}
+              className={`w-2 h-2 rounded-full transition-all ${i === current ? 'bg-[#C5A059] w-6' : 'bg-white/50'}`}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Arrows */}
-      <button onClick={() => goTo((current - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
-        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/30 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
-        aria-label="Previous">
-        <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-      </button>
-      <button onClick={() => goTo((current + 1) % HERO_SLIDES.length)}
-        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/30 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
-        aria-label="Next">
-        <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-      </button>
+      {HERO_SLIDES.length > 1 && (
+        <>
+          <button onClick={() => goTo((current - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/30 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+            aria-label="Previous">
+            <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+          </button>
+          <button onClick={() => goTo((current + 1) % HERO_SLIDES.length)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/30 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+            aria-label="Next">
+            <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -172,7 +242,7 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
             src={hovered && product.images[1] ? product.images[1] : product.images[0]}
             alt={product.title}
             loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-full object-cover object-top origin-top transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 border-b border-gray-100 text-gray-400 text-[11px] font-label-caps tracking-wider p-4 text-center">
@@ -271,21 +341,28 @@ function ProductCarousel({ title, products, onQuickAdd }: {
 }
 
 // ─── Snitch Mock Content Lists ─────────────────────────────────────────────────
-const FEATURED_CATEGORIES = [
-  { name: 'SHIRT', image: 'https://images.unsplash.com/photo-1603252109303-2751441dd157?w=500&q=80', href: '/?subcategory=Shirt' },
-  { name: 'JEANS', image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&q=80', href: '/?subcategory=Jeans' },
-  { name: 'TSHIRT', image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&q=80', href: '/?subcategory=Tshirt' },
-  { name: 'TRACK PANT', image: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=500&q=80', href: '/?subcategory=Track pant' },
-  { name: 'SHORTS', image: 'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=500&q=80', href: '/?subcategory=Shorts' },
-  { name: 'JACKET', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500&q=80', href: '/?subcategory=Jacket' },
+interface FeaturedCategory {
+  name: string;
+  image: string;
+  href: string;
+  badge?: string;
+}
+
+const FEATURED_CATEGORIES: FeaturedCategory[] = [
+  { name: 'SHIRT', image: '/assets/a_high_quality_product_photo_of_a_crisp_white_long_sleeved_button_down_shirt.png', href: '/?subcategory=Shirt' },
+  { name: 'JEANS', image: '/assets/a_high_quality_product_photo_of_a_classic_pair_of_blue_denim_jeans_on_a_white.png', href: '/?subcategory=Jeans' },
+  { name: 'TSHIRT', image: '/assets/a_high_quality_product_photo_of_a_plain_white_crew_neck_t_shirt_on_a_white.png', href: '/?subcategory=Tshirt' },
+  { name: 'TRACK PANT', image: '/assets/a_high_quality_product_photo_of_grey_cotton_track_pants_on_a_white_background..png', href: '/?subcategory=Track pant' },
+  { name: 'SHORTS', image: '/assets/a_high_quality_product_photo_of_olive_green_cargo_shorts_on_a_white_background..png', href: '/?subcategory=Shorts' },
+  { name: 'JACKET', image: '/assets/a_high_quality_product_photo_of_a_black_bomber_jacket_on_a_white_background._at.png', href: '/?subcategory=Jacket' },
 ];
 
 const MOODS = [
-  { name: 'TRENDING', highlight: 'NOW', image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&q=80', href: '/?category=men' },
-  { name: 'LUXURY', highlight: 'REFINED', image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&q=80', href: '/?subcategory=Jacket' },
-  { name: 'BASICS', highlight: 'DAILY', image: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=600&q=80', href: '/?subcategory=Tshirt' },
-  { name: 'HOLIDAY', highlight: 'ENERGY', image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=600&q=80', href: '/?subcategory=Shorts' },
-  { name: 'FORMAL', highlight: 'WEAR', image: 'https://images.unsplash.com/photo-1593032465175-481ac7f401a0?w=600&q=80', href: '/?subcategory=Track pant' },
+  { name: 'SUMMER', highlight: 'NOW', image: '/assets/a_bright_carefree_fashion_mood_banner_for_summer_style._a_person_in_a_light.png', href: '/?category=men' },
+  { name: 'LUXURY', highlight: 'REFINED', image: '/assets/a_sophisticated_high_end_fashion_mood_banner_for_luxury_style._a_man_in_a.png', href: '/?subcategory=Jacket' },
+  { name: 'BASICS', highlight: 'DAILY', image: '/assets/a_clean_minimalist_fashion_mood_banner_for_basics_style._a_person_in_a_high.png', href: '/?subcategory=Tshirt' },
+  { name: 'HOLIDAY', highlight: 'ENERGY', image: '/assets/a_sun_drenched_relaxed_fashion_mood_banner_for_holiday_style._a_person_in_a.png', href: '/?subcategory=Shorts' },
+  { name: 'FORMAL', highlight: 'WEAR', image: '/assets/a_sharp_professional_fashion_mood_banner_for_formal_style._a_man_in_a_crisp.png', href: '/?subcategory=Track pant' },
 ];
 
 const STEALS = [
@@ -426,18 +503,21 @@ function StorefrontContent() {
 
         {/* ── Featured Categories Grid ── */}
         {!isFiltering && (
-          <section className="py-12 px-4 md:px-10 max-w-[1400px] mx-auto text-center">
-            <h2 className="text-[16px] font-bold text-gray-900 tracking-[0.25em] uppercase mb-8">Featured Categories</h2>
-            <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar lg:grid lg:grid-cols-9 lg:gap-4">
+          <section className="py-16 px-4 md:px-10 max-w-[1400px] mx-auto text-center border-t border-gray-100">
+            <h2 className="text-[16px] font-bold text-gray-900 tracking-[0.25em] uppercase mb-10">Featured Categories</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               {FEATURED_CATEGORIES.map((cat, idx) => (
-                <Link key={idx} href={cat.href} className="shrink-0 w-[140px] lg:w-auto group relative block bg-white border border-gray-100 overflow-hidden rounded-sm shadow-sm hover:shadow-md transition-shadow">
-                  <div className="pt-4 px-2 text-center">
-                    <span className="text-[11px] font-bold tracking-widest text-gray-800 uppercase">{cat.name}</span>
-                  </div>
-                  <div className="relative aspect-[3/4] mt-2 overflow-hidden bg-gradient-to-b from-transparent to-gray-50 flex items-end">
-                    <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900/10 via-transparent to-transparent pointer-events-none" />
-                  </div>
+                <Link
+                  key={idx}
+                  href={cat.href}
+                  className="group relative block overflow-hidden rounded-sm hover:-translate-y-1 transition-all duration-300 aspect-square"
+                >
+                  <img
+                    src={cat.image}
+                    alt={cat.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
                 </Link>
               ))}
             </div>
@@ -450,13 +530,17 @@ function StorefrontContent() {
             <h2 className="text-[16px] font-bold text-gray-900 tracking-[0.25em] uppercase mb-8">Match The Mood</h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {MOODS.map((mood, idx) => (
-                <Link key={idx} href={mood.href} className="relative group overflow-hidden aspect-[4/5] bg-gray-900 rounded-sm">
-                  <img src={mood.image} alt={mood.name} loading="lazy" className="w-full h-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/60 group-hover:from-black/35 transition-all" />
-                  <div className="absolute bottom-6 left-0 right-0 text-center text-white px-2">
-                    <h4 className="text-[18px] font-bold leading-tight tracking-wide">{mood.name}</h4>
-                    <span className="text-[12px] font-bold text-yellow-400 tracking-wider uppercase block mt-1">{mood.highlight}</span>
-                  </div>
+                <Link
+                  key={idx}
+                  href={mood.href}
+                  className="group relative block overflow-hidden rounded-sm hover:-translate-y-1 transition-all duration-300 aspect-[3/4]"
+                >
+                  <img
+                    src={mood.image}
+                    alt={mood.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
                 </Link>
               ))}
             </div>
@@ -480,7 +564,7 @@ function StorefrontContent() {
                   </Link>
                 ) : (
                   <Link key={idx} href={steal.href} className="group relative overflow-hidden bg-gray-50 rounded-sm aspect-[4/5] block">
-                    <img src={steal.image} alt={steal.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <img src={steal.image} alt={steal.title} loading="lazy" className="w-full h-full object-cover object-top origin-top transition-transform duration-500 group-hover:scale-105" />
                     <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-all" />
                     <div className="absolute bottom-6 left-6 text-left text-white z-10">
                       <span className="text-[12px] font-medium tracking-wide block uppercase opacity-80">{steal.title}</span>
@@ -510,9 +594,8 @@ function StorefrontContent() {
                   <button
                     key={tab}
                     onClick={() => handleSubcategoryClick(tab)}
-                    className={`px-6 py-2.5 text-[11px] font-bold tracking-widest uppercase transition-all border ${
-                      isActive ? 'bg-black text-white border-black shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'
-                    }`}
+                    className={`px-6 py-2.5 text-[11px] font-bold tracking-widest uppercase transition-all border ${isActive ? 'bg-black text-white border-black shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'
+                      }`}
                   >
                     {tab}
                   </button>

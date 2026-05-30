@@ -67,7 +67,7 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                           : 'border-transparent hover:border-gray-300'
                       }`}
                     >
-                      <img src={img} alt={`View ${idx + 1}`} loading="lazy" className="w-full h-full object-cover" />
+                      <img src={img} alt={`View ${idx + 1}`} loading="lazy" className="w-full h-full object-cover object-top" />
                     </button>
                   ))}
                 </div>
@@ -307,7 +307,7 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                         src={item.images[0]}
                         alt={item.title}
                         loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        className="w-full h-full object-cover object-top origin-top transition-transform duration-500 group-hover:scale-105"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 text-[10px] font-label-caps tracking-wider text-center p-2">

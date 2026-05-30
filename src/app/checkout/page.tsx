@@ -489,7 +489,7 @@ export default function Checkout() {
                         <img 
                           src={item.image} 
                           alt={item.title} 
-                          className="w-12 h-16 object-cover bg-white aspect-[3/4]"
+                          className="w-12 h-16 object-cover object-top bg-white aspect-[3/4]"
                         />
                       ) : (
                         <div className="w-12 h-16 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5 aspect-[3/4]">
@@ -610,7 +610,7 @@ export default function Checkout() {
                             <img 
                               src={product.images[0]} 
                               alt={product.title} 
-                              className="w-10 h-13 object-cover bg-white aspect-[3/4]"
+                              className="w-10 h-13 object-cover object-top bg-white aspect-[3/4]"
                             />
                           ) : (
                             <div className="w-10 h-13 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5 aspect-[3/4]">

@@ -1130,7 +1130,7 @@ function AdminDashboardContent() {
                               {popularProducts.map((p, idx) => (
                                 <div key={idx} className="flex items-center gap-3 p-3 border border-zinc-100 rounded-sm hover:bg-zinc-50 transition-colors">
                                   {p.image ? (
-                                    <img src={p.image} alt={p.title} className="w-10 h-13 object-cover rounded-sm aspect-[3/4]" />
+                                    <img src={p.image} alt={p.title} className="w-10 h-13 object-cover object-top rounded-sm aspect-[3/4]" />
                                   ) : (
                                     <div className="w-10 h-13 bg-zinc-50 rounded-sm flex items-center justify-center border text-zinc-400">
                                       <span className="material-symbols-outlined text-[18px]">image</span>
@@ -1199,7 +1199,7 @@ function AdminDashboardContent() {
                                       <img
                                         src={prod.images[0]}
                                         alt={prod.title}
-                                        className="w-10 h-13 object-cover aspect-[3/4] border bg-zinc-50"
+                                        className="w-10 h-13 object-cover object-top aspect-[3/4] border bg-zinc-50"
                                       />
                                     ) : (
                                       <div className="w-10 h-13 border border-dashed border-zinc-300 flex flex-col items-center justify-center bg-zinc-50 text-zinc-400 aspect-[3/4] text-[9px] font-semibold text-center leading-tight">
@@ -1750,7 +1750,7 @@ function AdminDashboardContent() {
                           )}
                           {productForm.image1 && (
                             <div className="relative w-8 h-10 border rounded-sm shrink-0">
-                              <img src={productForm.image1} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                              <img src={productForm.image1} alt="Preview" className="w-full h-full object-cover object-top aspect-[3/4]" />
                               <button
                                 type="button"
                                 onClick={() => handleRemoveImage('image1')}
@@ -1795,7 +1795,7 @@ function AdminDashboardContent() {
                           )}
                           {productForm.image2 && (
                             <div className="relative w-8 h-10 border rounded-sm shrink-0">
-                              <img src={productForm.image2} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                              <img src={productForm.image2} alt="Preview" className="w-full h-full object-cover object-top aspect-[3/4]" />
                               <button
                                 type="button"
                                 onClick={() => handleRemoveImage('image2')}
@@ -1840,7 +1840,7 @@ function AdminDashboardContent() {
                           )}
                           {productForm.image3 && (
                             <div className="relative w-8 h-10 border rounded-sm shrink-0">
-                              <img src={productForm.image3} alt="Preview" className="w-full h-full object-cover aspect-[3/4]" />
+                              <img src={productForm.image3} alt="Preview" className="w-full h-full object-cover object-top aspect-[3/4]" />
                               <button
                                 type="button"
                                 onClick={() => handleRemoveImage('image3')}
