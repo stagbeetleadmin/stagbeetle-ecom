@@ -340,7 +340,7 @@ function ProductCarousel({ title, products, onQuickAdd }: {
   );
 }
 
-// ─── Snitch Mock Content Lists ─────────────────────────────────────────────────
+// ─── STAGBEETLE Mock Content Lists ─────────────────────────────────────────────────
 interface FeaturedCategory {
   name: string;
   image: string;
@@ -367,7 +367,7 @@ const MOODS = [
 
 const STEALS = [
   {
-    title: 'only SNITCH fans',
+    title: 'only STAGBEETLE fans',
     subtitle: 'SALE EXTENDED',
     offer: 'FLAT 40% OFF',
     date: 'Ends 28th May',
