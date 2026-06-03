@@ -415,9 +415,17 @@ function StorefrontContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(categoryParam);
   const [searchTerm, setSearchTerm] = useState(searchParam);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchParam);
 
   useEffect(() => { setActiveCategory(categoryParam); }, [categoryParam]);
   useEffect(() => { setSearchTerm(searchParam); }, [searchParam]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   useEffect(() => {
     getProducts().then(res => {
@@ -451,15 +459,25 @@ function StorefrontContent() {
   const filteredProducts = products.filter(p => {
     const matchCat = activeCategory === 'all' || activeCategory === '' || p.category.toLowerCase() === activeCategory.toLowerCase();
     const matchSub = !subcategoryParam || p.subcategory?.toLowerCase() === subcategoryParam.toLowerCase();
-    const matchSearch = !searchTerm ||
-      p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.material.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.subcategory && p.subcategory.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // Multi-word search query checking against multiple product fields (Title, Material, Subcategory, SKU, Description, Colors)
+    const matchSearch = !debouncedSearchTerm || (() => {
+      const queryWords = debouncedSearchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+      return queryWords.every(word => {
+        const inTitle = p.title.toLowerCase().includes(word);
+        const inMaterial = p.material.toLowerCase().includes(word);
+        const inSubcategory = p.subcategory ? p.subcategory.toLowerCase().includes(word) : false;
+        const inSku = p.sku ? p.sku.toLowerCase().includes(word) : false;
+        const inDescription = p.description ? p.description.toLowerCase().includes(word) : false;
+        const inColors = p.colors ? p.colors.some(c => c.toLowerCase().includes(word)) : false;
+        return inTitle || inMaterial || inSubcategory || inSku || inDescription || inColors;
+      });
+    })();
 
     return matchCat && matchSub && matchSearch;
   });
 
-  const isFiltering = activeCategory !== 'all' || !!subcategoryParam || !!searchTerm;
+  const isFiltering = activeCategory !== 'all' || !!subcategoryParam || !!debouncedSearchTerm;
 
   // Infinite Scroll Logic
   const ITEMS_PER_PAGE = 8;
@@ -469,7 +487,7 @@ function StorefrontContent() {
   // Reset pagination count on search or filter change
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
-  }, [activeCategory, subcategoryParam, searchTerm]);
+  }, [activeCategory, subcategoryParam, debouncedSearchTerm]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -582,7 +600,7 @@ function StorefrontContent() {
         <section className="py-12 px-4 md:px-10 max-w-[1400px] mx-auto border-t border-gray-100">
           <div className="text-center mb-10">
             <h2 className="text-[16px] font-bold text-gray-900 tracking-[0.25em] uppercase">
-              {searchTerm ? 'Search Results' : subcategoryParam ? `${subcategoryParam}` : 'New and Popular'}
+              {debouncedSearchTerm ? 'Search Results' : subcategoryParam ? `${subcategoryParam}` : 'New and Popular'}
             </h2>
             <p className="text-[12px] text-gray-400 mt-2">{filteredProducts.length} items available</p>
 
