@@ -1652,17 +1652,19 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Sleeve Type dropdown - Visible only for Shirts */}
-                <div className={`space-y-1.5 transition-all duration-300 ${productForm.subcategory === 'Shirt' ? 'opacity-100 scale-100 h-auto' : 'opacity-0 scale-95 h-0 overflow-hidden pointer-events-none'}`}>
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SLEEVES</label>
-                  <select
-                    value={productForm.sleeve_type}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, sleeve_type: e.target.value }))}
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
-                  >
-                    <option value="Half Sleeves">Half Sleeves</option>
-                    <option value="Full Sleeves">Full Sleeves</option>
-                  </select>
-                </div>
+                {productForm.subcategory === 'Shirt' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SLEEVES</label>
+                    <select
+                      value={productForm.sleeve_type}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, sleeve_type: e.target.value }))}
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                    >
+                      <option value="Half Sleeves">Half Sleeves</option>
+                      <option value="Full Sleeves">Full Sleeves</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* Material */}
                 <div className="space-y-1.5 sm:col-span-2">
