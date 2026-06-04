@@ -96,7 +96,7 @@ function HeaderInner() {
                 <span className="material-symbols-outlined text-[24px]">menu</span>
               </button>
               <Link href="/" className="flex items-center gap-2">
-                <Logo className={`w-auto text-[#052A42] transition-all duration-300 ${isScrolled ? 'h-10' : 'h-12'}`} showText={true} />
+                <Logo className={`w-auto text-[#052A42] transition-all duration-300 ${isScrolled ? 'h-8' : 'h-9 md:h-10'}`} showText={true} />
               </Link>
             </div>
 
@@ -229,7 +229,7 @@ function HeaderInner() {
           {/* Drawer Panel */}
           <div className="fixed inset-y-0 left-0 w-full max-w-[300px] bg-white shadow-2xl z-[150] flex flex-col transition-transform duration-300 border-r border-gray-100 md:hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <Logo className="h-9 w-auto text-[#052A42]" showText={true} />
+              <Logo className="h-8 w-auto text-[#052A42]" showText={true} />
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-1.5 text-[#052A42] hover:text-[#C5A059] transition-colors"
