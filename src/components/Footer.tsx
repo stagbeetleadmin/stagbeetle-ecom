@@ -10,7 +10,7 @@ export default function Footer() {
 
           <div className="col-span-2 lg:col-span-2 space-y-6">
             <Link href="/" className="flex items-center gap-3">
-              <Logo className="h-9 md:h-10 w-auto text-on-surface grayscale" showText={true} />
+              <Logo className="w-auto h-10 text-on-surface grayscale origin-left scale-[0.9] md:scale-100" showText={true} />
             </Link>
             <p className="text-[13px] text-on-surface-variant leading-relaxed max-w-sm">
               <strong className="text-on-surface block mb-2 font-display">STAGBEETLE® – Where Style Meets Confidence.</strong>

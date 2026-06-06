@@ -90,18 +90,25 @@ function HeaderInner() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setIsMobileMenuOpen(true)}
-                className="md:hidden p-1.5 text-[#052A42] hover:text-[#C5A059] transition-colors"
+                className="lg:hidden p-1.5 text-[#052A42] hover:text-[#C5A059] transition-colors"
                 aria-label="Open Menu"
               >
                 <span className="material-symbols-outlined text-[24px]">menu</span>
               </button>
               <Link href="/" className="flex items-center gap-2">
-                <Logo className={`w-auto text-[#052A42] transition-all duration-300 ${isScrolled ? 'h-8' : 'h-9 md:h-10'}`} showText={true} />
+                <Logo
+                  className={`w-auto h-10 text-[#052A42] transition-transform duration-300 origin-left ${
+                    isScrolled
+                      ? 'scale-[0.75] sm:scale-80 md:scale-85 lg:scale-90'
+                      : 'scale-[0.85] sm:scale-90 md:scale-95 lg:scale-100'
+                  }`}
+                  showText={true}
+                />
               </Link>
             </div>
 
             {/* Center Nav */}
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden lg:flex items-center gap-8">
               {isAdmin ? (
                 <>
                   <Link href="/admin?tab=analytics" className="text-[12px] font-semibold tracking-[0.12em] text-[#C5A059] hover:text-[#052A42] transition-colors uppercase">Atelier Analytics</Link>
@@ -223,13 +230,13 @@ function HeaderInner() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/40 z-[140] transition-opacity duration-300 md:hidden"
+            className="fixed inset-0 bg-black/40 z-[140] transition-opacity duration-300 lg:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
           {/* Drawer Panel */}
-          <div className="fixed inset-y-0 left-0 w-full max-w-[300px] bg-white shadow-2xl z-[150] flex flex-col transition-transform duration-300 border-r border-gray-100 md:hidden">
+          <div className="fixed inset-y-0 left-0 w-full max-w-[300px] bg-white shadow-2xl z-[150] flex flex-col transition-transform duration-300 border-r border-gray-100 lg:hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <Logo className="h-8 w-auto text-[#052A42]" showText={true} />
+              <Logo className="w-auto h-10 text-[#052A42] origin-left scale-[0.8]" showText={true} />
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-1.5 text-[#052A42] hover:text-[#C5A059] transition-colors"
