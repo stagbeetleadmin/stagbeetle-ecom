@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import dynamic from 'next/dynamic';
 import Logo from './Logo';
@@ -15,16 +15,6 @@ const LoginModal = dynamic(() => import('./LoginModal'), {
 });
 import { useAuth } from '@/context/AuthContext';
 
-const SUBCATEGORIES = [
-  { name: 'Discover', href: '/?category=all' },
-  { name: 'Shirt', href: '/?subcategory=Shirt' },
-  { name: 'Jeans', href: '/?subcategory=Jeans' },
-  { name: 'Tshirt', href: '/?subcategory=Tshirt' },
-  { name: 'Track pant', href: '/?subcategory=Track pant' },
-  { name: 'Shorts', href: '/?subcategory=Shorts' },
-  { name: 'Jacket', href: '/?subcategory=Jacket' },
-];
-
 function HeaderInner() {
   const { cartCount } = useCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -34,6 +24,7 @@ function HeaderInner() {
   const searchRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const { user, isAdmin, triggerLoginModal, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -41,6 +32,51 @@ function HeaderInner() {
 
   const activeCategory = searchParams.get('category') || '';
   const activeSubcategory = searchParams.get('subcategory') || '';
+
+  // Determine active sections
+  const isStorySection = ['/about', '/stores', '/care', '/shipping', '/returns'].includes(pathname);
+  const isMenActive = !isStorySection && activeCategory === 'men';
+  const isNewArrivalsActive = !isStorySection && !isMenActive;
+  const isStoryActive = isStorySection;
+
+  // Dynamically compute subcategories
+  const subcategories = isStoryActive
+    ? [
+        { name: 'Story', href: '/about' },
+        { name: 'Store Locations', href: '/stores' },
+        { name: 'Garment Care', href: '/care' },
+        { name: 'Shipping Policy', href: '/shipping' },
+        { name: 'Cancellation & Refund', href: '/returns' },
+      ]
+    : isMenActive
+    ? [
+        { name: 'Discover', href: '/?category=men' },
+        { name: 'Shirt', href: '/?category=men&subcategory=Shirt' },
+        { name: 'Jeans', href: '/?category=men&subcategory=Jeans' },
+        { name: 'Tshirt', href: '/?category=men&subcategory=Tshirt' },
+        { name: 'Track pant', href: '/?category=men&subcategory=Track pant' },
+        { name: 'Shorts', href: '/?category=men&subcategory=Shorts' },
+        { name: 'Jacket', href: '/?category=men&subcategory=Jacket' },
+      ]
+    : [
+        { name: 'Discover', href: '/?category=all' },
+        { name: 'Shirt', href: '/?category=all&subcategory=Shirt' },
+        { name: 'Jeans', href: '/?category=all&subcategory=Jeans' },
+        { name: 'Tshirt', href: '/?category=all&subcategory=Tshirt' },
+        { name: 'Track pant', href: '/?category=all&subcategory=Track pant' },
+        { name: 'Shorts', href: '/?category=all&subcategory=Shorts' },
+        { name: 'Jacket', href: '/?category=all&subcategory=Jacket' },
+      ];
+
+  const isSubActive = (sub: { name: string; href: string }) => {
+    if (isStoryActive) {
+      return pathname === sub.href;
+    }
+    if (sub.name === 'Discover') {
+      return !activeSubcategory;
+    }
+    return activeSubcategory.toLowerCase() === sub.name.toLowerCase();
+  };
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 30);
@@ -118,9 +154,36 @@ function HeaderInner() {
                 </>
               ) : (
                 <>
-                  <Link href="/?category=all" className="text-[12px] font-semibold tracking-[0.12em] text-[#052A42] hover:text-[#C5A059] transition-colors uppercase">New Arrivals</Link>
-                  <Link href="/?category=men" className="text-[12px] font-semibold tracking-[0.12em] text-[#052A42] hover:text-[#C5A059] transition-colors uppercase">Men</Link>
-                  <Link href="/about" className="text-[12px] font-semibold tracking-[0.12em] text-[#052A42] hover:text-[#C5A059] transition-colors uppercase">Our Story</Link>
+                  <Link
+                    href="/?category=all"
+                    className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
+                      isNewArrivalsActive
+                        ? 'text-[#C5A059] border-[#C5A059] font-bold'
+                        : 'text-[#052A42] border-transparent hover:text-[#C5A059] font-semibold'
+                    }`}
+                  >
+                    New Arrivals
+                  </Link>
+                  <Link
+                    href="/?category=men"
+                    className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
+                      isMenActive
+                        ? 'text-[#C5A059] border-[#C5A059] font-bold'
+                        : 'text-[#052A42] border-transparent hover:text-[#C5A059] font-semibold'
+                    }`}
+                  >
+                    Men
+                  </Link>
+                  <Link
+                    href="/about"
+                    className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
+                      isStoryActive
+                        ? 'text-[#C5A059] border-[#C5A059] font-bold'
+                        : 'text-[#052A42] border-transparent hover:text-[#C5A059] font-semibold'
+                    }`}
+                  >
+                    Our Story
+                  </Link>
                 </>
               )}
             </div>
@@ -203,15 +266,15 @@ function HeaderInner() {
         {!isAdmin && (
           <div className="w-full bg-white border-b border-gray-100 py-3 overflow-x-auto hide-scrollbar">
             <div className="flex gap-6 md:gap-8 px-4 max-w-[1400px] mx-auto whitespace-nowrap justify-start md:justify-center">
-              {SUBCATEGORIES.map((sub) => {
-                const isActive = (sub.name === 'Discover' && !activeSubcategory && activeCategory !== 'men') ||
-                  (sub.name !== 'Discover' && activeSubcategory.toLowerCase() === sub.name.toLowerCase());
+              {subcategories.map((sub) => {
+                const isActive = isSubActive(sub);
                 return (
                   <Link
                     key={sub.name}
                     href={sub.href}
-                    className={`text-[11px] font-bold tracking-widest uppercase transition-colors relative pb-1 ${isActive ? 'text-[#052A42] border-b border-[#052A42]' : 'text-gray-500 hover:text-[#C5A059]'
-                      }`}
+                    className={`text-[11px] font-bold tracking-widest uppercase transition-colors relative pb-1 ${
+                      isActive ? 'text-[#052A42] border-b border-[#052A42]' : 'text-gray-500 hover:text-[#C5A059]'
+                    }`}
                   >
                     {sub.name}
                   </Link>
@@ -257,10 +320,40 @@ function HeaderInner() {
                 </>
               ) : (
                 <>
-                  <span className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Collections</span>
-                  <Link href="/?category=all" onClick={() => setIsMobileMenuOpen(false)} className="text-[13px] font-semibold tracking-[0.12em] text-[#052A42] hover:text-[#C5A059] transition-colors uppercase">New Arrivals</Link>
-                  <Link href="/?category=men" onClick={() => setIsMobileMenuOpen(false)} className="text-[13px] font-semibold tracking-[0.12em] text-[#052A42] hover:text-[#C5A059] transition-colors uppercase">Men</Link>
-                  <Link href="/about" onClick={() => setIsMobileMenuOpen(false)} className="text-[13px] font-semibold tracking-[0.12em] text-[#052A42] hover:text-[#C5A059] transition-colors uppercase">Our Story</Link>
+                  <span className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-1">Collections</span>
+                  <Link
+                    href="/?category=all"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`text-[13px] tracking-[0.12em] uppercase transition-colors pl-2 border-l-2 ${
+                      isNewArrivalsActive
+                        ? 'text-[#C5A059] border-[#C5A059] font-bold'
+                        : 'text-[#052A42] border-transparent hover:text-[#C5A059] font-semibold'
+                    }`}
+                  >
+                    New Arrivals
+                  </Link>
+                  <Link
+                    href="/?category=men"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`text-[13px] tracking-[0.12em] uppercase transition-colors pl-2 border-l-2 ${
+                      isMenActive
+                        ? 'text-[#C5A059] border-[#C5A059] font-bold'
+                        : 'text-[#052A42] border-transparent hover:text-[#C5A059] font-semibold'
+                    }`}
+                  >
+                    Men
+                  </Link>
+                  <Link
+                    href="/about"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`text-[13px] tracking-[0.12em] uppercase transition-colors pl-2 border-l-2 ${
+                      isStoryActive
+                        ? 'text-[#C5A059] border-[#C5A059] font-bold'
+                        : 'text-[#052A42] border-transparent hover:text-[#C5A059] font-semibold'
+                    }`}
+                  >
+                    Our Story
+                  </Link>
                 </>
               )}
 

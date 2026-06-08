@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Product, getColorHex } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -17,6 +18,8 @@ interface ProductDetailClientProps {
 export default function ProductDetailClient({ product, initialSuggestions, colorVariants = [] }: ProductDetailClientProps) {
   const { addToCart } = useCart();
   const { isAdmin } = useAuth();
+  const searchParams = useSearchParams();
+  const activeCategory = searchParams.get('category') || '';
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
   const [selectedColor, setSelectedColor] = useState(product.colors[0] || 'Default');
@@ -242,7 +245,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                           return (
                             <Link
                               key={variant.id}
-                              href={`/product/${variant.id}`}
+                              href={`/product/${variant.id}${activeCategory ? `?category=${activeCategory}` : ''}`}
                               className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900 bg-white transition-all"
                               title={`Switch to ${variant.title}`}
                             >
@@ -331,7 +334,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {initialSuggestions.map(item => (
                 <Link
-                  href={`/product/${item.id}`}
+                  href={`/product/${item.id}${activeCategory ? `?category=${activeCategory}` : ''}`}
                   key={item.id}
                   className="group block bg-white border border-gray-100 hover:border-gray-300 transition-all"
                 >

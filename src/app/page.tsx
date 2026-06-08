@@ -218,6 +218,8 @@ function ProductCard({
   const [activeProduct, setActiveProduct] = useState(initialProduct);
   const [hovered, setHovered] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const searchParams = useSearchParams();
+  const activeCategory = searchParams.get('category') || '';
 
   useEffect(() => {
     setActiveProduct(initialProduct);
@@ -245,7 +247,7 @@ function ProductCard({
   const allProductsInGroup = [initialProduct, ...variants];
 
   return (
-    <Link href={`/product/${activeProduct.id}`}
+    <Link href={`/product/${activeProduct.id}${activeCategory ? `?category=${activeCategory}` : ''}`}
       className="group block bg-white"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -482,6 +484,19 @@ function StorefrontContent() {
   useEffect(() => { setActiveCategory(categoryParam); }, [categoryParam]);
   useEffect(() => { setSearchTerm(searchParam); }, [searchParam]);
 
+  const getPreservedHref = (baseHref: string) => {
+    if (activeCategory && activeCategory !== 'all') {
+      if (baseHref.includes('?')) {
+        if (!baseHref.includes('category=')) {
+          return `${baseHref}&category=${activeCategory}`;
+        }
+      } else {
+        return `${baseHref}?category=${activeCategory}`;
+      }
+    }
+    return baseHref;
+  };
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -617,7 +632,7 @@ function StorefrontContent() {
               {FEATURED_CATEGORIES.map((cat, idx) => (
                 <Link
                   key={idx}
-                  href={cat.href}
+                  href={getPreservedHref(cat.href)}
                   className="group relative block overflow-hidden rounded-sm hover:-translate-y-1 transition-all duration-300 aspect-square"
                 >
                   <img
@@ -640,7 +655,7 @@ function StorefrontContent() {
               {MOODS.map((mood, idx) => (
                 <Link
                   key={idx}
-                  href={mood.href}
+                  href={getPreservedHref(mood.href)}
                   className="group relative block overflow-hidden rounded-sm hover:-translate-y-1 transition-all duration-300 aspect-[3/4]"
                 >
                   <img
@@ -662,7 +677,7 @@ function StorefrontContent() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {STEALS.map((steal, idx) => (
                 steal.isBanner ? (
-                  <Link key={idx} href={steal.href} className={`flex flex-col justify-center items-center p-6 text-white ${steal.bgColor} rounded-sm aspect-[4/5] text-center`}>
+                  <Link key={idx} href={getPreservedHref(steal.href)} className={`flex flex-col justify-center items-center p-6 text-white ${steal.bgColor} rounded-sm aspect-[4/5] text-center`}>
                     <p className="text-[11px] font-semibold tracking-widest uppercase mb-1">{steal.title}</p>
                     <h4 className="text-[18px] font-black tracking-wider uppercase">{steal.subtitle}</h4>
                     <div className="my-6 border-y border-white/20 py-4 w-full">
@@ -671,7 +686,7 @@ function StorefrontContent() {
                     <span className="text-[10px] tracking-widest uppercase opacity-75">{steal.date}</span>
                   </Link>
                 ) : (
-                  <Link key={idx} href={steal.href} className="group relative overflow-hidden bg-gray-50 rounded-sm aspect-[4/5] block">
+                  <Link key={idx} href={getPreservedHref(steal.href)} className="group relative overflow-hidden bg-gray-50 rounded-sm aspect-[4/5] block">
                     <img src={steal.image} alt={steal.title} loading="lazy" className="w-full h-full object-cover object-top origin-top transition-transform duration-500 group-hover:scale-105" />
                     <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-all" />
                     <div className="absolute bottom-6 left-6 text-left text-white z-10">
