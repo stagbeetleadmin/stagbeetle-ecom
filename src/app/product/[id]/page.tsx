@@ -1,6 +1,6 @@
 import React from 'react';
 import { Metadata } from 'next';
-import { getProductById, getSuggestions } from '@/lib/db';
+import { getProductById, getSuggestions, getProducts, getSkuBase } from '@/lib/db';
 import ProductDetailClient from './ProductDetailClient';
 import { notFound } from 'next/navigation';
 
@@ -55,9 +55,20 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     notFound();
   }
 
+  const allProducts = await getProducts();
+  const skuBase = getSkuBase(product.sku);
+  const colorVariants = skuBase
+    ? allProducts.filter(p => p.id !== product.id && getSkuBase(p.sku) === skuBase)
+    : [];
+
   const suggestions = await getSuggestions([product.id]);
 
   return (
-    <ProductDetailClient product={product} initialSuggestions={suggestions} />
+    <ProductDetailClient
+      product={product}
+      initialSuggestions={suggestions}
+      colorVariants={colorVariants}
+    />
   );
 }
+

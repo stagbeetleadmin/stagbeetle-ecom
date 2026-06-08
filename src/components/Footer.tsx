@@ -81,7 +81,7 @@ export default function Footer() {
               <li><Link className="hover:text-gold-leaf transition-colors" href="/shipping">Shipping &amp; Deliveries</Link></li>
               <li><Link className="hover:text-gold-leaf transition-colors" href="/returns">Returns &amp; Exchanges</Link></li>
               <li><Link className="hover:text-gold-leaf transition-colors" href="/care">Garment Care Guide</Link></li>
-              <li><Link className="hover:text-gold-leaf transition-colors" href="/atelier">Atelier Booking</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/stores">Book Consultation</Link></li>
             </ul>
           </div>
 
@@ -97,7 +97,7 @@ export default function Footer() {
               <li>
                 <a className="hover:text-gold-leaf transition-colors" href="https://www.instagram.com" target="_blank" rel="noopener noreferrer">Instagram Profile</a>
               </li>
-              <li><Link className="hover:text-gold-leaf transition-colors" href="/atelier">Atelier Locations</Link></li>
+              <li><Link className="hover:text-gold-leaf transition-colors" href="/stores">Store Locations</Link></li>
             </ul>
           </div>
 

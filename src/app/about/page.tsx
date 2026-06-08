@@ -100,10 +100,10 @@ export default function AboutPage() {
               SHOP THE COLLECTION
             </Link>
             <Link
-              href="/atelier"
+              href="/stores"
               className="border border-primary/20 text-primary px-10 py-4 font-label-caps text-[11px] tracking-[0.2em] hover:bg-primary/5 transition-all text-center"
             >
-              VISIT AN ATELIER
+              VISIT OUR STORES
             </Link>
           </div>
 

@@ -10,7 +10,8 @@ import {
   Product, Coupon, Order,
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
-  getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage
+  getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage,
+  getSkuBase
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 
@@ -1606,6 +1607,27 @@ function AdminDashboardContent() {
                     placeholder="e.g. SB-SHIRT-HS-001"
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   />
+                  {(() => {
+                    const currentSkuBase = getSkuBase(productForm.sku);
+                    const referencedColorVariants = currentSkuBase
+                      ? products.filter(p => p.sku !== productForm.sku && getSkuBase(p.sku) === currentSkuBase)
+                      : [];
+                    if (referencedColorVariants.length === 0) return null;
+                    return (
+                      <div className="mt-1.5 p-2 bg-[#F9F6F0] border border-[#C5A059]/20 rounded-sm text-[11px] text-[#0D1B2A] space-y-1">
+                        <p className="font-bold uppercase tracking-wider text-[9px] text-[#C5A059]">
+                          {currentSkuBase} has {referencedColorVariants.length + (editingProduct ? 1 : 0)} color variant{referencedColorVariants.length + (editingProduct ? 1 : 0) > 1 ? 's' : ''} in catalog:
+                        </p>
+                        <ul className="list-disc list-inside space-y-0.5 font-medium text-zinc-600">
+                          {referencedColorVariants.map(v => (
+                            <li key={v.id}>
+                              <span className="font-mono font-bold text-zinc-800">{v.sku}</span>: {v.colors.join(', ')} ({v.title})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Price */}

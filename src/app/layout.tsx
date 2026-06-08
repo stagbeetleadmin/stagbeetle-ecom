@@ -25,9 +25,6 @@ export const metadata: Metadata = {
     template: "%s | Stag Beetle"
   },
   description: "Modern luxury defined by architectural form, tailored in our Bengaluru atelier with hand-woven Indian textiles including Banarasi silk, Kashmir wool, and Jaipur handloom linen.",
-  icons: {
-    icon: "/favicon.ico",
-  },
   keywords: ["Indian Luxury Weaves", "Stag Beetle", "Banarasi Silk Shirts", "Mysore Rosewood Accessories", "Kashmir Wool Coat", "Jaipur Handloom Linen Trousers", "Bengaluru Atelier", "Premium Men Tailoring India"],
   authors: [{ name: "Stag Beetle Atelier" }],
   creator: "Stag Beetle Development Team",

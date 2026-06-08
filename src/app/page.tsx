@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { getProducts, Product } from '@/lib/db';
+import { getProducts, Product, getSkuBase, getColorHex } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 
 // ─── Hero Carousel ────────────────────────────────────────────────────────────
@@ -206,14 +206,27 @@ function HeroCarousel() {
 }
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
-function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e: React.MouseEvent, p: Product) => void }) {
+function ProductCard({ 
+  product: initialProduct, 
+  variants = [], 
+  onQuickAdd 
+}: { 
+  product: Product; 
+  variants?: Product[]; 
+  onQuickAdd: (e: React.MouseEvent, p: Product) => void 
+}) {
+  const [activeProduct, setActiveProduct] = useState(initialProduct);
   const [hovered, setHovered] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
 
   useEffect(() => {
+    setActiveProduct(initialProduct);
+  }, [initialProduct]);
+
+  useEffect(() => {
     const list = JSON.parse(localStorage.getItem('stag_beetle_wishlist') || '[]');
-    setIsWishlisted(list.includes(product.id));
-  }, [product.id]);
+    setIsWishlisted(list.includes(activeProduct.id));
+  }, [activeProduct.id]);
 
   const toggleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -221,26 +234,28 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
     const list = JSON.parse(localStorage.getItem('stag_beetle_wishlist') || '[]');
     let newList;
     if (isWishlisted) {
-      newList = list.filter((id: string) => id !== product.id);
+      newList = list.filter((id: string) => id !== activeProduct.id);
     } else {
-      newList = [...list, product.id];
+      newList = [...list, activeProduct.id];
     }
     localStorage.setItem('stag_beetle_wishlist', JSON.stringify(newList));
     setIsWishlisted(!isWishlisted);
   };
 
+  const allProductsInGroup = [initialProduct, ...variants];
+
   return (
-    <Link href={`/product/${product.id}`}
+    <Link href={`/product/${activeProduct.id}`}
       className="group block bg-white"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Image Container */}
       <div className="relative overflow-hidden bg-gray-50 aspect-[3/4]">
-        {product.images && product.images[0] ? (
+        {activeProduct.images && activeProduct.images[0] ? (
           <img
-            src={hovered && product.images[1] ? product.images[1] : product.images[0]}
-            alt={product.title}
+            src={hovered && activeProduct.images[1] ? activeProduct.images[1] : activeProduct.images[0]}
+            alt={activeProduct.title}
             loading="lazy"
             className="w-full h-full object-cover object-top origin-top transition-transform duration-700 group-hover:scale-105"
           />
@@ -267,7 +282,7 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
         {/* Quick Add */}
         <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
           <button
-            onClick={(e) => onQuickAdd(e, product)}
+            onClick={(e) => onQuickAdd(e, activeProduct)}
             className="w-full bg-[#0D1B2A] text-white py-3 text-[10px] font-bold tracking-[0.25em] uppercase hover:bg-[#C5A059] transition-colors"
           >
             Quick Add
@@ -275,7 +290,7 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
         </div>
 
         {/* Badge */}
-        {product.rating && product.rating >= 4.9 && (
+        {activeProduct.rating && activeProduct.rating >= 4.9 && (
           <span className="absolute top-2 left-2 bg-[#C5A059] text-white text-[9px] font-bold px-2 py-0.5 tracking-wider uppercase">
             Bestseller
           </span>
@@ -284,20 +299,67 @@ function ProductCard({ product, onQuickAdd }: { product: Product; onQuickAdd: (e
 
       {/* Info */}
       <div className="pt-3 pb-4 px-1 text-left">
-        <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">{product.subcategory || product.category}</p>
+        <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">{activeProduct.subcategory || activeProduct.category}</p>
         <div className="flex justify-between items-start gap-2">
-          <h3 className="text-[13px] font-semibold text-gray-900 leading-snug truncate pr-2">{product.title}</h3>
-          <span className="text-[13px] font-bold text-gray-900 shrink-0">₹{product.price.toLocaleString('en-IN')}</span>
+          <h3 className="text-[13px] font-semibold text-gray-900 leading-snug truncate pr-2">{activeProduct.title}</h3>
+          <span className="text-[13px] font-bold text-gray-900 shrink-0">₹{activeProduct.price.toLocaleString('en-IN')}</span>
         </div>
-        <p className="text-[11px] text-gray-400 mt-0.5 truncate">{product.material}</p>
+        <p className="text-[11px] text-gray-400 mt-0.5 truncate">{activeProduct.material}</p>
+        
         {/* Color dots */}
-        {product.colors && product.colors.length > 0 && (
-          <div className="flex gap-1 mt-2">
-            {product.colors.slice(0, 3).map((c, i) => (
-              <span key={i} className="w-2.5 h-2.5 rounded-full border border-gray-200 bg-gray-300" title={c} />
-            ))}
-            {product.colors.length > 3 && <span className="text-[9px] text-gray-400 self-center">+{product.colors.length - 3}</span>}
+        {allProductsInGroup.length > 1 ? (
+          <div className="flex flex-col gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {allProductsInGroup.map((p) => {
+                const color = p.colors[0] || 'Default';
+                const colorHex = getColorHex(color);
+                const isActive = activeProduct.id === p.id;
+                
+                return (
+                  <button
+                    key={p.id}
+                    title={color}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveProduct(p);
+                    }}
+                    onMouseEnter={() => {
+                      setActiveProduct(p);
+                    }}
+                    className={`w-3.5 h-3.5 rounded-full border transition-all flex items-center justify-center ${
+                      isActive ? 'border-[#C5A059] scale-110 shadow-sm ring-1 ring-[#C5A059]' : 'border-gray-200 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: colorHex }}
+                  >
+                    {colorHex.toLowerCase() === '#ffffff' && (
+                      <span className="w-1 h-1 rounded-full bg-gray-200" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[10px] text-gray-400 font-medium">
+              {variants.length + 1} colors available
+            </span>
           </div>
+        ) : (
+          initialProduct.colors && initialProduct.colors.length > 0 && (
+            <div className="flex gap-1 mt-2">
+              {initialProduct.colors.slice(0, 3).map((c, i) => {
+                const colorHex = getColorHex(c);
+                return (
+                  <span 
+                    key={i} 
+                    className="w-3 h-3 rounded-full border border-gray-200" 
+                    style={{ backgroundColor: colorHex }} 
+                    title={c} 
+                  />
+                );
+              })}
+              {initialProduct.colors.length > 3 && <span className="text-[9px] text-gray-400 self-center">+{initialProduct.colors.length - 3}</span>}
+            </div>
+          )
         )}
       </div>
     </Link>
@@ -485,6 +547,32 @@ function StorefrontContent() {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Reset pagination count on search or filter change
+  // Group products by base SKU initials
+  const groupedProducts = React.useMemo(() => {
+    const groups: Record<string, Product[]> = {};
+    
+    filteredProducts.forEach(p => {
+      const base = getSkuBase(p.sku);
+      if (base) {
+        if (!groups[base]) {
+          groups[base] = [];
+        }
+        groups[base].push(p);
+      } else {
+        groups[`none-${p.id}`] = [p];
+      }
+    });
+
+    return Object.entries(groups).map(([base, groupProducts]) => {
+      const [representative, ...variants] = groupProducts;
+      return {
+        id: base,
+        representative,
+        variants
+      };
+    });
+  }, [filteredProducts]);
+
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
   }, [activeCategory, subcategoryParam, debouncedSearchTerm]);
@@ -492,7 +580,7 @@ function StorefrontContent() {
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) {
-        setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredProducts.length));
+        setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, groupedProducts.length));
       }
     }, { threshold: 0.1 });
 
@@ -506,9 +594,11 @@ function StorefrontContent() {
         observer.unobserve(currentSentinel);
       }
     };
-  }, [filteredProducts.length]);
+  }, [groupedProducts.length]);
 
-  const displayedProducts = filteredProducts.slice(0, visibleCount);
+  const displayedGroups = React.useMemo(() => {
+    return groupedProducts.slice(0, visibleCount);
+  }, [groupedProducts, visibleCount]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white">
@@ -649,7 +739,7 @@ function StorefrontContent() {
           ) : products.length === 0 ? (
             <div className="max-w-[700px] mx-auto px-6 py-24 text-center border border-dashed border-[#C5A059]/25 bg-gray-50/50 rounded-sm my-10">
               <span className="material-symbols-outlined text-[56px] text-[#C5A059] mb-4">temp_preferences_custom</span>
-              <h2 className="font-display text-[22px] font-bold text-gray-900 tracking-wide uppercase mb-3">ATELIER UNDER CRAFT</h2>
+              <h2 className="font-display text-[22px] font-bold text-gray-900 tracking-wide uppercase mb-3">COLLECTION UNDER CRAFT</h2>
               <p className="font-body text-[14px] text-gray-500 max-w-md mx-auto leading-relaxed mb-6">
                 Our master craftspeople are currently tailoring the upcoming seasonal collection. No garments are currently listed in our public catalog. Check back soon.
               </p>
@@ -657,7 +747,7 @@ function StorefrontContent() {
                 STAGBEETLE PVT. LTD. &middot; BENGALURU
               </p>
             </div>
-          ) : displayedProducts.length === 0 ? (
+          ) : displayedGroups.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
               <span className="material-symbols-outlined text-[48px] mb-3 block">search_off</span>
               <p className="text-[15px] font-medium">No garments found in this category.</p>
@@ -667,14 +757,19 @@ function StorefrontContent() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-10">
-              {displayedProducts.map(p => (
-                <ProductCard key={p.id} product={p} onQuickAdd={handleQuickAdd} />
+              {displayedGroups.map(group => (
+                <ProductCard 
+                  key={group.representative.id} 
+                  product={group.representative} 
+                  variants={group.variants}
+                  onQuickAdd={handleQuickAdd} 
+                />
               ))}
             </div>
           )}
 
           {/* Infinite Scroll Sentinel */}
-          {visibleCount < filteredProducts.length && (
+          {visibleCount < groupedProducts.length && (
             <div ref={sentinelRef} className="h-16 w-full flex items-center justify-center mt-12">
               <div className="w-8 h-8 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
             </div>

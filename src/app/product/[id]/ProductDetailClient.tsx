@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Product } from '@/lib/db';
+import { Product, getColorHex } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -11,9 +11,10 @@ import Footer from '@/components/Footer';
 interface ProductDetailClientProps {
   product: Product;
   initialSuggestions: Product[];
+  colorVariants?: Product[];
 }
 
-export default function ProductDetailClient({ product, initialSuggestions }: ProductDetailClientProps) {
+export default function ProductDetailClient({ product, initialSuggestions, colorVariants = [] }: ProductDetailClientProps) {
   const { addToCart } = useCart();
   const { isAdmin } = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -208,19 +209,52 @@ export default function ProductDetailClient({ product, initialSuggestions }: Pro
                       Color: <span className="text-gray-800 normal-case font-semibold">{selectedColor}</span>
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      {product.colors.map(color => (
-                        <button
-                          key={color}
-                          onClick={() => setSelectedColor(color)}
-                          className={`px-3 py-1.5 text-[11px] border transition-all ${
-                            selectedColor === color
-                              ? 'border-[#C5A059] bg-[#C5A059]/10 text-gray-900 font-semibold'
-                              : 'border-gray-200 text-gray-600 hover:border-gray-400 bg-white'
-                          }`}
-                        >
-                          {color}
-                        </button>
-                      ))}
+                      {product.colors.map(color => {
+                        const colorHex = getColorHex(color);
+                        return (
+                          <button
+                            key={color}
+                            onClick={() => setSelectedColor(color)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] border transition-all ${
+                              selectedColor === color
+                                ? 'border-[#C5A059] bg-[#C5A059]/10 text-gray-900 font-semibold'
+                                : 'border-gray-200 text-gray-600 hover:border-gray-400 bg-white'
+                            }`}
+                          >
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full border border-gray-200/50 shrink-0" 
+                              style={{ backgroundColor: colorHex }}
+                            />
+                            {color}
+                          </button>
+                        );
+                      })}
+
+                      {/* Display other SKU variants as clickable color links */}
+                      {colorVariants
+                        .filter(variant => {
+                          const variantColor = variant.colors[0];
+                          return variantColor && !product.colors.some(c => c.toLowerCase().trim() === variantColor.toLowerCase().trim());
+                        })
+                        .map(variant => {
+                          const variantColor = variant.colors[0] || 'Default';
+                          const colorHex = getColorHex(variantColor);
+                          return (
+                            <Link
+                              key={variant.id}
+                              href={`/product/${variant.id}`}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900 bg-white transition-all"
+                              title={`Switch to ${variant.title}`}
+                            >
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full border border-gray-200/50 shrink-0" 
+                                style={{ backgroundColor: colorHex }}
+                              />
+                              {variantColor}
+                            </Link>
+                          );
+                        })
+                      }
                     </div>
                   </div>
 

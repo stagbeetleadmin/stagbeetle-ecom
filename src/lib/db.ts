@@ -908,3 +908,60 @@ export const uploadGarmentImage = async (file: File, sku?: string, index?: numbe
     reader.readAsDataURL(file);
   });
 };
+
+/**
+ * Helper to get the base prefix of a SKU by dropping the color/suffix.
+ * E.g., SB-LNSH-SGR -> SB-LNSH
+ *       SATN-CRM -> SATN
+ */
+export const getSkuBase = (sku?: string): string => {
+  if (!sku) return '';
+  const trimmed = sku.trim().toUpperCase();
+  const parts = trimmed.split('-');
+  if (parts.length > 1) {
+    // Drop the last part which represents the color suffix
+    return parts.slice(0, -1).join('-');
+  }
+  return trimmed;
+};
+
+/**
+ * Helper to map a text color name to a hex color code for UI rendering.
+ */
+export const getColorHex = (colorName: string): string => {
+  const name = colorName.toLowerCase().trim();
+  const map: Record<string, string> = {
+    'stone grey': '#8E9AAF',
+    'stone gray': '#8E9AAF',
+    'grey': '#A0AAB2',
+    'gray': '#A0AAB2',
+    'slate grey': '#5A6065',
+    'ivory white': '#F2EFEC',
+    'white': '#FFFFFF',
+    'arctic white': '#F9FBFD',
+    'sage mint': '#A3C1AD',
+    'forest olive': '#4F5D2F',
+    'forest green': '#2D4A22',
+    'light blue': '#ADD8E6',
+    'purple': '#800080',
+    'blue': '#0000FF',
+    'beetle navy': '#1B2A4A',
+    'navy blue': '#000080',
+    'midnight black': '#0B0C10',
+    'obsidian black': '#0B0C10',
+    'black': '#000000',
+    'peacock teal': '#005F73',
+    'burgundy': '#800020',
+    'ivory cream': '#FFFDD0',
+    'cream': '#FFFDD0',
+    'maroon': '#800000',
+  };
+
+  for (const key of Object.keys(map)) {
+    if (name.includes(key)) {
+      return map[key];
+    }
+  }
+  return '#CCCCCC'; // default fallback
+};
+
