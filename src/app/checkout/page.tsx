@@ -31,7 +31,7 @@ export default function Checkout() {
     country: 'India',
   });
 
-  const { user, triggerLoginModal, saveAddress } = useAuth();
+  const { user, triggerLoginModal, saveAddress, updateProfile } = useAuth();
   const [saveAddressToProfile, setSaveAddressToProfile] = useState(true);
   const [pinMessage, setPinMessage] = useState('');
   const [pinLoading, setPinLoading] = useState(false);
@@ -196,8 +196,13 @@ export default function Checkout() {
         tracking_number: 'DKV' + Math.floor(100000000 + Math.random() * 900000000),
       });
 
-      if (saveAddressToProfile && user) {
-        await saveAddress(formData.address, formData.city, formData.zip, formData.country);
+      if (user) {
+        if (saveAddressToProfile) {
+          await saveAddress(formData.address, formData.city, formData.zip, formData.country, formData.phone);
+        } else if (!user.phone && formData.phone.trim()) {
+          // Even without saving the full address, remember the phone number for future prefills
+          await updateProfile({ phone: formData.phone.trim() });
+        }
       }
 
       clearCart();
@@ -207,7 +212,7 @@ export default function Checkout() {
       setError('Payment was received but order creation failed. Please contact support with Payment ID: ' + paymentId);
       setRazorpayLoading(false);
     }
-  }, [cart, formData, finalTotal, appliedCoupon, discountAmount, saveAddressToProfile, user, clearCart, router, saveAddress]);
+  }, [cart, formData, finalTotal, appliedCoupon, discountAmount, saveAddressToProfile, user, clearCart, router, saveAddress, updateProfile]);
 
   // Opens the Razorpay payment popup
   const handleRazorpayPay = useCallback(async () => {

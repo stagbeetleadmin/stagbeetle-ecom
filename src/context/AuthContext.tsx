@@ -13,7 +13,7 @@ interface AuthContextType {
   loginWithEmailPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   registerWithEmailPassword: (name: string, email: string, password: string, phone: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
-  saveAddress: (address: string, city: string, zip: string, country: string) => Promise<void>;
+  saveAddress: (address: string, city: string, zip: string, country: string, phone?: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   triggerLoginModal: (onSuccessCallback?: () => void) => void;
   closeLoginModal: () => void;
@@ -409,9 +409,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ── Save shipping address ──────────────────────────────────────────────────
-  const saveAddress = async (address: string, city: string, zip: string, country: string) => {
+  const saveAddress = async (address: string, city: string, zip: string, country: string, phone?: string) => {
     if (!user) return;
-    const updated: UserProfile = { ...user, address, city, zip, country };
+    const updated: UserProfile = { ...user, address, city, zip, country, ...(phone?.trim() ? { phone: phone.trim() } : {}) };
     await upsertProfile(updated);
     setUser(updated);
     if (typeof window !== 'undefined') {

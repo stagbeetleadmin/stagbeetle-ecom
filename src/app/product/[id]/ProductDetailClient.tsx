@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Product, getColorHex } from '@/lib/db';
+import { Product, getColorHex, getColorName } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -22,7 +22,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
   const activeCategory = searchParams.get('category') || '';
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
-  const [selectedColor, setSelectedColor] = useState(product.colors[0] || 'Default');
+  const [selectedColor, setSelectedColor] = useState(getColorName(product.colors[0]) || 'Default');
   const [quantity, setQuantity] = useState(1);
   const [addedMessage, setAddedMessage] = useState(false);
 
@@ -214,12 +214,13 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                     <div className="flex flex-wrap gap-2">
                       {product.colors.map(color => {
                         const colorHex = getColorHex(color);
+                        const cleanColorName = getColorName(color);
                         return (
                           <button
                             key={color}
-                            onClick={() => setSelectedColor(color)}
+                            onClick={() => setSelectedColor(cleanColorName)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] border transition-all ${
-                              selectedColor === color
+                              selectedColor === cleanColorName
                                 ? 'border-[#C5A059] bg-[#C5A059]/10 text-gray-900 font-semibold'
                                 : 'border-gray-200 text-gray-600 hover:border-gray-400 bg-white'
                             }`}
@@ -228,7 +229,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                               className="w-2.5 h-2.5 rounded-full border border-gray-200/50 shrink-0" 
                               style={{ backgroundColor: colorHex }}
                             />
-                            {color}
+                            {cleanColorName}
                           </button>
                         );
                       })}
@@ -237,7 +238,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                       {colorVariants
                         .filter(variant => {
                           const variantColor = variant.colors[0];
-                          return variantColor && !product.colors.some(c => c.toLowerCase().trim() === variantColor.toLowerCase().trim());
+                          return variantColor && !product.colors.some(c => getColorName(c).toLowerCase().trim() === getColorName(variantColor).toLowerCase().trim());
                         })
                         .map(variant => {
                           const variantColor = variant.colors[0] || 'Default';
@@ -247,13 +248,13 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                               key={variant.id}
                               href={`/product/${variant.id}${activeCategory ? `?category=${activeCategory}` : ''}`}
                               className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900 bg-white transition-all"
-                              title={`Switch to ${variant.title}`}
+                              title={`Switch to ${getColorName(variantColor)}`}
                             >
                               <span 
                                 className="w-2.5 h-2.5 rounded-full border border-gray-200/50 shrink-0" 
                                 style={{ backgroundColor: colorHex }}
                               />
-                              {variantColor}
+                              {getColorName(variantColor)}
                             </Link>
                           );
                         })

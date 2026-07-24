@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { getProducts, Product, getSkuBase, getColorHex } from '@/lib/db';
+import { getProducts, Product, getSkuBase, getColorHex, getColorName } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 
 // ─── Hero Carousel ────────────────────────────────────────────────────────────
@@ -320,7 +320,7 @@ function ProductCard({
                 return (
                   <button
                     key={p.id}
-                    title={color}
+                    title={getColorName(color)}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -355,7 +355,7 @@ function ProductCard({
                     key={i} 
                     className="w-3 h-3 rounded-full border border-gray-200" 
                     style={{ backgroundColor: colorHex }} 
-                    title={c} 
+                    title={getColorName(c)} 
                   />
                 );
               })}
@@ -514,7 +514,7 @@ function StorefrontContent() {
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product, product.sizes[0] || 'M', product.colors[0] || 'Default', 1);
+    addToCart(product, product.sizes[0] || 'M', getColorName(product.colors[0]) || 'Default', 1);
   };
 
   const handleCategoryClick = (cat: string) => {

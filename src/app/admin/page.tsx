@@ -11,9 +11,20 @@ import {
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage,
-  getSkuBase
+  getSkuBase, getColorHex, getColorName
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
+
+const parseSku = (sku?: string) => {
+  if (!sku) return { styleCode: '', colorCode: '' };
+  const parts = sku.trim().toUpperCase().split('-');
+  if (parts.length > 1) {
+    const colorCode = parts[parts.length - 1];
+    const styleCode = parts.slice(0, -1).join('-');
+    return { styleCode, colorCode };
+  }
+  return { styleCode: sku, colorCode: '' };
+};
 
 function AdminDashboardContent() {
   const router = useRouter();
@@ -105,6 +116,20 @@ function AdminDashboardContent() {
     sizes: 'S, M, L, XL',
     colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
   });
+
+  // SKU, sizes, colors helper states
+  const [styleCode, setStyleCode] = useState('');
+  const [colorCode, setColorCode] = useState('');
+  const [selectedSizes, setSelectedSizes] = useState<string[]>(['S', 'M', 'L', 'XL']);
+  const [colorName, setColorName] = useState('');
+  const [colorHex, setColorHexState] = useState('#A0AAB2');
+
+  useEffect(() => {
+    const s = styleCode.trim().toUpperCase();
+    const c = colorCode.trim().toUpperCase();
+    const computedSku = s && c ? `${s}-${c}` : s || c || '';
+    setProductForm(prev => ({ ...prev, sku: computedSku }));
+  }, [styleCode, colorCode]);
 
   // Image Uploading States
   const [uploadingStates, setUploadingStates] = useState({
@@ -366,6 +391,11 @@ function AdminDashboardContent() {
   // =========================================================================
   const openAddProduct = () => {
     setEditingProduct(null);
+    setStyleCode('');
+    setColorCode('');
+    setSelectedSizes(['S', 'M', 'L', 'XL']);
+    setColorName('');
+    setColorHexState('#A0AAB2');
     setProductForm({
       title: '',
       price: 0,
@@ -379,13 +409,24 @@ function AdminDashboardContent() {
       image2: '',
       image3: '',
       sizes: 'S, M, L, XL',
-      colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
+      colors: ''
     });
     setShowProductModal(true);
   };
 
   const openEditProduct = (prod: Product) => {
     setEditingProduct(prod);
+    const { styleCode: parsedStyle, colorCode: parsedColor } = parseSku(prod.sku);
+    setStyleCode(parsedStyle);
+    setColorCode(parsedColor);
+    setSelectedSizes(prod.sizes);
+
+    const rawColor = prod.colors[0] || '';
+    const namePart = rawColor.split('|')[0] || '';
+    const hexPart = rawColor.split('|')[1] || getColorHex(namePart);
+    setColorName(namePart);
+    setColorHexState(hexPart);
+
     setProductForm({
       title: prod.title,
       price: prod.price,
@@ -407,8 +448,6 @@ function AdminDashboardContent() {
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const imagesArray = [productForm.image1, productForm.image2, productForm.image3].filter(url => url.trim() !== '');
-    const sizesArray = productForm.sizes.split(',').map(s => s.trim()).filter(s => s !== '');
-    const colorsArray = productForm.colors.split(',').map(c => c.trim()).filter(c => c !== '');
 
     const productPayload = {
       title: productForm.title,
@@ -420,8 +459,8 @@ function AdminDashboardContent() {
       material: productForm.material,
       description: productForm.description,
       images: imagesArray,
-      sizes: sizesArray.length > 0 ? sizesArray : ["One Size"],
-      colors: colorsArray.length > 0 ? colorsArray : ["Default"]
+      sizes: selectedSizes.length > 0 ? selectedSizes : ["One Size"],
+      colors: colorName.trim() ? [`${colorName.trim()}|${colorHex.trim()}`] : ["Default"]
     };
 
     try {
@@ -1596,17 +1635,38 @@ function AdminDashboardContent() {
                   />
                 </div>
 
-                {/* SKU */}
+                {/* Style Code & Color Code (SKU Auto-generation) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">STYLE CODE</label>
+                    <input
+                      type="text"
+                      required
+                      value={styleCode}
+                      onChange={(e) => setStyleCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. SATN"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">COLOR CODE</label>
+                    <input
+                      type="text"
+                      required
+                      value={colorCode}
+                      onChange={(e) => setColorCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. CRM"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Derived SKU preview */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SKU NUMBER</label>
-                  <input
-                    type="text"
-                    required
-                    value={productForm.sku}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, sku: e.target.value }))}
-                    placeholder="e.g. SB-SHIRT-HS-001"
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
-                  />
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GENERATED SKU</label>
+                  <div className="w-full bg-zinc-50 border border-zinc-200 rounded-sm py-2.5 px-3.5 text-[13px] font-mono text-zinc-600">
+                    {productForm.sku || 'Please enter Style Code & Color Code'}
+                  </div>
                   {(() => {
                     const currentSkuBase = getSkuBase(productForm.sku);
                     const referencedColorVariants = currentSkuBase
@@ -1621,7 +1681,7 @@ function AdminDashboardContent() {
                         <ul className="list-disc list-inside space-y-0.5 font-medium text-zinc-600">
                           {referencedColorVariants.map(v => (
                             <li key={v.id}>
-                              <span className="font-mono font-bold text-zinc-800">{v.sku}</span>: {v.colors.join(', ')} ({v.title})
+                              <span className="font-mono font-bold text-zinc-800">{v.sku}</span>: {v.colors.map(getColorName).join(', ')} ({v.title})
                             </li>
                           ))}
                         </ul>
@@ -1714,28 +1774,80 @@ function AdminDashboardContent() {
                   />
                 </div>
 
-                {/* Colors */}
+                {/* Color Name and Color Hex */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">COLORS (COMMA SEPARATED)</label>
-                  <input
-                    type="text"
-                    value={productForm.colors}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, colors: e.target.value }))}
-                    placeholder="e.g. Ivory White, Sky Blue"
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
-                  />
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">GARMENT COLOR</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={colorName}
+                      onChange={(e) => setColorName(e.target.value)}
+                      placeholder="e.g. Sage Mint"
+                      className="flex-1 bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                    />
+                    <div className="flex items-center gap-1.5 border border-on-surface/15 bg-surface-dim rounded-sm px-2 shrink-0">
+                      <input
+                        type="color"
+                        value={colorHex}
+                        onChange={(e) => setColorHexState(e.target.value)}
+                        className="w-7 h-7 border-0 cursor-pointer bg-transparent rounded-sm"
+                      />
+                      <input
+                        type="text"
+                        value={colorHex}
+                        onChange={(e) => setColorHexState(e.target.value)}
+                        placeholder="#A0AAB2"
+                        maxLength={7}
+                        className="w-16 bg-transparent border-0 text-[11px] font-mono text-zinc-600 outline-none p-0"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Sizes */}
+                {/* Sizes Toggles */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SIZES (COMMA SEPARATED)</label>
-                  <input
-                    type="text"
-                    value={productForm.sizes}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, sizes: e.target.value }))}
-                    placeholder="e.g. S, M, L, XL"
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
-                  />
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">AVAILABLE SIZES</label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'].map(sz => {
+                      const isSelected = selectedSizes.includes(sz);
+                      return (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSizes(prev => 
+                              prev.includes(sz) ? prev.filter(s => s !== sz) : [...prev, sz]
+                            );
+                          }}
+                          className={`min-w-[40px] h-9 border text-[11px] font-bold rounded-sm flex items-center justify-center transition-all ${
+                            isSelected 
+                              ? 'bg-[#052A42] border-[#052A42] text-white' 
+                              : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-400'
+                          }`}
+                        >
+                          {sz}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Generated Size SKUs Preview */}
+                <div className="sm:col-span-2 space-y-1.5 bg-zinc-50 border border-zinc-200 rounded-sm p-3">
+                  <span className="text-[10px] font-label-caps font-bold text-[#C5A059] block tracking-wider">
+                    Generated Size-Specific SKUs Naming Preview:
+                  </span>
+                  <div className="flex flex-wrap gap-2 pt-1.5">
+                    {selectedSizes.map(sz => (
+                      <span key={sz} className="bg-white border border-zinc-200 text-zinc-600 font-mono text-[11px] px-2 py-1 rounded-sm">
+                        {styleCode && colorCode ? `${styleCode}-${colorCode}-${sz}`.toUpperCase() : `[STYLE]-[COLOR]-${sz}`}
+                      </span>
+                    ))}
+                    {selectedSizes.length === 0 && (
+                      <span className="text-zinc-400 text-[11px] italic">No sizes selected.</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Images */}

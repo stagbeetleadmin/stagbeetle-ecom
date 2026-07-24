@@ -652,7 +652,7 @@ export default function ProfilePage() {
                               {order.payment_status || 'paid'}
                             </span>
                             <span className="text-[10px] text-zinc-400 uppercase font-semibold tracking-wider">
-                              via {order.payment_method || 'PhonePe UPI'}
+                              via {order.payment_method || 'Razorpay'}
                             </span>
                           </div>
                           <div>

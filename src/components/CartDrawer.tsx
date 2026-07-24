@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useCart } from '@/context/CartContext';
-import { Product } from '@/lib/db';
+import { Product, getColorName } from '@/lib/db';
 import Link from 'next/link';
 
 interface CartDrawerProps {
@@ -18,7 +18,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const handleAddSuggestion = (product: Product) => {
     // Add suggestion with default first size/color
     const defaultSize = product.sizes[0] || 'One Size';
-    const defaultColor = product.colors[0] || 'Default';
+    const defaultColor = getColorName(product.colors[0]) || 'Default';
     addToCart(product, defaultSize, defaultColor, 1);
   };
 

@@ -929,7 +929,18 @@ export const getSkuBase = (sku?: string): string => {
  * Helper to map a text color name to a hex color code for UI rendering.
  */
 export const getColorHex = (colorName: string): string => {
-  const name = colorName.toLowerCase().trim();
+  if (!colorName) return '#CCCCCC';
+  
+  // If the colorName contains a '|', extract the hex part directly!
+  if (colorName.includes('|')) {
+    const parts = colorName.split('|');
+    const hex = parts[1]?.trim();
+    if (hex && /^#[0-9A-F]{3,6}$/i.test(hex)) {
+      return hex;
+    }
+  }
+
+  const name = colorName.split('|')[0].toLowerCase().trim();
   const map: Record<string, string> = {
     'stone grey': '#8E9AAF',
     'stone gray': '#8E9AAF',
@@ -955,6 +966,15 @@ export const getColorHex = (colorName: string): string => {
     'ivory cream': '#FFFDD0',
     'cream': '#FFFDD0',
     'maroon': '#800000',
+    'mauve': '#E0B0FF',
+    'crimson': '#DC143C',
+    'olive': '#808000',
+    'pista green': '#93C572',
+    'light green': '#90EE90',
+    'sky blue': '#87CEEB',
+    'beige': '#F5F5DC',
+    'sky beige': '#E2DFD2',
+    'wine': '#722F37',
   };
 
   for (const key of Object.keys(map)) {
@@ -963,5 +983,13 @@ export const getColorHex = (colorName: string): string => {
     }
   }
   return '#CCCCCC'; // default fallback
+};
+
+/**
+ * Helper to get user-facing color name (strips hex part if stored as Name|Hex).
+ */
+export const getColorName = (colorName: string): string => {
+  if (!colorName) return '';
+  return colorName.split('|')[0].trim();
 };
 
