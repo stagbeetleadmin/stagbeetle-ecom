@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, OrderItem, getSuggestions } from '@/lib/db';
+import { useAuth } from './AuthContext';
 
 interface CartItem extends OrderItem {}
 
@@ -22,6 +23,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const { user, loading: authLoading } = useAuth();
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -36,6 +38,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
   }, []);
+
+  // Tie the cart to the signed-in account. A cart saved while logged in must not
+  // survive a logout, an expired session, or a different account on this browser.
+  // Guest carts (no recorded owner) are kept, including through a sign-in at checkout.
+  useEffect(() => {
+    if (authLoading || typeof window === 'undefined') return;
+    const owner = localStorage.getItem('stag_beetle_cart_owner');
+    if (owner && (!user || user.id !== owner)) {
+      setCart([]);
+      localStorage.removeItem('stag_beetle_cart');
+      localStorage.removeItem('stag_beetle_cart_owner');
+    }
+    if (user) {
+      localStorage.setItem('stag_beetle_cart_owner', user.id);
+    }
+  }, [user, authLoading]);
 
   // Save cart to localStorage and update suggestions on cart change
   useEffect(() => {
