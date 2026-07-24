@@ -700,6 +700,31 @@ export const getOrders = async (): Promise<Order[]> => {
   return [];
 };
 
+export const getOrderById = async (id: string): Promise<Order | null> => {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabaseTimeout(
+        supabase.from('orders').select('*').eq('id', id).single()
+      );
+      if (!error && data) return data as Order;
+      if (error) console.warn("[Atelier DB] Supabase getOrderById error:", error.message);
+    } catch (e: any) {
+      console.warn("Supabase getOrderById failed or timed out, falling back to mock:", e.message || e);
+    }
+  }
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem('stag_beetle_orders');
+  if (stored) {
+    try {
+      const found = JSON.parse(stored).find((o: Order) => o.id === id);
+      if (found) return found as Order;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  return null;
+};
+
 export const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>): Promise<Order> => {
   const newOrder: Order = {
     ...orderData,

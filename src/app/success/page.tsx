@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Order } from '@/lib/db';
+import { Order, getOrderById } from '@/lib/db';
 
 interface SuccessPageProps {
   searchParams: Promise<{ orderId?: string }>;
@@ -17,26 +17,23 @@ export default function OrderSuccess({ searchParams }: SuccessPageProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch the order from persistent localStorage (mock fallback) or database
+  // Fetch the order from the database (falls back to localStorage internally)
   useEffect(() => {
     if (!orderId) {
       setLoading(false);
       return;
     }
 
-    const fetchOrderData = () => {
+    const fetchOrderData = async () => {
       setLoading(true);
-      
-      // Look up in localStorage
-      if (typeof window !== 'undefined') {
-        const storedOrders = JSON.parse(localStorage.getItem('stag_beetle_orders') || '[]');
-        const foundOrder = storedOrders.find((o: any) => o.id === orderId);
-        if (foundOrder) {
-          setOrder(foundOrder);
-        }
+      try {
+        const foundOrder = await getOrderById(orderId);
+        if (foundOrder) setOrder(foundOrder);
+      } catch (e) {
+        console.error('Failed to fetch order:', e);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     fetchOrderData();
@@ -122,7 +119,7 @@ export default function OrderSuccess({ searchParams }: SuccessPageProps) {
           ) : (
             orderId && (
               <p className="text-[13px] text-on-surface-variant italic">
-                Specification details for Order ID <strong>{orderId}</strong> are available in the local database registry.
+                Your payment was received and order <strong>{orderId}</strong> is confirmed. Full details are available in your <Link href="/profile" className="underline font-semibold not-italic">profile</Link>.
               </p>
             )
           )}

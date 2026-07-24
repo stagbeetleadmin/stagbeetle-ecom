@@ -295,6 +295,8 @@ export default function Checkout() {
         modal: {
           ondismiss: () => {
             setRazorpayLoading(false);
+            // Keep a payment-failure message if one was already shown; otherwise report the cancellation
+            setError(prev => prev || 'Payment was cancelled — you have not been charged. Your bag is untouched, so you can try again whenever you are ready.');
           },
         },
       });
