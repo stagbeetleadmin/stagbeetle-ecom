@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, OrderItem, getSuggestions } from '@/lib/db';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { Product, OrderItem, getSuggestions, getCart, saveCart } from '@/lib/db';
 import { useAuth } from './AuthContext';
 
 interface CartItem extends OrderItem {}
@@ -20,10 +20,37 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+// Combine the server-side cart with items added locally (e.g. as a guest before
+// signing in). Duplicate lines keep the larger quantity rather than summing, so
+// a cart that was already synced doesn't double itself.
+const mergeCarts = (server: CartItem[], local: CartItem[]): CartItem[] => {
+  const merged = [...server];
+  for (const item of local) {
+    const idx = merged.findIndex(
+      m =>
+        m.product_id === item.product_id &&
+        m.selected_size === item.selected_size &&
+        m.selected_color === item.selected_color
+    );
+    if (idx > -1) {
+      merged[idx] = { ...merged[idx], quantity: Math.max(merged[idx].quantity, item.quantity) };
+    } else {
+      merged.push(item);
+    }
+  }
+  return merged;
+};
+
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const { user, loading: authLoading } = useAuth();
+  // Which user's server cart has been fetched (guards against re-fetch loops)
+  const fetchedUserRef = useRef<string | null>(null);
+  // Which user's cart is fully hydrated (gates writes so we never overwrite the
+  // server copy before it has been read and merged)
+  const hydratedUserRef = useRef<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -40,36 +67,66 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Tie the cart to the signed-in account. A cart saved while logged in must not
-  // survive a logout, an expired session, or a different account on this browser.
-  // Guest carts (no recorded owner) are kept, including through a sign-in at checkout.
+  // survive a logout, an expired session, or a different account on this browser —
+  // but it stays in the server-side carts table, so signing back in restores it.
+  // Guest carts (no recorded owner) are kept, including through a sign-in at checkout,
+  // and are merged into the account's server cart on login.
   useEffect(() => {
     if (authLoading || typeof window === 'undefined') return;
+
+    if (!user) {
+      fetchedUserRef.current = null;
+      hydratedUserRef.current = null;
+      const owner = localStorage.getItem('stag_beetle_cart_owner');
+      if (owner) {
+        setCart([]);
+        localStorage.removeItem('stag_beetle_cart');
+        localStorage.removeItem('stag_beetle_cart_owner');
+      }
+      return;
+    }
+
     const owner = localStorage.getItem('stag_beetle_cart_owner');
-    if (owner && (!user || user.id !== owner)) {
+    if (owner && owner !== user.id) {
+      // A different account's leftovers: drop them before hydrating this account
       setCart([]);
-      localStorage.removeItem('stag_beetle_cart');
-      localStorage.removeItem('stag_beetle_cart_owner');
     }
-    if (user) {
-      localStorage.setItem('stag_beetle_cart_owner', user.id);
-    }
+    localStorage.setItem('stag_beetle_cart_owner', user.id);
+
+    if (fetchedUserRef.current === user.id) return;
+    fetchedUserRef.current = user.id;
+
+    (async () => {
+      const serverItems = await getCart(user.id);
+      hydratedUserRef.current = user.id;
+      // New array identity also triggers the save effect, pushing the merge result up
+      setCart(prev => mergeCarts(serverItems || [], owner && owner !== user.id ? [] : prev));
+    })();
   }, [user, authLoading]);
 
-  // Save cart to localStorage and update suggestions on cart change
+  // Save cart to localStorage (and the server copy) and update suggestions on cart change
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('stag_beetle_cart', JSON.stringify(cart));
     }
-    
+
+    // Persist to the server-side cart, debounced — but only after this user's
+    // server cart has been read and merged, so we never clobber it with stale data
+    if (user && hydratedUserRef.current === user.id) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      const userId = user.id;
+      saveTimerRef.current = setTimeout(() => saveCart(userId, cart), 800);
+    }
+
     // Fetch suggestions
     const fetchSuggestions = async () => {
       const cartIds = cart.map(item => item.product_id);
       const recs = await getSuggestions(cartIds);
       setSuggestions(recs);
     };
-    
+
     fetchSuggestions();
-  }, [cart]);
+  }, [cart, user]);
 
   const addToCart = (product: Product, size: string, color: string, quantity: number = 1) => {
     setCart((prevCart) => {

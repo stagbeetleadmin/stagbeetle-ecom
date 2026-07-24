@@ -700,6 +700,41 @@ export const getOrders = async (): Promise<Order[]> => {
   return [];
 };
 
+// =========================================================================
+// Cart persistence — one server-side cart per signed-in user so items can be
+// restored after logout / on another device. Mock sessions (usr_*) get a new
+// id every login, so persisting them is pointless and they are skipped, same
+// as upsertProfile does.
+// =========================================================================
+
+export const getCart = async (userId: string): Promise<OrderItem[] | null> => {
+  if (isSupabaseConfigured && supabase && !userId.startsWith('usr_')) {
+    try {
+      const { data, error } = await supabaseTimeout(
+        supabase.from('carts').select('items').eq('user_id', userId).maybeSingle()
+      );
+      if (!error && data) return (data.items as OrderItem[]) || [];
+      if (error) console.warn("[Atelier DB] Supabase getCart error:", error.message);
+    } catch (e: any) {
+      console.warn("Supabase getCart failed or timed out:", e.message || e);
+    }
+  }
+  return null;
+};
+
+export const saveCart = async (userId: string, items: OrderItem[]): Promise<void> => {
+  if (isSupabaseConfigured && supabase && !userId.startsWith('usr_')) {
+    try {
+      const { error } = await supabaseTimeout(
+        supabase.from('carts').upsert([{ user_id: userId, items, updated_at: new Date().toISOString() }])
+      );
+      if (error) console.warn("[Atelier DB] Supabase saveCart error:", error.message);
+    } catch (e: any) {
+      console.warn("Supabase saveCart failed or timed out:", e.message || e);
+    }
+  }
+};
+
 export const getOrderById = async (id: string): Promise<Order | null> => {
   if (isSupabaseConfigured && supabase) {
     try {
