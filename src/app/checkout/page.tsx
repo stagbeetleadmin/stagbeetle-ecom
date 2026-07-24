@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { createOrder, Product, validateCoupon, Coupon } from '@/lib/db';
@@ -8,6 +8,13 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+
+// Razorpay global types
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export default function Checkout() {
   const router = useRouter();
@@ -22,10 +29,6 @@ export default function Checkout() {
     city: '',
     zip: '',
     country: 'India',
-    cardName: '',
-    cardNumber: '',
-    cardExpiry: '',
-    cardCvv: ''
   });
 
   const { user, triggerLoginModal, saveAddress } = useAuth();
@@ -89,8 +92,24 @@ export default function Checkout() {
     lookupPincode();
   }, [formData.zip]);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [razorpayReady, setRazorpayReady] = useState(false);
+
+  // Load Razorpay JS SDK once on mount and track when it's ready
+  useEffect(() => {
+    // Already loaded (e.g. hot-reload)
+    if (window.Razorpay) {
+      setRazorpayReady(true);
+      return;
+    }
+    if (document.getElementById('razorpay-script')) return;
+    const script = document.createElement('script');
+    script.id = 'razorpay-script';
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => setRazorpayReady(true);
+    script.onerror = () => console.error('Failed to load Razorpay SDK');
+    document.body.appendChild(script);
+  }, []);
   
   // Coupon states
   const [promoCode, setPromoCode] = useState('');
@@ -141,120 +160,173 @@ export default function Checkout() {
     setCouponError('');
   };
   
-  // PhonePe Payment Simulation States
-  const [showPhonePeModal, setShowPhonePeModal] = useState(false);
-  const [upiId, setUpiId] = useState('');
-  const [phonePeStatus, setPhonePeStatus] = useState<'idle' | 'processing' | 'success'>('idle');
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes timer
-  const [paymentTab, setPaymentTab] = useState<'qr' | 'upi'>('qr');
-
-  // Timer logic for QR code
-  useEffect(() => {
-    if (!showPhonePeModal || timeLeft <= 0) return;
-    const interval = setInterval(() => {
-      setTimeLeft(t => t - 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [showPhonePeModal, timeLeft]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const [error, setError] = useState('');
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Triggers the PhonePe gateway overlay
+  // Called after Razorpay confirms a successful payment — creates the DB order
+  const finalizeOrder = useCallback(async (paymentId: string) => {
+    try {
+      const orderItems = cart.map(item => ({
+        product_id: item.product_id,
+        title: item.title,
+        price: item.price,
+        quantity: item.quantity,
+        selected_size: item.selected_size,
+        selected_color: item.selected_color,
+        image: item.image
+      }));
+
+      const result = await createOrder({
+        customer_name: formData.name,
+        customer_email: formData.email,
+        shipping_address: `${formData.address}, ${formData.city}, ${formData.zip}, ${formData.country}`,
+        total_price: finalTotal,
+        items: orderItems,
+        payment_status: 'paid',
+        payment_method: 'Razorpay',
+        coupon_applied: appliedCoupon ? appliedCoupon.code : undefined,
+        discount_amount: appliedCoupon ? discountAmount : undefined,
+        shipping_status: 'Scheduled',
+        shipping_carrier: 'Delhivery',
+        tracking_number: 'DKV' + Math.floor(100000000 + Math.random() * 900000000),
+      });
+
+      if (saveAddressToProfile && user) {
+        await saveAddress(formData.address, formData.city, formData.zip, formData.country);
+      }
+
+      clearCart();
+      router.push(`/success?orderId=${result.id}`);
+    } catch (e: any) {
+      console.error('Order submission failed:', e);
+      setError('Payment was received but order creation failed. Please contact support with Payment ID: ' + paymentId);
+      setRazorpayLoading(false);
+    }
+  }, [cart, formData, finalTotal, appliedCoupon, discountAmount, saveAddressToProfile, user, clearCart, router, saveAddress]);
+
+  // Opens the Razorpay payment popup
+  const handleRazorpayPay = useCallback(async () => {
+    if (!razorpayReady || !window.Razorpay) {
+      setError('Payment gateway is still loading. Please wait a moment and try again.');
+      return;
+    }
+
+    if (finalTotal <= 0) {
+      setError('Order total must be greater than ₹0 to proceed.');
+      return;
+    }
+
+    setRazorpayLoading(true);
+    setError('');
+
+    try {
+      // Step 1: Create Razorpay order on our server
+      const res = await fetch('/api/razorpay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: finalTotal, currency: 'INR' }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.orderId) {
+        throw new Error(data.error || 'Failed to initiate payment');
+      }
+
+      // Step 2: Open Razorpay popup
+      // Use the key returned from API; fall back to the NEXT_PUBLIC env var
+      const razorpayKey = data.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      const rzp = new window.Razorpay({
+        key: razorpayKey,
+        amount: data.amount,
+        currency: data.currency,
+        order_id: data.orderId,
+        name: 'Stag Beetle India',
+        description: `Order of ${cart.length} item(s)`,
+        image: '/favicon.ico',
+        prefill: {
+          name: formData.name,
+          email: formData.email,
+          contact: formData.phone,
+        },
+        notes: {
+          shipping_address: `${formData.address}, ${formData.city}, ${formData.zip}, ${formData.country}`,
+        },
+        theme: {
+          color: '#1a1a1a',
+        },
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          // Step 3: Verify signature server-side
+          const verifyRes = await fetch('/api/razorpay/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          });
+
+          const verifyData = await verifyRes.json();
+
+          if (!verifyData.success) {
+            setError('Payment verification failed. Please contact support with Payment ID: ' + response.razorpay_payment_id);
+            setRazorpayLoading(false);
+            return;
+          }
+
+          // Step 4: Create order in DB and redirect
+          await finalizeOrder(response.razorpay_payment_id);
+        },
+        modal: {
+          ondismiss: () => {
+            setRazorpayLoading(false);
+          },
+        },
+      });
+
+      // Handle payment failure inside the Razorpay popup
+      rzp.on('payment.failed', (response: any) => {
+        setError(`Payment failed: ${response.error?.description || 'Unknown error'}. Please try again.`);
+        setRazorpayLoading(false);
+      });
+
+      rzp.open();
+    } catch (err: any) {
+      console.error('Razorpay error:', err);
+      setError(err.message || 'An error occurred. Please try again.');
+      setRazorpayLoading(false);
+    }
+  }, [finalTotal, cart, formData, finalizeOrder, razorpayReady]);
+
+  // Validates form and triggers Razorpay
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) {
       setError('Your shopping bag is empty.');
       return;
     }
-    
+
     if (!user) {
-      setError('A authenticated profile is required to check out.');
+      setError('A signed-in profile is required to check out.');
       triggerLoginModal(() => {
         setError('');
-        setTimeLeft(300);
-        setPhonePeStatus('idle');
-        setShowPhonePeModal(true);
+        handleRazorpayPay();
       });
       return;
     }
 
     setError('');
-    setTimeLeft(300); // Reset timer
-    setPhonePeStatus('idle');
-    setShowPhonePeModal(true);
-  };
-
-  // Simulates PhonePe Payment Authorization
-  const handlePhonePePay = async () => {
-    if (paymentTab === 'upi' && !upiId) {
-      alert('Please enter a valid UPI ID');
-      return;
-    }
-
-    setPhonePeStatus('processing');
-    
-    // Simulate transaction processing (2 seconds)
-    setTimeout(async () => {
-      setPhonePeStatus('success');
-      
-      // Simulate database order creation after 1.5 seconds on success screen
-      setTimeout(async () => {
-        try {
-          // Map cart items to Order Items
-          const orderItems = cart.map(item => ({
-            product_id: item.product_id,
-            title: item.title,
-            price: item.price,
-            quantity: item.quantity,
-            selected_size: item.selected_size,
-            selected_color: item.selected_color,
-            image: item.image
-          }));
-
-          // Create Order in DB (Supabase/localStorage)
-          const result = await createOrder({
-            customer_name: formData.name,
-            customer_email: formData.email,
-            shipping_address: `${formData.address}, ${formData.city}, ${formData.zip}, ${formData.country}`,
-            total_price: finalTotal,
-            items: orderItems,
-            payment_status: "paid",
-            payment_method: "PhonePe UPI",
-            coupon_applied: appliedCoupon ? appliedCoupon.code : undefined,
-            discount_amount: appliedCoupon ? discountAmount : undefined,
-            shipping_status: "Scheduled",
-            shipping_carrier: "Delhivery",
-            tracking_number: "DKV" + Math.floor(100000000 + Math.random() * 900000000)
-          });
-
-          // Save address back to user profile if checked
-          if (saveAddressToProfile && user) {
-            await saveAddress(formData.address, formData.city, formData.zip, formData.country);
-          }
-
-          // Clear the Cart on successful order
-          clearCart();
-          setShowPhonePeModal(false);
-          
-          // Redirect to Order Success Page
-          router.push(`/success?orderId=${result.id}`);
-        } catch (e: any) {
-          console.error("Order submission failed:", e);
-          setError('An error occurred while placing your order. Please try again.');
-          setShowPhonePeModal(false);
-        }
-      }, 1500);
-
-    }, 2000);
+    handleRazorpayPay();
   };
 
   const handleAddSuggestion = (product: Product) => {
@@ -457,14 +529,23 @@ export default function Checkout() {
                   
                   <button
                     type="submit"
-                    className="w-full bg-primary text-white py-4 font-label-caps text-label-caps tracking-[0.25em] hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md font-semibold flex items-center justify-center gap-2"
+                    disabled={razorpayLoading}
+                    className="w-full bg-primary text-white py-4 font-label-caps text-label-caps tracking-[0.25em] hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    CONTINUE TO PHONEPE GATEWAY (₹{finalTotal})
+                    {razorpayLoading ? (
+                      <>
+                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+                        PROCESSING...
+                      </>
+                    ) : (
+                      <>PAY SECURELY — ₹{finalTotal}</>
+                    )}
                   </button>
-                  
-                  <p className="text-[11px] text-center text-on-surface-variant/80 italic">
-                    Payments are securely authorized using the official PhonePe UPI interface.
-                  </p>
+
+                  <div className="flex items-center justify-center gap-2 text-[11px] text-on-surface-variant/70">
+                    <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"/></svg>
+                    <span>Secured by Razorpay · UPI · Cards · Net Banking · Wallets</span>
+                  </div>
                 </div>
 
               </form>
@@ -642,211 +723,7 @@ export default function Checkout() {
         </div>
       </main>
 
-      {/* ========================================================================= */}
-      {/* PHONEPE UPI PAYMENT INTEGRATION MODAL                                    */}
-      {/* ========================================================================= */}
-      {showPhonePeModal && (
-        <div className="fixed inset-0 z-[200] overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-lg overflow-hidden shadow-2xl border border-purple-200 text-zinc-800">
-            
-            {/* PhonePe Branding Header */}
-            <div className="bg-[#5f259f] px-6 py-4 flex justify-between items-center text-white">
-              <div className="flex items-center gap-2">
-                {/* Simulated PhonePe Logo Icon */}
-                <div className="h-8 w-8 bg-white rounded-md flex items-center justify-center font-bold text-[#5f259f] text-[20px] shadow-sm">
-                  P
-                </div>
-                <div>
-                  <h3 className="font-semibold text-body-lg tracking-tight">PhonePe</h3>
-                  <p className="text-[10px] text-purple-200 uppercase font-semibold tracking-wider">UPI Payment Gateway</p>
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => {
-                  if (phonePeStatus !== 'processing' && phonePeStatus !== 'success') {
-                    setShowPhonePeModal(false);
-                  }
-                }}
-                className="text-white/70 hover:text-white material-symbols-outlined text-[20px]"
-                disabled={phonePeStatus === 'processing' || phonePeStatus === 'success'}
-              >
-                close
-              </button>
-            </div>
-
-            {/* Merchant Details */}
-            <div className="bg-purple-50 px-6 py-3.5 flex justify-between items-center border-b border-purple-100">
-              <div className="text-[12px] font-medium text-purple-900">
-                Merchant: <span className="font-bold text-zinc-900">Stag Beetle India</span>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Amount to Pay</p>
-                <p className="font-bold text-[18px] text-[#5f259f]">₹{finalTotal}</p>
-              </div>
-            </div>
-
-            {/* Payment Content */}
-            <div className="p-6">
-              {phonePeStatus === 'idle' && (
-                <div className="space-y-6">
-                  {/* Tabs */}
-                  <div className="flex border-b border-zinc-100 font-semibold text-[13px] tracking-wide">
-                    <button
-                      onClick={() => setPaymentTab('qr')}
-                      className={`flex-1 pb-3 text-center border-b-2 transition-all ${
-                        paymentTab === 'qr' 
-                          ? 'border-[#5f259f] text-[#5f259f]' 
-                          : 'border-transparent text-zinc-400 hover:text-zinc-600'
-                      }`}
-                    >
-                      SCAN UPI QR CODE
-                    </button>
-                    <button
-                      onClick={() => setPaymentTab('upi')}
-                      className={`flex-1 pb-3 text-center border-b-2 transition-all ${
-                        paymentTab === 'upi' 
-                          ? 'border-[#5f259f] text-[#5f259f]' 
-                          : 'border-transparent text-zinc-400 hover:text-zinc-600'
-                      }`}
-                    >
-                      ENTER UPI ID
-                    </button>
-                  </div>
-
-                  {/* TAB 1: QR Code Scanner */}
-                  {paymentTab === 'qr' && (
-                    <div className="flex flex-col items-center space-y-4">
-                      {/* High-Fidelity Vector QR Code */}
-                      <div className="border-2 border-dashed border-purple-200 p-3 bg-zinc-50 rounded-lg relative">
-                        <svg className="w-40 h-40" viewBox="0 0 100 100" fill="currentColor">
-                          {/* Corner Squares */}
-                          <path d="M5,5 H25 V25 H5 Z M10,10 H20 V20 H10 Z" />
-                          <path d="M75,5 H95 V25 H75 Z M80,10 H90 V20 H80 Z" />
-                          <path d="M5,75 H25 V95 H5 Z M10,80 H20 V90 H10 Z" />
-                          
-                          {/* Fake QR code dot pattern */}
-                          <rect x="35" y="5" width="5" height="15" />
-                          <rect x="45" y="10" width="10" height="5" />
-                          <rect x="60" y="5" width="10" height="5" />
-                          
-                          <rect x="35" y="25" width="20" height="5" />
-                          <rect x="30" y="35" width="5" height="15" />
-                          <rect x="45" y="45" width="15" height="5" />
-                          <rect x="5" y="35" width="10" height="5" />
-                          <rect x="15" y="45" width="5" height="10" />
-                          
-                          <rect x="75" y="35" width="15" height="5" />
-                          <rect x="85" y="45" width="5" height="20" />
-                          <rect x="65" y="50" width="10" height="5" />
-                          
-                          <rect x="35" y="60" width="5" height="15" />
-                          <rect x="45" y="65" width="10" height="5" />
-                          <rect x="5" y="60" width="10" height="5" />
-                          <rect x="20" y="65" width="5" height="5" />
-                          
-                          <rect x="65" y="70" width="25" height="5" />
-                          <rect x="75" y="80" width="5" height="15" />
-                          <rect x="85" y="85" width="10" height="5" />
-                          <rect x="55" y="85" width="10" height="5" />
-                          
-                          {/* PhonePe Center Icon */}
-                          <rect x="42" y="42" width="16" height="16" fill="white" rx="2" />
-                          <text x="47" y="54" fill="#5f259f" fontWeight="bold" fontSize="13px">P</text>
-                        </svg>
-                      </div>
-
-                      <div className="text-center space-y-2">
-                        <p className="text-[13px] font-semibold text-zinc-700">Scan QR using PhonePe or any UPI app</p>
-                        <div className="flex items-center gap-1.5 justify-center text-[11px] text-zinc-500 font-semibold bg-zinc-100 py-1 px-3 rounded-full">
-                          <span className="material-symbols-outlined text-[14px]">schedule</span>
-                          QR expires in <span className="text-[#5f259f] font-bold">{formatTime(timeLeft)}</span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handlePhonePePay}
-                        className="w-full bg-[#5f259f] text-white py-3 rounded-md font-semibold text-[14px] hover:bg-[#4d1d82] transition-colors shadow-sm mt-2"
-                      >
-                        SIMULATE SUCCESSFUL SCAN
-                      </button>
-                    </div>
-                  )}
-
-                  {/* TAB 2: UPI ID payment */}
-                  {paymentTab === 'upi' && (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block">ENTER YOUR UPI ID</label>
-                        <div className="flex items-center border border-zinc-200 rounded-md overflow-hidden bg-zinc-50 focus-within:border-purple-300">
-                          <input 
-                            type="text" 
-                            placeholder="e.g. mobileNumber" 
-                            value={upiId}
-                            onChange={(e) => setUpiId(e.target.value)}
-                            className="bg-transparent border-none focus:ring-0 text-[14px] px-3 py-3 w-full outline-none"
-                          />
-                          <span className="bg-zinc-200/50 px-4 py-3 text-[14px] text-zinc-500 font-semibold border-l border-zinc-100">
-                            @ybl
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handlePhonePePay}
-                        className="w-full bg-[#5f259f] text-white py-3 rounded-md font-semibold text-[14px] hover:bg-[#4d1d82] transition-colors shadow-sm"
-                      >
-                        VERIFY & PAY
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Processing State */}
-              {phonePeStatus === 'processing' && (
-                <div className="py-12 flex flex-col items-center justify-center space-y-6">
-                  <div className="relative flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#5f259f]"></div>
-                    <span className="absolute text-[#5f259f] font-bold text-[18px]">P</span>
-                  </div>
-                  <div className="text-center space-y-1.5">
-                    <h4 className="font-semibold text-zinc-800">Processing UPI Transaction</h4>
-                    <p className="text-[12px] text-zinc-500">Do not refresh this page or press back button.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Success Screen */}
-              {phonePeStatus === 'success' && (
-                <div className="py-10 flex flex-col items-center justify-center space-y-4 text-center">
-                  <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center text-green-600 animate-bounce">
-                    <span className="material-symbols-outlined text-[36px] fill-1">check_circle</span>
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-[20px] text-green-800">Transaction Successful</h4>
-                    <p className="text-[12px] text-zinc-500 font-semibold">Ref: TXN{Math.random().toString().substr(2, 9).toUpperCase()}</p>
-                    <p className="text-[14px] text-zinc-700 font-medium mt-2">
-                      Charged <span className="font-bold">₹{finalTotal}</span> successfully.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* PhonePe Footer Security Seal */}
-            <div className="bg-zinc-50 border-t border-zinc-100 px-6 py-4 flex justify-between items-center text-[11px] text-zinc-400 font-semibold tracking-wider">
-              <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px] text-green-600">lock</span> SECURED BY PHONEPE
-              </span>
-              <span>PCI-DSS COMPLIANT</span>
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* Payment is handled by the Razorpay JS SDK popup — no custom modal needed */}
 
       <Footer />
     </div>

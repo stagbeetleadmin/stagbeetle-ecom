@@ -101,7 +101,7 @@ export default function OrderSuccess({ searchParams }: SuccessPageProps) {
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Payment Gateway</span>
                     <span className="text-primary font-bold text-[12px] tracking-wide flex items-center gap-1 uppercase">
-                      PhonePe UPI
+                      Razorpay
                     </span>
                   </div>
                   
