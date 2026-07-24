@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 
+
 export default function ProfilePage() {
   const router = useRouter();
   const { user, isAdmin, loading, updateProfile, saveAddress, triggerLoginModal, logout } = useAuth();
