@@ -8,6 +8,9 @@ import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import ProductGallery from '@/components/ProductGallery';
+import PriceDisplay from '@/components/PriceDisplay';
+import RichText from '@/components/RichText';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -20,7 +23,6 @@ export default function ProductDetailClient({ product, initialSuggestions, color
   const { isAdmin } = useAuth();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get('category') || '';
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
   const [selectedColor, setSelectedColor] = useState(getColorName(product.colors[0]) || 'Default');
   const [quantity, setQuantity] = useState(1);
@@ -56,68 +58,8 @@ export default function ProductDetailClient({ product, initialSuggestions, color
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
 
             {/* ── Left: Image Gallery ── */}
-            <div className="flex gap-3">
-
-              {/* Thumbnails — vertical strip */}
-              {product.images.length > 1 && (
-                <div className="flex flex-col gap-2 shrink-0">
-                  {product.images.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveImageIndex(idx)}
-                      className={`w-16 h-20 overflow-hidden border-2 transition-all shrink-0 ${
-                        activeImageIndex === idx
-                          ? 'border-[#C5A059]'
-                          : 'border-transparent hover:border-gray-300'
-                      }`}
-                    >
-                      <img src={img} alt={`View ${idx + 1}`} loading="lazy" className="w-full h-full object-cover object-top" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Main image — fixed height so it fits in viewport */}
-              <div className="flex-1 relative overflow-hidden bg-gray-50 border border-gray-100" style={{ height: 'min(70vh, 560px)' }}>
-                {product.images && product.images.length > 0 ? (
-                  <>
-                    <img
-                      src={product.images[activeImageIndex]}
-                      alt={product.title}
-                      fetchPriority="high"
-                      loading="eager"
-                      className="w-full h-full object-cover object-top transition-all duration-400"
-                    />
-                    {/* View label */}
-                    <span className="absolute bottom-3 left-3 bg-white/90 text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-1 text-gray-600">
-                      {activeImageIndex === 0 ? 'Front' : activeImageIndex === 1 ? 'Back' : 'Detail'}
-                    </span>
-                  </>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 text-[13px] font-label-caps tracking-wider">
-                    <span className="material-symbols-outlined text-[48px] text-gray-300 mb-2">image</span>
-                    No Image Available
-                  </div>
-                )}
-                {/* Arrow nav on mobile */}
-                {product.images.length > 1 && (
-                  <div className="absolute inset-y-0 right-2 flex flex-col justify-center gap-2 lg:hidden">
-                    <button
-                      onClick={() => setActiveImageIndex(i => Math.max(0, i - 1))}
-                      className="w-7 h-7 bg-white/80 flex items-center justify-center shadow text-gray-600 hover:text-[#C5A059]"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">expand_less</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveImageIndex(i => Math.min(product.images.length - 1, i + 1))}
-                      className="w-7 h-7 bg-white/80 flex items-center justify-center shadow text-gray-600 hover:text-[#C5A059]"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">expand_more</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* key={product.id} forces a clean remount (fresh active image, no leftover zoom state) when navigating between products */}
+            <ProductGallery key={product.id} images={product.images} title={product.title} />
 
             {/* ── Right: Product Info ── */}
             <div className="flex flex-col gap-5">
@@ -131,9 +73,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                   {product.title}
                 </h1>
                 <div className="flex items-center gap-4">
-                  <span className="text-[26px] font-bold text-[#0D1B2A]">
-                    ₹{product.price.toLocaleString('en-IN')}
-                  </span>
+                  <PriceDisplay price={product.price} mrp={product.mrp} size="lg" />
                   {product.rating && (
                     <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-sm">
                       <span className="material-symbols-outlined text-[13px] text-amber-500 fill-1">star</span>
@@ -157,9 +97,9 @@ export default function ProductDetailClient({ product, initialSuggestions, color
               </div>
 
               {/* Description */}
-              <p className="text-[13px] text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
-                {product.description}
-              </p>
+              <div className="border-t border-gray-100 pt-4">
+                <RichText html={product.description} className="text-[13px] text-gray-600 leading-relaxed" />
+              </div>
 
               {isAdmin ? (
                 <div className="border-t border-gray-100 pt-6">
@@ -345,7 +285,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                         src={item.images[0]}
                         alt={item.title}
                         loading="lazy"
-                        className="w-full h-full object-cover object-top origin-top transition-transform duration-500 group-hover:scale-105"
+                        className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 text-[10px] font-label-caps tracking-wider text-center p-2">
@@ -356,7 +296,7 @@ export default function ProductDetailClient({ product, initialSuggestions, color
                   <div className="p-3">
                     <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-0.5">{item.category}</p>
                     <h4 className="text-[13px] font-semibold text-gray-900 leading-snug mb-1">{item.title}</h4>
-                    <span className="text-[13px] font-bold text-[#0D1B2A]">₹{item.price.toLocaleString('en-IN')}</span>
+                    <PriceDisplay price={item.price} mrp={item.mrp} size="sm" />
                   </div>
                 </Link>
               ))}

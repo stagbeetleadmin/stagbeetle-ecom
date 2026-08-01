@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
@@ -14,6 +14,13 @@ import {
   getSkuBase, getColorHex, getColorName
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
+import PriceDisplay from '@/components/PriceDisplay';
+import RichTextEditor from '@/components/RichTextEditor';
+import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
+import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
+
+const CATEGORY_OPTIONS = ['Men', 'Accessories'];
+const GARMENT_TYPE_OPTIONS = ['Shirt', 'Jeans', 'Tshirt', 'Track pant', 'Shorts', 'Jacket'];
 
 const parseSku = (sku?: string) => {
   if (!sku) return { styleCode: '', colorCode: '' };
@@ -45,6 +52,53 @@ function AdminDashboardContent() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Product catalog search + filters
+  const [skuSearch, setSkuSearch] = useState('');
+  const [debouncedSkuSearch, setDebouncedSkuSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [garmentTypeFilter, setGarmentTypeFilter] = useState('');
+  const [materialFilter, setMaterialFilter] = useState('');
+
+  // Debounce the search box (same 300ms convention as the storefront search) so
+  // filtering — and the table re-render it triggers — doesn't run on every keystroke.
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSkuSearch(skuSearch), 300);
+    return () => clearTimeout(handler);
+  }, [skuSearch]);
+
+  // Distinct material values present in the catalog, for the filter dropdown
+  const materialOptions = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach(p => { if (p.material?.trim()) set.add(p.material.trim()); });
+    return Array.from(set).sort();
+  }, [products]);
+
+  // Client-side filtering — the catalog is already loaded in memory (getProducts()),
+  // so a memoized single-pass filter stays fast even with thousands of products.
+  const filteredProducts = useMemo(() => {
+    const query = debouncedSkuSearch.trim().toLowerCase();
+    return products.filter(p => {
+      if (query && !(p.sku || '').toLowerCase().includes(query) && !p.title.toLowerCase().includes(query)) return false;
+      if (categoryFilter && p.category !== categoryFilter) return false;
+      if (garmentTypeFilter && p.subcategory !== garmentTypeFilter) return false;
+      if (materialFilter && p.material !== materialFilter) return false;
+      return true;
+    });
+  }, [products, debouncedSkuSearch, categoryFilter, garmentTypeFilter, materialFilter]);
+
+  // Table pagination — keeps the DOM light regardless of catalog size (the filter
+  // itself is cheap; rendering thousands of <tr> rows at once is what actually costs).
+  // Clamped (not reset-via-effect) so a filter that shrinks the result set never
+  // strands the page out of range without needing an effect to fix it up.
+  const PRODUCTS_PER_PAGE = 25;
+  const [productPage, setProductPage] = useState(1);
+  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+  const safeProductPage = Math.min(productPage, totalProductPages);
+  const paginatedProducts = useMemo(() => {
+    const start = (safeProductPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(start, start + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, safeProductPage]);
 
   const { isAdmin, loading: authLoading, setAdminStatus, loginWithEmailPassword, logout } = useAuth();
   const [passcode, setPasscode] = useState('');
@@ -104,18 +158,19 @@ function AdminDashboardContent() {
   const [productForm, setProductForm] = useState({
     title: '',
     price: 0,
+    mrp: 0,
     category: 'Men',
     subcategory: 'Shirt', // default garment type
     sleeve_type: 'Full Sleeves', // default sleeves for Shirt
     sku: '', // stock keeping unit
     material: '',
     description: '',
-    image1: '',
-    image2: '',
-    image3: '',
+    images: [] as string[],
     sizes: 'S, M, L, XL',
     colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
   });
+
+  const [showPreview, setShowPreview] = useState(false);
 
   // SKU, sizes, colors helper states
   const [styleCode, setStyleCode] = useState('');
@@ -131,26 +186,15 @@ function AdminDashboardContent() {
     setProductForm(prev => ({ ...prev, sku: computedSku }));
   }, [styleCode, colorCode]);
 
-  // Image Uploading States
-  const [uploadingStates, setUploadingStates] = useState({
-    image1: false,
-    image2: false,
-    image3: false
-  });
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: 'image1' | 'image2' | 'image3') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const imgIndex = fieldName === 'image1' ? 1 : fieldName === 'image2' ? 2 : 3;
-
+  // Handles a single-file upload for a given image slot (0-indexed) — called by ImageUploadGrid
+  const handleImageUpload = async (file: File, slotIndex: number): Promise<string | null> => {
     if (!productForm.sku.trim()) {
       triggerFeedback('error', 'Please fill in the SKU NUMBER first to automatically name and organize files in the storage bucket.');
-      return;
+      return null;
     }
 
-    // Delete existing image if there is already one in this slot (re-upload overwrite)
-    const existingUrl = productForm[fieldName];
+    // Replacing an already-uploaded image in this slot — clean up the old file first
+    const existingUrl = productForm.images[slotIndex];
     if (existingUrl && !existingUrl.startsWith('data:')) {
       console.log(`[Admin Portal] Cleaning up previous image from storage before re-upload: ${existingUrl}`);
       try {
@@ -160,55 +204,40 @@ function AdminDashboardContent() {
       }
     }
 
-    setUploadingStates(prev => ({ ...prev, [fieldName]: true }));
     try {
       console.log(`[Admin Portal] Compressing ${file.name} client-side...`);
       const compressedFile = await compressImage(file);
       console.log(`[Admin Portal] Uploading compressed image to Supabase storage...`);
-      const publicUrl = await uploadGarmentImage(compressedFile, productForm.sku, imgIndex);
+      const publicUrl = await uploadGarmentImage(compressedFile, productForm.sku, slotIndex + 1);
 
       if (publicUrl) {
-        setProductForm(prev => ({ ...prev, [fieldName]: publicUrl }));
-        if (publicUrl.startsWith('data:')) {
-          triggerFeedback('success', 'Image processed as base64 fallback (Supabase not connected).');
-        } else {
-          triggerFeedback('success', 'Image uploaded to Supabase successfully.');
-        }
-      } else {
-        triggerFeedback('error', 'Image upload failed. Fallback did not resolve.');
+        triggerFeedback('success', publicUrl.startsWith('data:')
+          ? 'Image processed as base64 fallback (Supabase not connected).'
+          : 'Image uploaded to Supabase successfully.');
+        return publicUrl;
       }
+      triggerFeedback('error', 'Image upload failed. Fallback did not resolve.');
+      return null;
     } catch (err: any) {
       triggerFeedback('error', `Image upload failed: ${err.message || err}`);
-    } finally {
-      setUploadingStates(prev => ({ ...prev, [fieldName]: false }));
+      return null;
     }
   };
 
-  const handleRemoveImage = async (fieldName: 'image1' | 'image2' | 'image3') => {
-    const imageUrl = productForm[fieldName];
-    if (!imageUrl) return;
-
-    if (!confirm('Are you sure you want to delete this image? This action will permanently remove it from storage.')) return;
-
-    // Clear state first
-    setProductForm(prev => ({ ...prev, [fieldName]: '' }));
-
-    if (!imageUrl.startsWith('data:')) {
-      try {
-        console.log(`[Admin Portal] Deleting image from storage: ${imageUrl}`);
-        const ok = await deleteStorageImage(imageUrl);
-        if (ok) {
-          triggerFeedback('success', 'Image removed from Supabase storage.');
-        } else {
-          console.warn('Could not delete image from Supabase storage (might be already deleted).');
-          triggerFeedback('success', 'Image slot cleared.');
-        }
-      } catch (err: any) {
-        console.error('Error deleting image:', err);
-        triggerFeedback('error', `Failed to delete from storage: ${err.message || err}`);
-      }
-    } else {
-      triggerFeedback('success', 'Image slot cleared.');
+  // Deletes an image from storage — called by ImageUploadGrid before it removes the slot.
+  // Throwing here (on cancel) stops ImageUploadGrid from removing the slot from the form.
+  const handleRemoveImage = async (imageUrl: string) => {
+    if (!confirm('Are you sure you want to remove this image? This action will permanently delete it from storage.')) {
+      throw new Error('cancelled');
+    }
+    if (!imageUrl || imageUrl.startsWith('data:')) return;
+    try {
+      console.log(`[Admin Portal] Deleting image from storage: ${imageUrl}`);
+      const ok = await deleteStorageImage(imageUrl);
+      triggerFeedback('success', ok ? 'Image removed from Supabase storage.' : 'Image slot cleared.');
+    } catch (err: any) {
+      console.error('Error deleting image:', err);
+      triggerFeedback('error', `Failed to delete from storage: ${err.message || err}`);
     }
   };
 
@@ -399,15 +428,14 @@ function AdminDashboardContent() {
     setProductForm({
       title: '',
       price: 0,
+      mrp: 0,
       category: 'Men',
       subcategory: 'Shirt',
       sleeve_type: 'Full Sleeves',
       sku: '',
       material: '',
       description: '',
-      image1: '',
-      image2: '',
-      image3: '',
+      images: [],
       sizes: 'S, M, L, XL',
       colors: ''
     });
@@ -430,15 +458,14 @@ function AdminDashboardContent() {
     setProductForm({
       title: prod.title,
       price: prod.price,
+      mrp: prod.mrp || 0,
       category: prod.category,
       subcategory: prod.subcategory || 'Shirt',
       sleeve_type: prod.sleeve_type || 'Full Sleeves',
       sku: prod.sku || '',
       material: prod.material,
       description: prod.description,
-      image1: prod.images[0] || '',
-      image2: prod.images[1] || '',
-      image3: prod.images[2] || '',
+      images: prod.images || [],
       sizes: prod.sizes.join(', '),
       colors: prod.colors.join(', ')
     });
@@ -447,11 +474,19 @@ function AdminDashboardContent() {
 
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const imagesArray = [productForm.image1, productForm.image2, productForm.image3].filter(url => url.trim() !== '');
+
+    // The rich-text description editor isn't a native <textarea>, so `required` doesn't apply — check manually
+    if (!productForm.description.replace(/<[^>]*>/g, '').trim()) {
+      triggerFeedback('error', 'Please provide a garment description.');
+      return;
+    }
+
+    const imagesArray = productForm.images.filter(url => url.trim() !== '');
 
     const productPayload = {
       title: productForm.title,
       price: Number(productForm.price),
+      mrp: Number(productForm.mrp) > 0 ? Number(productForm.mrp) : undefined,
       category: productForm.category,
       subcategory: productForm.subcategory,
       sleeve_type: productForm.subcategory === 'Shirt' ? (productForm.sleeve_type as any) : undefined,
@@ -477,6 +512,25 @@ function AdminDashboardContent() {
       triggerFeedback('error', 'Failed to save product details.');
     }
   };
+
+  // Builds a Product-shaped object from the in-progress form so the Preview
+  // modal can render it through the exact same components as the live site.
+  const buildPreviewProduct = (): Product => ({
+    id: editingProduct?.id || 'preview',
+    title: productForm.title,
+    price: Number(productForm.price) || 0,
+    mrp: Number(productForm.mrp) > 0 ? Number(productForm.mrp) : undefined,
+    category: productForm.category,
+    subcategory: productForm.subcategory,
+    sleeve_type: productForm.subcategory === 'Shirt' ? (productForm.sleeve_type as any) : undefined,
+    sku: productForm.sku,
+    material: productForm.material,
+    description: productForm.description,
+    images: productForm.images,
+    sizes: selectedSizes.length > 0 ? selectedSizes : ['One Size'],
+    colors: colorName.trim() ? [`${colorName.trim()}|${colorHex.trim()}`] : ['Default'],
+    rating: editingProduct?.rating,
+  });
 
   const handleDeleteProduct = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to remove "${name}" from the catalog?`)) return;
@@ -1204,6 +1258,60 @@ function AdminDashboardContent() {
                         </button>
                       </div>
 
+                      {/* Search + Filters */}
+                      {products.length > 0 && (
+                        <div className="border border-on-surface/5 bg-surface-dim/30 p-4 rounded-sm space-y-3">
+                          <div className="relative">
+                            <span className="material-symbols-outlined text-[16px] text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2">search</span>
+                            <input
+                              type="text"
+                              value={skuSearch}
+                              onChange={(e) => { setSkuSearch(e.target.value); setProductPage(1); }}
+                              placeholder="Search by SKU or garment name..."
+                              className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 pl-9 pr-3 text-[13px] outline-none font-mono"
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-3">
+                            <select
+                              value={categoryFilter}
+                              onChange={(e) => { setCategoryFilter(e.target.value); setProductPage(1); }}
+                              className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none"
+                            >
+                              <option value="">All Categories</option>
+                              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                            <select
+                              value={garmentTypeFilter}
+                              onChange={(e) => { setGarmentTypeFilter(e.target.value); setProductPage(1); }}
+                              className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none"
+                            >
+                              <option value="">All Garment Types</option>
+                              {GARMENT_TYPE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                            <select
+                              value={materialFilter}
+                              onChange={(e) => { setMaterialFilter(e.target.value); setProductPage(1); }}
+                              className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none max-w-[220px]"
+                            >
+                              <option value="">All Materials</option>
+                              {materialOptions.map(m => <option key={m} value={m}>{m.length > 40 ? m.slice(0, 40) + '…' : m}</option>)}
+                            </select>
+                            {(skuSearch || categoryFilter || garmentTypeFilter || materialFilter) && (
+                              <button
+                                type="button"
+                                onClick={() => { setSkuSearch(''); setCategoryFilter(''); setGarmentTypeFilter(''); setMaterialFilter(''); setProductPage(1); }}
+                                className="text-[11px] font-semibold text-zinc-500 hover:text-red-600 underline"
+                              >
+                                Clear Filters
+                              </button>
+                            )}
+                            <span className="text-[11px] text-zinc-400 font-medium self-center ml-auto">
+                              {filteredProducts.length} of {products.length} garments
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Products list table */}
                       {products.length === 0 ? (
                         <div className="text-center py-16 border border-dashed border-zinc-200 bg-zinc-50/50 rounded-sm">
@@ -1219,27 +1327,33 @@ function AdminDashboardContent() {
                             ADD YOUR FIRST GARMENT
                           </button>
                         </div>
+                      ) : filteredProducts.length === 0 ? (
+                        <div className="text-center py-16 border border-dashed border-zinc-200 bg-zinc-50/50 rounded-sm">
+                          <span className="material-symbols-outlined text-[36px] text-zinc-400 mb-2 block">search_off</span>
+                          <p className="text-[13px] text-zinc-500 font-medium">No garments match your search or filters.</p>
+                        </div>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-left border-collapse text-[13px]">
                             <thead>
                               <tr className="border-b border-on-surface/10 font-label-caps text-[10px] tracking-wider text-on-surface-variant font-bold">
                                 <th className="pb-3">GARMENT DETAILS</th>
+                                <th className="pb-3">SKU</th>
                                 <th className="pb-3">CATEGORY</th>
-                                <th className="pb-3 text-right">PRICE (₹)</th>
+                                <th className="pb-3 text-right">PRICE</th>
                                 <th className="pb-3 text-center">RATING</th>
                                 <th className="pb-3 text-right">CONTROLS</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-on-surface/5">
-                              {products.map(prod => (
+                              {paginatedProducts.map(prod => (
                                 <tr key={prod.id} className="hover:bg-surface-dim/20 transition-colors">
                                   <td className="py-4 flex items-center gap-3">
                                     {prod.images && prod.images[0] ? (
                                       <img
                                         src={prod.images[0]}
                                         alt={prod.title}
-                                        className="w-10 h-13 object-cover object-top aspect-[3/4] border bg-zinc-50"
+                                        className="w-10 h-13 object-contain aspect-[3/4] border bg-zinc-50"
                                       />
                                     ) : (
                                       <div className="w-10 h-13 border border-dashed border-zinc-300 flex flex-col items-center justify-center bg-zinc-50 text-zinc-400 aspect-[3/4] text-[9px] font-semibold text-center leading-tight">
@@ -1251,10 +1365,21 @@ function AdminDashboardContent() {
                                       <div className="text-[11px] text-zinc-400 font-medium truncate max-w-sm">{prod.material}</div>
                                     </div>
                                   </td>
-                                  <td className="py-4 font-semibold uppercase text-[11px] text-zinc-500">{prod.category}</td>
-                                  <td className="py-4 text-right font-bold text-gold-leaf text-[14px]">₹{prod.price}</td>
+                                  <td className="py-4 font-mono text-[11px] text-zinc-500 uppercase">{prod.sku || '—'}</td>
+                                  <td className="py-4 font-semibold uppercase text-[11px] text-zinc-500">{prod.subcategory ? `${prod.category} · ${prod.subcategory}` : prod.category}</td>
+                                  <td className="py-4 text-right">
+                                    <PriceDisplay price={prod.price} mrp={prod.mrp} size="sm" className="justify-end" />
+                                  </td>
                                   <td className="py-4 text-center font-semibold text-on-surface-variant">{prod.rating || 5.0}</td>
-                                  <td className="py-4 text-right space-x-2">
+                                  <td className="py-4 text-right space-x-2 whitespace-nowrap">
+                                    <Link
+                                      href={`/product/${prod.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] font-label-caps font-semibold text-zinc-500 hover:underline uppercase tracking-wider"
+                                    >
+                                      VIEW
+                                    </Link>
                                     <button
                                       onClick={() => openEditProduct(prod)}
                                       className="text-[11px] font-label-caps font-semibold text-primary hover:underline uppercase tracking-wider"
@@ -1272,6 +1397,32 @@ function AdminDashboardContent() {
                               ))}
                             </tbody>
                           </table>
+
+                          {totalProductPages > 1 && (
+                            <div className="flex items-center justify-between pt-4 mt-2 border-t border-on-surface/5">
+                              <span className="text-[11px] text-zinc-400 font-medium">
+                                Page {safeProductPage} of {totalProductPages}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setProductPage(p => Math.max(1, p - 1))}
+                                  disabled={safeProductPage === 1}
+                                  className="w-8 h-8 flex items-center justify-center border border-zinc-200 rounded-sm text-zinc-500 hover:border-gold-leaf hover:text-gold-leaf transition-colors disabled:opacity-30 disabled:hover:border-zinc-200 disabled:hover:text-zinc-500"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setProductPage(p => Math.min(totalProductPages, p + 1))}
+                                  disabled={safeProductPage === totalProductPages}
+                                  className="w-8 h-8 flex items-center justify-center border border-zinc-200 rounded-sm text-zinc-500 hover:border-gold-leaf hover:text-gold-leaf transition-colors disabled:opacity-30 disabled:hover:border-zinc-200 disabled:hover:text-zinc-500"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1690,17 +1841,32 @@ function AdminDashboardContent() {
                   })()}
                 </div>
 
-                {/* Price */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">PRICE IN RUPEES (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    value={productForm.price || ''}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
-                    placeholder="e.g. 3200"
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
-                  />
+                {/* Selling Price & MRP */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">SELLING PRICE (₹)</label>
+                    <input
+                      type="number"
+                      required
+                      value={productForm.price || ''}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
+                      placeholder="e.g. 3200"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">MRP (₹) — OPTIONAL</label>
+                    <input
+                      type="number"
+                      value={productForm.mrp || ''}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, mrp: Number(e.target.value) }))}
+                      placeholder="e.g. 4500"
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                    />
+                    {productForm.mrp > 0 && productForm.mrp <= productForm.price && (
+                      <p className="text-[10px] text-amber-600">MRP must be higher than Selling Price to show a discount.</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Category */}
@@ -1764,13 +1930,11 @@ function AdminDashboardContent() {
                 {/* Description */}
                 <div className="sm:col-span-2 space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">DESCRIPTION</label>
-                  <textarea
-                    rows={3}
-                    required
+                  <RichTextEditor
+                    key={editingProduct?.id || 'new'}
                     value={productForm.description}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(html) => setProductForm(prev => ({ ...prev, description: html }))}
                     placeholder="Provide details about weave, cuts, tailoring..."
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   />
                 </div>
 
@@ -1851,169 +2015,58 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Images */}
-                <div className="sm:col-span-2 space-y-4">
-                  <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">GARMENT IMAGES (MAIN + SIDES)</span>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Image 1 */}
-                    <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Front View (Main) *</label>
-                      </div>
-
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          required
-                          value={productForm.image1}
-                          onChange={(e) => setProductForm(prev => ({ ...prev, image1: e.target.value }))}
-                          placeholder="Paste image URL..."
-                          className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-1.5 px-2.5 text-[12px] outline-none"
-                        />
-                        <div className="flex items-center justify-between gap-2">
-                          <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
-                            <span className="material-symbols-outlined text-[12px]">upload</span>
-                            Upload File
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleImageUpload(e, 'image1')}
-                            />
-                          </label>
-                          {uploadingStates.image1 && (
-                            <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
-                          )}
-                          {productForm.image1 && (
-                            <div className="relative w-8 h-10 border rounded-sm shrink-0">
-                              <img src={productForm.image1} alt="Preview" className="w-full h-full object-cover object-top aspect-[3/4]" />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveImage('image1')}
-                                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md transition-all text-[10px] font-bold z-10"
-                                title="Remove image from storage"
-                              >
-                                &times;
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Image 2 */}
-                    <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Back View (Optional)</label>
-                      </div>
-
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={productForm.image2}
-                          onChange={(e) => setProductForm(prev => ({ ...prev, image2: e.target.value }))}
-                          placeholder="Paste image URL..."
-                          className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-1.5 px-2.5 text-[12px] outline-none"
-                        />
-                        <div className="flex items-center justify-between gap-2">
-                          <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
-                            <span className="material-symbols-outlined text-[12px]">upload</span>
-                            Upload File
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleImageUpload(e, 'image2')}
-                            />
-                          </label>
-                          {uploadingStates.image2 && (
-                            <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
-                          )}
-                          {productForm.image2 && (
-                            <div className="relative w-8 h-10 border rounded-sm shrink-0">
-                              <img src={productForm.image2} alt="Preview" className="w-full h-full object-cover object-top aspect-[3/4]" />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveImage('image2')}
-                                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md transition-all text-[10px] font-bold z-10"
-                                title="Remove image from storage"
-                              >
-                                &times;
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Image 3 */}
-                    <div className="space-y-2 border border-dashed border-zinc-200 p-3 rounded-sm">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Detail View (Optional)</label>
-                      </div>
-
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={productForm.image3}
-                          onChange={(e) => setProductForm(prev => ({ ...prev, image3: e.target.value }))}
-                          placeholder="Paste image URL..."
-                          className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-1.5 px-2.5 text-[12px] outline-none"
-                        />
-                        <div className="flex items-center justify-between gap-2">
-                          <label className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold px-2.5 py-1.5 rounded-sm cursor-pointer border border-zinc-200 transition-colors flex items-center gap-1 shrink-0">
-                            <span className="material-symbols-outlined text-[12px]">upload</span>
-                            Upload File
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleImageUpload(e, 'image3')}
-                            />
-                          </label>
-                          {uploadingStates.image3 && (
-                            <span className="animate-spin border border-gold-leaf border-t-transparent w-3.5 h-3.5 rounded-full inline-block shrink-0" />
-                          )}
-                          {productForm.image3 && (
-                            <div className="relative w-8 h-10 border rounded-sm shrink-0">
-                              <img src={productForm.image3} alt="Preview" className="w-full h-full object-cover object-top aspect-[3/4]" />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveImage('image3')}
-                                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md transition-all text-[10px] font-bold z-10"
-                                title="Remove image from storage"
-                              >
-                                &times;
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="sm:col-span-2 space-y-2">
+                  <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
+                    GARMENT IMAGES (UP TO 6)
+                  </span>
+                  <ImageUploadGrid
+                    images={productForm.images}
+                    onChange={(images) => setProductForm(prev => ({ ...prev, images }))}
+                    onUploadFile={handleImageUpload}
+                    onRemoveFile={handleRemoveImage}
+                    disabled={!productForm.sku.trim()}
+                    disabledReason="Please fill in the Style Code & Color Code first, so uploaded files can be named and organized in storage."
+                    maxImages={6}
+                  />
                 </div>
 
               </div>
 
             </div>
 
-            <div className="px-6 py-4 border-t border-on-surface/10 flex justify-end gap-3 bg-white shrink-0">
+            <div className="px-6 py-4 border-t border-on-surface/10 flex justify-between items-center gap-3 bg-white shrink-0">
               <button
                 type="button"
-                onClick={() => setShowProductModal(false)}
-                className="border border-on-surface/15 text-on-surface-variant px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-zinc-50"
+                onClick={() => setShowPreview(true)}
+                disabled={!productForm.title.trim() || productForm.images.length === 0}
+                className="border border-[#0D1B2A]/20 text-[#0D1B2A] px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-[#0D1B2A] hover:text-white transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#0D1B2A]"
               >
-                CANCEL
+                <span className="material-symbols-outlined text-[16px]">visibility</span>
+                PREVIEW
               </button>
-              <button
-                type="submit"
-                className="bg-primary text-white px-8 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
-              >
-                {editingProduct ? 'SAVE CHANGES' : 'PUBLISH GARMENT'}
-              </button>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowProductModal(false)}
+                  className="border border-on-surface/15 text-on-surface-variant px-5 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-zinc-50"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  className="bg-primary text-white px-8 py-2.5 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-sm"
+                >
+                  {editingProduct ? 'SAVE CHANGES' : 'PUBLISH GARMENT'}
+                </button>
+              </div>
             </div>
           </form>
         </div>
+      )}
+
+      {showPreview && (
+        <ProductPreviewModal product={buildPreviewProduct()} onClose={() => setShowPreview(false)} />
       )}
 
       <Footer />

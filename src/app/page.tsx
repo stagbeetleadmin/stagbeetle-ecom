@@ -8,6 +8,7 @@ import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
 import { getProducts, Product, getSkuBase, getColorHex, getColorName } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
+import PriceDisplay from '@/components/PriceDisplay';
 
 // ─── Hero Carousel ────────────────────────────────────────────────────────────
 interface HeroSlide {
@@ -259,7 +260,7 @@ function ProductCard({
             src={hovered && activeProduct.images[1] ? activeProduct.images[1] : activeProduct.images[0]}
             alt={activeProduct.title}
             loading="lazy"
-            className="w-full h-full object-cover object-top origin-top transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 border-b border-gray-100 text-gray-400 text-[11px] font-label-caps tracking-wider p-4 text-center">
@@ -302,10 +303,8 @@ function ProductCard({
       {/* Info */}
       <div className="pt-3 pb-4 px-1 text-left">
         <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">{activeProduct.subcategory || activeProduct.category}</p>
-        <div className="flex justify-between items-start gap-2">
-          <h3 className="text-[13px] font-semibold text-gray-900 leading-snug truncate pr-2">{activeProduct.title}</h3>
-          <span className="text-[13px] font-bold text-gray-900 shrink-0">₹{activeProduct.price.toLocaleString('en-IN')}</span>
-        </div>
+        <h3 className="text-[13px] font-semibold text-gray-900 leading-snug truncate pr-2">{activeProduct.title}</h3>
+        <PriceDisplay price={activeProduct.price} mrp={activeProduct.mrp} size="sm" className="mt-0.5" />
         <p className="text-[11px] text-gray-400 mt-0.5 truncate">{activeProduct.material}</p>
         
         {/* Color dots */}

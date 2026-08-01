@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import PriceDisplay from '@/components/PriceDisplay';
 
 // Razorpay global types
 declare global {
@@ -695,10 +696,10 @@ export default function Checkout() {
                       <div key={product.id} className="flex items-center justify-between gap-4 border-b border-on-surface/5 pb-4 last:border-b-0 last:pb-0">
                         <div className="flex items-center gap-3">
                           {product.images && product.images[0] ? (
-                            <img 
-                              src={product.images[0]} 
-                              alt={product.title} 
-                              className="w-10 h-13 object-cover object-top bg-white aspect-[3/4]"
+                            <img
+                              src={product.images[0]}
+                              alt={product.title}
+                              className="w-10 h-13 object-contain bg-white aspect-[3/4]"
                             />
                           ) : (
                             <div className="w-10 h-13 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5 aspect-[3/4]">
@@ -707,7 +708,7 @@ export default function Checkout() {
                           )}
                           <div className="min-w-0">
                             <h4 className="font-body text-[13px] font-semibold text-on-surface truncate">{product.title}</h4>
-                            <p className="text-[11px] text-gold-leaf font-medium">₹{product.price}</p>
+                            <PriceDisplay price={product.price} mrp={product.mrp} size="sm" />
                           </div>
                         </div>
                         <button 

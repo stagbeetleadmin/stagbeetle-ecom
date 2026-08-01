@@ -4,6 +4,7 @@ import React from 'react';
 import { useCart } from '@/context/CartContext';
 import { Product, getColorName } from '@/lib/db';
 import Link from 'next/link';
+import PriceDisplay from '@/components/PriceDisplay';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -135,10 +136,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         <div key={product.id} className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
                             {product.images && product.images[0] ? (
-                              <img 
-                                src={product.images[0]} 
-                                alt={product.title} 
-                                className="w-12 h-16 object-cover object-top bg-surface aspect-[3/4]"
+                              <img
+                                src={product.images[0]}
+                                alt={product.title}
+                                className="w-12 h-16 object-contain bg-surface aspect-[3/4]"
                               />
                             ) : (
                               <div className="w-12 h-16 flex flex-col items-center justify-center bg-gray-50 border border-zinc-200 text-gray-400 text-[8px] font-label-caps tracking-wider text-center p-0.5">
@@ -147,7 +148,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             )}
                             <div className="min-w-0">
                               <h4 className="font-body text-[13px] font-semibold text-on-surface truncate">{product.title}</h4>
-                              <p className="text-[11px] text-gold-leaf font-medium">₹{product.price}</p>
+                              <PriceDisplay price={product.price} mrp={product.mrp} size="sm" />
                             </div>
                           </div>
                           <button 

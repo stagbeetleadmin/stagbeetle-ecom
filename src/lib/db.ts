@@ -4,14 +4,15 @@ import { createClient } from '@supabase/supabase-js';
 export interface Product {
   id: string;
   title: string;
-  price: number;
+  price: number; // Selling Price (SP) — what the customer pays
+  mrp?: number; // Maximum Retail Price — shown struck-through when higher than price
   category: string;
   subcategory?: string; // e.g. "Shirt", "Jeans", "Tshirt", "Track pant", "Shorts", "Jacket"
   sleeve_type?: 'Half Sleeves' | 'Full Sleeves'; // applicable for Shirts
   sku?: string;
   material: string;
-  description: string;
-  images: string[]; // [Front, Back, Detail/Side]
+  description: string; // may contain rich-text HTML (bold/italic/lists/headings) or legacy plain text
+  images: string[]; // up to 6, in display order
   sizes: string[];
   colors: string[];
   rating?: number;
