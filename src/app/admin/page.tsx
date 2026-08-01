@@ -269,7 +269,7 @@ function AdminDashboardContent() {
 
           <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
             <div className="text-center mb-6">
-              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
+              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
               <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
               <p className="text-[12px] text-zinc-500 font-body mt-2">
                 Log in with your administrator account or enter the administrative passcode.
@@ -603,7 +603,7 @@ function AdminDashboardContent() {
           {/* Page Title & Status */}
           <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-on-surface/10 pb-6 mb-8 gap-4">
             <div>
-              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAG BEETLE SELLER PORTAL</span>
+              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
               <h1 className="font-display text-[32px] font-semibold text-on-surface">Atelier Dashboard</h1>
             </div>
 

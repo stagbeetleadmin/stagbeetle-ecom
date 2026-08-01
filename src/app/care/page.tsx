@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Garment Care Guide | Stag Beetle',
-  description: 'How to care for your Stag Beetle men\'s garments — linen shirts, tailored blazers, premium denim, and fine knits. Preserve your wardrobe for years.',
+  title: 'Garment Care Guide | STAGBEETLE',
+  description: 'How to care for your STAGBEETLE men\'s garments — linen shirts, tailored blazers, premium denim, and fine knits. Preserve your wardrobe for years.',
 };
 
 const careItems = [

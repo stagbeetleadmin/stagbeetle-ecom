@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'About | Stag Beetle — The Anatomy of Elegance',
-  description: 'The story of Stag Beetle — born from biomimetic design and Savile Row tailoring, rooted in India\'s finest textile traditions.',
+  title: 'About | STAGBEETLE — One Of A Kind',
+  description: 'The story of STAGBEETLE — born from biomimetic design and Savile Row tailoring, rooted in India\'s finest textile traditions.',
 };
 
 export default function AboutPage() {
@@ -19,14 +19,14 @@ export default function AboutPage() {
         <section className="relative h-[60vh] min-h-[400px] flex items-end overflow-hidden bg-surface-dim">
           <img
             src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1400&q=80"
-            alt="Stag Beetle Atelier"
+            alt="STAGBEETLE Atelier"
             className="absolute inset-0 w-full h-full object-cover opacity-30"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent" />
           <div className="relative z-10 px-6 md:px-12 max-w-container-max mx-auto pb-16 w-full">
             <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-3">OUR STORY</span>
             <h1 className="font-display text-[48px] md:text-[64px] font-semibold text-on-surface leading-tight">
-              The World of<br /><span className="text-gold-leaf italic font-normal">Stag Beetle</span>
+              The World of<br /><span className="text-gold-leaf italic font-normal">STAGBEETLE</span>
             </h1>
           </div>
         </section>
@@ -39,7 +39,7 @@ export default function AboutPage() {
               <div className="space-y-6">
                 <h2 className="font-display text-[32px] font-semibold text-on-surface leading-tight">A Legacy in the Making</h2>
                 <p className="text-body-lg leading-relaxed font-light">
-                  At Stag Beetle, we believe fashion is the ultimate protective carapace. Born from the intersection of biomimetic design and traditional Savile Row tailoring, integrated with heritage Indian textiles.
+                  At STAGBEETLE, we believe fashion is the ultimate protective carapace. Born from the intersection of biomimetic design and traditional Savile Row tailoring, integrated with heritage Indian textiles.
                 </p>
                 <p className="text-body-md leading-relaxed">
                   The stag beetle — nature&apos;s most architecturally perfect insect — is our muse. Its iridescent carapace, structural mandibles, and precise segmentation inform every silhouette, seam, and surface we create.
@@ -61,7 +61,7 @@ export default function AboutPage() {
                 Every stitch is a conscious choice. We source our cottons, silks, and wools directly from weaver co-operatives in Banaras, Jaipur, and Kashmir — paying fair prices and building long-term relationships with the artisans who keep these traditions alive.
               </p>
               <p className="text-body-md leading-relaxed">
-                Our Bengaluru atelier employs 24 master tailors, each trained in both Western pattern-cutting and traditional Indian hand-finishing techniques. A single Stag Beetle garment passes through at least 12 pairs of hands before it reaches yours.
+                Our Bengaluru atelier employs 24 master tailors, each trained in both Western pattern-cutting and traditional Indian hand-finishing techniques. A single STAGBEETLE garment passes through at least 12 pairs of hands before it reaches yours.
               </p>
             </section>
 

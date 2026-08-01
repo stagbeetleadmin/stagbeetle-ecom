@@ -251,7 +251,7 @@ export default function Checkout() {
         amount: data.amount,
         currency: data.currency,
         order_id: data.orderId,
-        name: 'Stag Beetle India',
+        name: 'STAGBEETLE India',
         description: `Order of ${cart.length} item(s)`,
         image: '/favicon.ico',
         prefill: {

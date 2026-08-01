@@ -5,7 +5,7 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Shipping Policy | Stag Beetle',
+  title: 'Shipping Policy | STAGBEETLE',
   description: 'At Stagbeetle, we ensure safe and reliable delivery of your orders across India through India Post.',
 };
 

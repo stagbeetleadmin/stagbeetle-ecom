@@ -5,7 +5,7 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Cancellation & Refund Policy | Stag Beetle',
+  title: 'Cancellation & Refund Policy | STAGBEETLE',
   description: 'Learn about Stagbeetle returns, exchanges, and cancellation policies. Read our quick guide and requirements for claims.',
 };
 

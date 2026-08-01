@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Store Locations & Booking | Stag Beetle',
-  description: 'Visit the Stag Beetle store locations in Bengaluru for private viewings, bespoke consultations, and store appointments.',
+  title: 'Store Locations & Booking | STAGBEETLE',
+  description: 'Visit the STAGBEETLE store locations in Bengaluru for private viewings, bespoke consultations, and store appointments.',
 };
 
 const locations = [
@@ -60,7 +60,7 @@ export default function StoresPage() {
             Our Stores
           </h1>
           <p className="font-body text-body-lg text-on-surface-variant mb-16 leading-relaxed max-w-2xl">
-            Experience Stag Beetle in person. Our store locations are spaces for discovery — private viewings, bespoke consultations, and made-to-measure appointments with our style advisors.
+            Experience STAGBEETLE in person. Our store locations are spaces for discovery — private viewings, bespoke consultations, and made-to-measure appointments with our style advisors.
           </p>
 
           <div className="space-y-10 mb-20">

@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | Stag Beetle',
-  description: 'How Stag Beetle collects, uses, and protects your personal information.',
+  title: 'Privacy Policy | STAGBEETLE',
+  description: 'How STAGBEETLE collects, uses, and protects your personal information.',
 };
 
 export default function PrivacyPage() {
@@ -31,7 +31,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">1. Who We Are</h2>
               <p>
-                Stagbeetle Pvt. Ltd. (&quot;Stag Beetle&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the website stagbeetle.co.in and associated services. Our registered office is at Lalbagh Road, Bangalore-560027, Karnataka, India.
+                Stagbeetle Pvt. Ltd. (&quot;STAGBEETLE&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the website stagbeetle.co.in and associated services. Our registered office is at Lalbagh Road, Bangalore-560027, Karnataka, India.
               </p>
             </section>
 

@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Quarterly Journal | Stag Beetle',
-  description: 'The Stag Beetle Journal — essays on craft, textile heritage, sustainable fashion, and the philosophy of dressing with intention.',
+  title: 'Quarterly Journal | STAGBEETLE',
+  description: 'The STAGBEETLE Journal — essays on craft, textile heritage, sustainable fashion, and the philosophy of dressing with intention.',
 };
 
 const articles = [
@@ -45,7 +45,7 @@ const articles = [
   {
     issue: 'Issue III · Monsoon 2025',
     title: 'Jaipur Blue: The Indigo Revival',
-    excerpt: 'Natural indigo dyeing nearly disappeared from Rajasthan. A new generation of artisans is bringing it back — and Stag Beetle is proud to be part of that story.',
+    excerpt: 'Natural indigo dyeing nearly disappeared from Rajasthan. A new generation of artisans is bringing it back — and STAGBEETLE is proud to be part of that story.',
     image: 'https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80',
     category: 'HERITAGE',
     readTime: '9 min read',

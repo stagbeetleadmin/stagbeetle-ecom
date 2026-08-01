@@ -15,17 +15,17 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
   if (!product) {
     return {
-      title: 'Garment Specification Not Found | Stag Beetle',
+      title: 'Garment Specification Not Found | STAGBEETLE',
       description: 'The requested garment specifications could not be retrieved from the atelier collection.'
     };
   }
 
   return {
-    title: `${product.title} - The Anatomy of Elegance | Stag Beetle`,
+    title: `${product.title} - One Of A Kind | STAGBEETLE`,
     description: product.description,
     openGraph: {
       type: 'website',
-      title: `${product.title} | Stag Beetle India`,
+      title: `${product.title} | STAGBEETLE India`,
       description: product.description,
       url: `https://stagbeetle.co.in/product/${product.id}`,
       images: [
@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${product.title} | Stag Beetle`,
+      title: `${product.title} | STAGBEETLE`,
       description: product.description,
       images: [product.images[0]]
     }

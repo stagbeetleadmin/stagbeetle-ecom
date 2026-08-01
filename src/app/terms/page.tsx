@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Terms of Use | Stag Beetle',
-  description: 'Terms and conditions governing your use of the Stag Beetle website and purchase of our products.',
+  title: 'Terms of Use | STAGBEETLE',
+  description: 'Terms and conditions governing your use of the STAGBEETLE website and purchase of our products.',
 };
 
 export default function TermsPage() {
@@ -31,7 +31,7 @@ export default function TermsPage() {
             <section>
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">1. Acceptance of Terms</h2>
               <p>
-                By accessing or using the Stag Beetle website (stagbeetle.co.in) or purchasing our products, you agree to be bound by these Terms of Use and our{' '}
+                By accessing or using the STAGBEETLE website (stagbeetle.co.in) or purchasing our products, you agree to be bound by these Terms of Use and our{' '}
                 <Link href="/privacy" className="text-gold-leaf hover:underline">Privacy Policy</Link>. If you do not agree, please do not use our website.
               </p>
             </section>
@@ -82,7 +82,7 @@ export default function TermsPage() {
             <section>
               <h2 className="font-display text-[20px] font-semibold text-on-surface mb-3">7. Limitation of Liability</h2>
               <p>
-                To the maximum extent permitted by law, Stag Beetle shall not be liable for any indirect, incidental, or consequential damages arising from your use of our website or products. Our total liability shall not exceed the value of the order giving rise to the claim.
+                To the maximum extent permitted by law, STAGBEETLE shall not be liable for any indirect, incidental, or consequential damages arising from your use of our website or products. Our total liability shall not exceed the value of the order giving rise to the claim.
               </p>
             </section>
 
