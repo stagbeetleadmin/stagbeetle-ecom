@@ -8,13 +8,15 @@ interface PriceDisplayProps {
 }
 
 const SIZE_CLASSES = {
-  sm: { price: 'text-[13px] font-bold', mrp: 'text-[11px]', badge: 'text-[9px] px-1.5 py-0.5' },
-  md: { price: 'text-[18px] font-bold', mrp: 'text-[13px]', badge: 'text-[10px] px-2 py-0.5' },
-  lg: { price: 'text-[26px] font-bold', mrp: 'text-[15px]', badge: 'text-[11px] px-2.5 py-1' },
+  sm: { price: 'text-[13px] font-bold', mrp: 'text-[11px]', discount: 'text-[11px]' },
+  md: { price: 'text-[18px] font-bold', mrp: 'text-[13px]', discount: 'text-[13px]' },
+  lg: { price: 'text-[26px] font-bold', mrp: 'text-[15px]', discount: 'text-[15px]' },
 };
 
 // Reused on product cards, product detail, and the admin Preview modal so the
 // discount math and formatting can't drift between customer surfaces.
+// Discount % uses the vivid red-orange convention shoppers already read as
+// "savings" from Myntra/Ajio/Amazon, rather than the site's gold/charcoal palette.
 export default function PriceDisplay({ price, mrp, size = 'md', className = '' }: PriceDisplayProps) {
   const classes = SIZE_CLASSES[size];
   const hasDiscount = !!mrp && mrp > price;
@@ -26,7 +28,7 @@ export default function PriceDisplay({ price, mrp, size = 'md', className = '' }
       {hasDiscount && (
         <>
           <span className={`${classes.mrp} text-gray-400 line-through`}>₹{mrp!.toLocaleString('en-IN')}</span>
-          <span className={`${classes.badge} font-bold text-green-700 bg-green-50 border border-green-200 rounded-sm uppercase tracking-wide`}>
+          <span className={`${classes.discount} font-bold text-[#E4443D]`}>
             {discountPct}% OFF
           </span>
         </>

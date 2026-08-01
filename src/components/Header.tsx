@@ -225,19 +225,22 @@ function HeaderInner() {
               {/* Account */}
               <div className="relative">
                 <button
-                  onClick={() => user ? setIsUserMenuOpen(!isUserMenuOpen) : triggerLoginModal()}
+                  onClick={() => (user || isAdmin) ? setIsUserMenuOpen(!isUserMenuOpen) : triggerLoginModal()}
                   className="p-1.5 text-[#052A42] hover:text-[#C5A059] transition-colors"
                   aria-label="Account"
                 >
                   <span className="material-symbols-outlined text-[20px]">person</span>
                 </button>
 
-                {user && isUserMenuOpen && (
+                {/* isAdmin can be true with no `user` — the atelier passcode grants admin
+                    access without creating a customer session, so this menu must not
+                    require `user` or a passcode-only admin gets bounced to login. */}
+                {(user || isAdmin) && isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-60 bg-white border border-gray-100 shadow-xl rounded-sm z-[150] py-2">
                     <div className="px-4 py-3 border-b border-gray-50">
                       <p className="text-[11px] text-[#C5A059] font-semibold tracking-widest uppercase mb-0.5">Signed in as</p>
-                      <p className="font-semibold text-[14px] text-gray-900 truncate">{user.name}</p>
-                      <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                      <p className="font-semibold text-[14px] text-gray-900 truncate">{user ? user.name : 'Administrator'}</p>
+                      <p className="text-[11px] text-gray-400 truncate">{user ? user.email : 'Atelier passcode session'}</p>
                     </div>
                     <div className="px-2 pt-2 space-y-1">
                       {isAdmin && (
@@ -246,10 +249,12 @@ function HeaderInner() {
                           Admin Portal
                         </Link>
                       )}
-                      <Link href="/profile" onClick={() => setIsUserMenuOpen(false)}
-                        className="block w-full text-left px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 rounded-sm transition-colors">
-                        My Profile
-                      </Link>
+                      {user && (
+                        <Link href="/profile" onClick={() => setIsUserMenuOpen(false)}
+                          className="block w-full text-left px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 rounded-sm transition-colors">
+                          My Profile
+                        </Link>
+                      )}
                       <button onClick={() => { logout(); setIsUserMenuOpen(false); }}
                         className="block w-full text-left px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 rounded-sm transition-colors">
                         Sign Out
