@@ -330,14 +330,75 @@ const setLocalCoupons = (coupons: Coupon[]) => {
 // PRODUCTS OPERATIONS
 // =========================================================================
 
+// In-memory cache for the product catalog — avoids re-fetching from Supabase on
+// every StorefrontContent mount (e.g. home -> product -> home again within the
+// same tab/session). Cleared automatically by any product write (add/update/
+// delete/bulk-upload) so edits show up immediately instead of waiting out the TTL.
+let productsCache: { data: Product[]; expiresAt: number } | null = null;
+const PRODUCTS_CACHE_TTL_MS = 60_000;
+
+const invalidateProductsCache = () => { productsCache = null; };
+
+// =========================================================================
+// REALTIME PRODUCT CHANGE NOTIFICATIONS
+// Uses Supabase Realtime's Broadcast channel — already part of
+// @supabase/supabase-js, no new dependency — to push a "something changed"
+// ping to every open tab the instant a product is written. Cheaper than
+// polling (nothing sent unless a write actually happens) and simpler than
+// Postgres Changes/CDC (no replication to configure on the table). It's a
+// best-effort nudge, not a correctness guarantee: the 60s cache TTL above is
+// the fallback if a tab misses the broadcast (e.g. reconnecting).
+// =========================================================================
+
+const PRODUCTS_CHANNEL_NAME = 'products-catalog';
+const PRODUCTS_CHANGED_EVENT = 'products-changed';
+
+type RealtimeChannel = ReturnType<NonNullable<typeof supabase>['channel']>;
+let productsChannel: RealtimeChannel | null = null;
+const productChangeListeners = new Set<() => void>();
+
+const ensureProductsChannel = (): RealtimeChannel | null => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  if (!productsChannel) {
+    productsChannel = supabase
+      .channel(PRODUCTS_CHANNEL_NAME)
+      .on('broadcast', { event: PRODUCTS_CHANGED_EVENT }, () => {
+        invalidateProductsCache();
+        productChangeListeners.forEach(fn => fn());
+      })
+      .subscribe();
+  }
+  return productsChannel;
+};
+
+const broadcastProductsChanged = () => {
+  const channel = ensureProductsChannel();
+  channel?.send({ type: 'broadcast', event: PRODUCTS_CHANGED_EVENT, payload: {} }).catch(() => {});
+};
+
+// Subscribe to live product catalog changes from other tabs/admins — e.g. the
+// storefront refreshing its grid the moment an admin edits a price elsewhere.
+// Returns an unsubscribe function; safe to call from multiple components.
+export const subscribeToProductChanges = (onChange: () => void): (() => void) => {
+  if (!isSupabaseConfigured || !supabase) return () => {};
+  ensureProductsChannel();
+  productChangeListeners.add(onChange);
+  return () => { productChangeListeners.delete(onChange); };
+};
+
 export const getProducts = async (): Promise<Product[]> => {
+  if (productsCache && productsCache.expiresAt > Date.now()) {
+    return productsCache.data;
+  }
+
   if (isSupabaseConfigured && supabase) {
     try {
       console.log("[Atelier DB] Fetching products from Supabase...");
       const { data, error } = await supabaseTimeout(supabase.from('products').select('*'));
       if (!error && data) {
         console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
-        return data as Product[];
+        productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
+        return productsCache.data;
       }
       if (error) console.warn("[Atelier DB] Supabase products query error:", error.message);
     } catch (e: any) {
@@ -363,6 +424,8 @@ export const getProductById = async (id: string): Promise<Product | null> => {
 };
 
 export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product> => {
+  invalidateProductsCache();
+  broadcastProductsChanged();
   const newProduct: Product = {
     ...product,
     id: `prod_${Math.random().toString(36).substr(2, 9)}`,
@@ -384,6 +447,8 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
   return newProduct;
 };
 export const updateProduct = async (id: string, updatedFields: Partial<Product>): Promise<Product | null> => {
+  invalidateProductsCache();
+  broadcastProductsChanged();
   let finalFields = { ...updatedFields };
 
   if (isSupabaseConfigured && supabase) {
@@ -476,6 +541,8 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
 };
 
 export const deleteProduct = async (id: string): Promise<boolean> => {
+  invalidateProductsCache();
+  broadcastProductsChanged();
   let imagesToDelete: string[] = [];
 
   // 1. Fetch product first to find images to delete
@@ -562,6 +629,8 @@ export const deleteStorageImage = async (url: string): Promise<boolean> => {
 };
 
 export const bulkUploadProducts = async (newProducts: Omit<Product, 'id'>[]): Promise<Product[]> => {
+  invalidateProductsCache();
+  broadcastProductsChanged();
   const productsToInsert = newProducts.map(p => ({
     ...p,
     id: `prod_${Math.random().toString(36).substr(2, 9)}`,

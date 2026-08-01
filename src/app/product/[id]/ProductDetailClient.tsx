@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Product, getColorHex, getColorName } from '@/lib/db';
+import { Product, getColorHex, getColorName, getProductById, subscribeToProductChanges } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -18,15 +18,26 @@ interface ProductDetailClientProps {
   colorVariants?: Product[];
 }
 
-export default function ProductDetailClient({ product, initialSuggestions, colorVariants = [] }: ProductDetailClientProps) {
+export default function ProductDetailClient({ product: initialProduct, initialSuggestions, colorVariants = [] }: ProductDetailClientProps) {
   const { addToCart } = useCart();
   const { isAdmin } = useAuth();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get('category') || '';
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
-  const [selectedColor, setSelectedColor] = useState(getColorName(product.colors[0]) || 'Default');
+  // Seeded from the server-fetched product, then kept live if an admin edits
+  // this exact product while it's open (price, description, images, etc.) —
+  // the shopper's own size/color selection below is left untouched by that.
+  const [product, setProduct] = useState(initialProduct);
+  const [selectedSize, setSelectedSize] = useState(initialProduct.sizes[0] || 'M');
+  const [selectedColor, setSelectedColor] = useState(getColorName(initialProduct.colors[0]) || 'Default');
   const [quantity, setQuantity] = useState(1);
   const [addedMessage, setAddedMessage] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToProductChanges(() => {
+      getProductById(initialProduct.id).then(fresh => { if (fresh) setProduct(fresh); });
+    });
+    return unsubscribe;
+  }, [initialProduct.id]);
 
   const handleAddToCart = () => {
     addToCart(product, selectedSize, selectedColor, quantity);

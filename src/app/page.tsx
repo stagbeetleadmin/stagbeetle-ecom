@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { getProducts, Product, getSkuBase, getColorHex, getColorName } from '@/lib/db';
+import { getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import PriceDisplay from '@/components/PriceDisplay';
 
@@ -508,6 +508,13 @@ function StorefrontContent() {
       setProducts(res);
       setIsLoading(false);
     });
+
+    // Live-refresh the storefront the moment an admin adds/edits/removes a
+    // product in another tab — no polling, just a push over Supabase Realtime.
+    const unsubscribe = subscribeToProductChanges(() => {
+      getProducts().then(setProducts);
+    });
+    return unsubscribe;
   }, []);
 
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
@@ -553,7 +560,12 @@ function StorefrontContent() {
     return matchCat && matchSub && matchSearch;
   });
 
-  const isFiltering = activeCategory !== 'all' || !!subcategoryParam || !!debouncedSearchTerm;
+  // Bare "/" (no query params at all) shows the full marketing homepage (hero
+  // carousel, category tiles, mood banners, steals). Any explicit browsing action —
+  // including clicking "ALL" to clear a subcategory, which still leaves `category=all`
+  // in the URL — keeps the compact shopping grid instead of snapping back to the
+  // marketing sections, which previously felt like an unexpected navigation.
+  const isFiltering = searchParams.has('category') || !!subcategoryParam || !!debouncedSearchTerm;
 
   // Infinite Scroll Logic
   const ITEMS_PER_PAGE = 8;

@@ -11,7 +11,7 @@ import {
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage,
-  getSkuBase, getColorHex, getColorName
+  getSkuBase, getColorHex, getColorName, subscribeToProductChanges
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 import PriceDisplay from '@/components/PriceDisplay';
@@ -292,6 +292,16 @@ function AdminDashboardContent() {
     if (isAdmin) {
       loadData();
     }
+  }, [isAdmin]);
+
+  // Live-refresh the catalog when another admin tab/session writes a product —
+  // silent (no loading spinner) so it doesn't interrupt whatever this admin is doing.
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unsubscribe = subscribeToProductChanges(() => {
+      getProducts().then(setProducts);
+    });
+    return unsubscribe;
   }, [isAdmin]);
 
   if (authLoading) {
