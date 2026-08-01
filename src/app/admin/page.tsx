@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
@@ -87,18 +87,32 @@ function AdminDashboardContent() {
     });
   }, [products, debouncedSkuSearch, categoryFilter, garmentTypeFilter, materialFilter]);
 
-  // Table pagination — keeps the DOM light regardless of catalog size (the filter
-  // itself is cheap; rendering thousands of <tr> rows at once is what actually costs).
-  // Clamped (not reset-via-effect) so a filter that shrinks the result set never
-  // strands the page out of range without needing an effect to fix it up.
-  const PRODUCTS_PER_PAGE = 25;
-  const [productPage, setProductPage] = useState(1);
-  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
-  const safeProductPage = Math.min(productPage, totalProductPages);
-  const paginatedProducts = useMemo(() => {
-    const start = (safeProductPage - 1) * PRODUCTS_PER_PAGE;
-    return filteredProducts.slice(start, start + PRODUCTS_PER_PAGE);
-  }, [filteredProducts, safeProductPage]);
+  // Infinite scroll — keeps the DOM light regardless of catalog size (the filter
+  // itself is cheap; rendering thousands of <tr> rows at once is what actually costs)
+  // without splitting results across discrete pages a user can miss.
+  const PRODUCTS_PER_CHUNK = 25;
+  const [visibleProductCount, setVisibleProductCount] = useState(PRODUCTS_PER_CHUNK);
+  // Clamped (not reset-via-effect) so a filter that shrinks the result set below the
+  // current count never strands it — no effect needed to fix it up.
+  const safeVisibleCount = Math.min(visibleProductCount, Math.max(filteredProducts.length, PRODUCTS_PER_CHUNK));
+  const paginatedProducts = useMemo(() => (
+    filteredProducts.slice(0, safeVisibleCount)
+  ), [filteredProducts, safeVisibleCount]);
+
+  // Sentinel element at the bottom of the table — loads the next chunk once it scrolls
+  // into view. A callback ref (not useEffect+useRef) so the observer correctly
+  // re-attaches if the sentinel unmounts/remounts as the result set changes.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    if (!node) return;
+    observerRef.current = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setVisibleProductCount(prev => prev + PRODUCTS_PER_CHUNK);
+      }
+    }, { rootMargin: '200px' });
+    observerRef.current.observe(node);
+  }, []);
 
   const { isAdmin, loading: authLoading, setAdminStatus, loginWithEmailPassword, logout } = useAuth();
   const [passcode, setPasscode] = useState('');
@@ -1266,7 +1280,7 @@ function AdminDashboardContent() {
                             <input
                               type="text"
                               value={skuSearch}
-                              onChange={(e) => { setSkuSearch(e.target.value); setProductPage(1); }}
+                              onChange={(e) => { setSkuSearch(e.target.value); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                               placeholder="Search by SKU or garment name..."
                               className="w-full bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 pl-9 pr-3 text-[13px] outline-none font-mono"
                             />
@@ -1274,7 +1288,7 @@ function AdminDashboardContent() {
                           <div className="flex flex-wrap gap-3">
                             <select
                               value={categoryFilter}
-                              onChange={(e) => { setCategoryFilter(e.target.value); setProductPage(1); }}
+                              onChange={(e) => { setCategoryFilter(e.target.value); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                               className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none"
                             >
                               <option value="">All Categories</option>
@@ -1282,7 +1296,7 @@ function AdminDashboardContent() {
                             </select>
                             <select
                               value={garmentTypeFilter}
-                              onChange={(e) => { setGarmentTypeFilter(e.target.value); setProductPage(1); }}
+                              onChange={(e) => { setGarmentTypeFilter(e.target.value); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                               className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none"
                             >
                               <option value="">All Garment Types</option>
@@ -1290,7 +1304,7 @@ function AdminDashboardContent() {
                             </select>
                             <select
                               value={materialFilter}
-                              onChange={(e) => { setMaterialFilter(e.target.value); setProductPage(1); }}
+                              onChange={(e) => { setMaterialFilter(e.target.value); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                               className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none max-w-[220px]"
                             >
                               <option value="">All Materials</option>
@@ -1299,7 +1313,7 @@ function AdminDashboardContent() {
                             {(skuSearch || categoryFilter || garmentTypeFilter || materialFilter) && (
                               <button
                                 type="button"
-                                onClick={() => { setSkuSearch(''); setCategoryFilter(''); setGarmentTypeFilter(''); setMaterialFilter(''); setProductPage(1); }}
+                                onClick={() => { setSkuSearch(''); setCategoryFilter(''); setGarmentTypeFilter(''); setMaterialFilter(''); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                                 className="text-[11px] font-semibold text-zinc-500 hover:text-red-600 underline"
                               >
                                 Clear Filters
@@ -1398,29 +1412,14 @@ function AdminDashboardContent() {
                             </tbody>
                           </table>
 
-                          {totalProductPages > 1 && (
-                            <div className="flex items-center justify-between pt-4 mt-2 border-t border-on-surface/5">
-                              <span className="text-[11px] text-zinc-400 font-medium">
-                                Page {safeProductPage} of {totalProductPages}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setProductPage(p => Math.max(1, p - 1))}
-                                  disabled={safeProductPage === 1}
-                                  className="w-8 h-8 flex items-center justify-center border border-zinc-200 rounded-sm text-zinc-500 hover:border-gold-leaf hover:text-gold-leaf transition-colors disabled:opacity-30 disabled:hover:border-zinc-200 disabled:hover:text-zinc-500"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setProductPage(p => Math.min(totalProductPages, p + 1))}
-                                  disabled={safeProductPage === totalProductPages}
-                                  className="w-8 h-8 flex items-center justify-center border border-zinc-200 rounded-sm text-zinc-500 hover:border-gold-leaf hover:text-gold-leaf transition-colors disabled:opacity-30 disabled:hover:border-zinc-200 disabled:hover:text-zinc-500"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-                                </button>
-                              </div>
+                          {/* Infinite scroll sentinel — every garment is reachable by scrolling, none hidden behind a page click */}
+                          {paginatedProducts.length < filteredProducts.length ? (
+                            <div ref={loadMoreRef} className="flex items-center justify-center py-5">
+                              <span className="animate-spin border-2 border-gold-leaf border-t-transparent w-4 h-4 rounded-full" />
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-[11px] text-zinc-400 font-medium border-t border-on-surface/5 mt-2">
+                              All {filteredProducts.length} garment{filteredProducts.length === 1 ? '' : 's'} loaded
                             </div>
                           )}
                         </div>
