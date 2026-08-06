@@ -7,17 +7,19 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
-  Product, Coupon, Order,
+  Product, Coupon, Order, InventoryRecord, ProductStockSummary,
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage,
-  getSkuBase, getColorHex, getColorName, subscribeToProductChanges
+  getSkuBase, getColorHex, getColorName, subscribeToProductChanges,
+  getInventorySummaryForProducts, getInventoryForProduct, setInventoryManual, subscribeToInventoryChanges
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 import PriceDisplay from '@/components/PriceDisplay';
 import RichTextEditor from '@/components/RichTextEditor';
 import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
 import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
+import InventoryPanel from '@/components/admin/InventoryPanel';
 
 const CATEGORY_OPTIONS = ['Men', 'Accessories'];
 const GARMENT_TYPE_OPTIONS = ['Shirt', 'Jeans', 'Tshirt', 'Track pant', 'Shorts', 'Jacket'];
@@ -32,6 +34,33 @@ const parseSku = (sku?: string) => {
   }
   return { styleCode: sku, colorCode: '' };
 };
+
+// At-a-glance stock state for the product table — mirrors the semantic
+// (not brand-accent) color convention used for discount badges elsewhere.
+function StockPill({ summary }: { summary?: ProductStockSummary }) {
+  if (!summary || summary.trackedSizes === 0) {
+    return <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Not tracked</span>;
+  }
+  if (summary.outOfStockSizes === summary.trackedSizes) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+        Out of stock
+      </span>
+    );
+  }
+  if (summary.lowStockSizes > 0 || summary.outOfStockSizes > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+        Low · {summary.totalAvailable} left
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+      {summary.totalAvailable} in stock
+    </span>
+  );
+}
 
 function AdminDashboardContent() {
   const router = useRouter();
@@ -52,6 +81,7 @@ function AdminDashboardContent() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
+  const [inventorySummary, setInventorySummary] = useState<Record<string, ProductStockSummary>>({});
 
   // Product catalog search + filters
   const [skuSearch, setSkuSearch] = useState('');
@@ -282,6 +312,8 @@ function AdminDashboardContent() {
       setCoupons(allCoupons);
       const allOrders = await getOrders();
       setOrders(allOrders);
+      const stockSummary = await getInventorySummaryForProducts();
+      setInventorySummary(stockSummary);
     } catch (e) {
       console.error(e);
     }
@@ -292,6 +324,16 @@ function AdminDashboardContent() {
     if (isAdmin) {
       loadData();
     }
+  }, [isAdmin]);
+
+  // Live-refresh stock levels when a sale, a Galla sync, or another admin
+  // changes them — silent, no loading spinner.
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unsubscribe = subscribeToInventoryChanges(() => {
+      getInventorySummaryForProducts().then(setInventorySummary);
+    });
+    return unsubscribe;
   }, [isAdmin]);
 
   // Live-refresh the catalog when another admin tab/session writes a product —
@@ -766,6 +808,16 @@ function AdminDashboardContent() {
                 <span className="material-symbols-outlined text-[18px]">receipt_long</span>
                 ORDER REGISTRY
               </button>
+
+              <div className="border-t border-on-surface/10 my-2"></div>
+
+              <Link
+                href="/admin/integration"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold text-on-surface-variant hover:bg-surface-dim hover:text-on-surface"
+              >
+                <span className="material-symbols-outlined text-[18px]">sync_alt</span>
+                GALLA INTEGRATION DOCS
+              </Link>
             </div>
 
             {/* Dashboard Workspace */}
@@ -1366,6 +1418,7 @@ function AdminDashboardContent() {
                                 <th className="pb-3">CATEGORY</th>
                                 <th className="pb-3 text-right">PRICE</th>
                                 <th className="pb-3 text-center">RATING</th>
+                                <th className="pb-3 text-center">STOCK</th>
                                 <th className="pb-3 text-right">CONTROLS</th>
                               </tr>
                             </thead>
@@ -1395,6 +1448,9 @@ function AdminDashboardContent() {
                                     <PriceDisplay price={prod.price} mrp={prod.mrp} size="sm" className="justify-end" />
                                   </td>
                                   <td className="py-4 text-center font-semibold text-on-surface-variant">{prod.rating || 5.0}</td>
+                                  <td className="py-4 text-center">
+                                    <StockPill summary={inventorySummary[prod.id]} />
+                                  </td>
                                   <td className="py-4 text-right space-x-2 whitespace-nowrap">
                                     <Link
                                       href={`/product/${prod.id}`}
@@ -2022,6 +2078,20 @@ function AdminDashboardContent() {
                     )}
                   </div>
                 </div>
+
+                {/* Stock — only meaningful once the garment (and its SKU) actually exists */}
+                {editingProduct && (
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
+                      STOCK PER SIZE
+                    </span>
+                    <InventoryPanel
+                      productId={editingProduct.id}
+                      productSku={productForm.sku}
+                      sizes={selectedSizes}
+                    />
+                  </div>
+                )}
 
                 {/* Images */}
                 <div className="sm:col-span-2 space-y-2">

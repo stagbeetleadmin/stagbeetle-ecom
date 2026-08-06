@@ -18,6 +18,20 @@ export interface Product {
   rating?: number;
 }
 
+// One size of one product — the unit stock is actually tracked against.
+// SKU convention matches the admin form's existing preview: STYLE-COLOR-SIZE.
+export interface InventoryRecord {
+  variant_id: string;
+  sku: string;
+  size: string;
+  quantity_on_hand: number;
+  quantity_reserved: number;
+  quantity_available: number; // on_hand - reserved, floored at 0
+  low_stock_threshold: number;
+  sync_source: 'external_pos' | 'manual_admin' | 'order_deduction';
+  last_synced_at: string | null;
+}
+
 export interface OrderItem {
   product_id: string;
   title: string;
@@ -435,7 +449,10 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.from('products').insert([newProduct]).select().single();
-      if (!error && data) return data as Product;
+      if (!error && data) {
+        await ensureVariantsForProduct(data.id, data.sku, data.sizes || []);
+        return data as Product;
+      }
     } catch (e) {
       console.warn("Supabase addProduct failed, falling back to mock:", e);
     }
@@ -523,7 +540,10 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
 
     try {
       const { data, error } = await supabase.from('products').update(finalFields).eq('id', id).select().single();
-      if (!error && data) return data as Product;
+      if (!error && data) {
+        await ensureVariantsForProduct(data.id, data.sku, data.sizes || []);
+        return data as Product;
+      }
       if (error) console.warn("Supabase updateProduct returned error:", error.message);
     } catch (e) {
       console.warn(`Supabase updateProduct failed for id ${id}, falling back to mock:`, e);
@@ -650,6 +670,415 @@ export const bulkUploadProducts = async (newProducts: Omit<Product, 'id'>[]): Pr
   const combined = [...products, ...productsToInsert];
   setLocalProducts(combined);
   return productsToInsert;
+};
+
+// =========================================================================
+// INVENTORY OPERATIONS
+//
+// product_variants turns each size of a product into an addressable,
+// stockable unit (SKU convention: STYLE-COLOR-SIZE). inventory holds the
+// current count for that unit. Source of truth is the external POS
+// (Galla) once /api/inventory/sync is wired up to it; sync_source stays
+// 'manual_admin' until then. A variant with no inventory row at all is
+// treated as "not yet tracked" — purchasable, not sold out — so a
+// product never silently breaks just because its stock hasn't been
+// synced yet.
+// =========================================================================
+
+const INVENTORY_CHANNEL_NAME = 'inventory-stock';
+const INVENTORY_CHANGED_EVENT = 'inventory-changed';
+
+let inventoryChannel: RealtimeChannel | null = null;
+const inventoryChangeListeners = new Set<() => void>();
+
+const ensureInventoryChannel = (): RealtimeChannel | null => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  if (!inventoryChannel) {
+    inventoryChannel = supabase
+      .channel(INVENTORY_CHANNEL_NAME)
+      .on('broadcast', { event: INVENTORY_CHANGED_EVENT }, () => {
+        inventoryChangeListeners.forEach(fn => fn());
+      })
+      .subscribe();
+  }
+  return inventoryChannel;
+};
+
+const broadcastInventoryChanged = () => {
+  const channel = ensureInventoryChannel();
+  channel?.send({ type: 'broadcast', event: INVENTORY_CHANGED_EVENT, payload: {} }).catch(() => {});
+};
+
+// Subscribe to live stock changes — e.g. a product page flips a size to "Out
+// of Stock" the moment someone else buys the last one. Returns an unsubscribe function.
+export const subscribeToInventoryChanges = (onChange: () => void): (() => void) => {
+  if (!isSupabaseConfigured || !supabase) return () => {};
+  ensureInventoryChannel();
+  inventoryChangeListeners.add(onChange);
+  return () => { inventoryChangeListeners.delete(onChange); };
+};
+
+const toInventoryRecord = (variant: { id: string; sku: string; size: string }, inv?: {
+  quantity_on_hand: number; quantity_reserved: number; low_stock_threshold: number;
+  sync_source: string; last_synced_at: string | null;
+} | null): InventoryRecord => ({
+  variant_id: variant.id,
+  sku: variant.sku,
+  size: variant.size,
+  quantity_on_hand: inv?.quantity_on_hand ?? 0,
+  quantity_reserved: inv?.quantity_reserved ?? 0,
+  quantity_available: inv ? Math.max(0, inv.quantity_on_hand - inv.quantity_reserved) : Infinity, // untracked = don't block a sale
+  low_stock_threshold: inv?.low_stock_threshold ?? 3,
+  sync_source: (inv?.sync_source as InventoryRecord['sync_source']) ?? 'manual_admin',
+  last_synced_at: inv?.last_synced_at ?? null,
+});
+
+export const getInventoryForProduct = async (productId: string): Promise<InventoryRecord[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data: variants, error: vErr } = await supabaseTimeout(
+      supabase.from('product_variants').select('id,sku,size').eq('product_id', productId)
+    );
+    if (vErr || !variants || variants.length === 0) return [];
+
+    const variantIds = variants.map((v: any) => v.id);
+    const { data: invRows } = await supabaseTimeout(
+      supabase.from('inventory').select('*').in('variant_id', variantIds)
+    );
+    const invByVariant = new Map((invRows || []).map((r: any) => [r.variant_id, r]));
+
+    return variants.map((v: any) => toInventoryRecord(v, invByVariant.get(v.id) as any));
+  } catch (e: any) {
+    console.warn('[Atelier DB] getInventoryForProduct failed:', e.message || e);
+    return [];
+  }
+};
+
+export interface ProductStockSummary {
+  totalAvailable: number;
+  trackedSizes: number;
+  outOfStockSizes: number;
+  lowStockSizes: number;
+}
+
+// One bulk fetch for the whole catalog rather than one query per product —
+// keeps the admin table's stock column cheap even at a few thousand SKUs.
+// If this ever needs to scale further (tens of thousands of variants), page
+// it the same way the products table itself now does.
+export const getInventorySummaryForProducts = async (): Promise<Record<string, ProductStockSummary>> => {
+  if (!isSupabaseConfigured || !supabase) return {};
+  try {
+    const { data: variants } = await supabaseTimeout(
+      supabase.from('product_variants').select('id,product_id')
+    );
+    if (!variants || variants.length === 0) return {};
+
+    const { data: invRows } = await supabaseTimeout(
+      supabase.from('inventory').select('variant_id,quantity_on_hand,quantity_reserved,low_stock_threshold')
+    );
+    const invByVariant = new Map<string, { quantity_on_hand: number; quantity_reserved: number; low_stock_threshold: number }>(
+      (invRows || []).map((r: any) => [r.variant_id, r])
+    );
+
+    const summary: Record<string, ProductStockSummary> = {};
+    for (const v of variants as any[]) {
+      const inv = invByVariant.get(v.id);
+      if (!summary[v.product_id]) {
+        summary[v.product_id] = { totalAvailable: 0, trackedSizes: 0, outOfStockSizes: 0, lowStockSizes: 0 };
+      }
+      if (!inv) continue; // untracked size — doesn't count toward tracked totals
+      const available = Math.max(0, inv.quantity_on_hand - inv.quantity_reserved);
+      summary[v.product_id].totalAvailable += available;
+      summary[v.product_id].trackedSizes += 1;
+      if (available === 0) summary[v.product_id].outOfStockSizes += 1;
+      else if (available <= inv.low_stock_threshold) summary[v.product_id].lowStockSizes += 1;
+    }
+    return summary;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getInventorySummaryForProducts failed:', e.message || e);
+    return {};
+  }
+};
+
+export const getInventoryBySku = async (sku: string): Promise<InventoryRecord | null> => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data: variant, error: vErr } = await supabaseTimeout(
+      supabase.from('product_variants').select('id,sku,size').eq('sku', sku).maybeSingle()
+    );
+    if (vErr || !variant) return null;
+
+    const { data: inv } = await supabaseTimeout(
+      supabase.from('inventory').select('*').eq('variant_id', variant.id).maybeSingle()
+    );
+    return toInventoryRecord(variant, inv as any);
+  } catch (e: any) {
+    console.warn(`[Atelier DB] getInventoryBySku failed for ${sku}:`, e.message || e);
+    return null;
+  }
+};
+
+// Creates any missing size-variants for a product (e.g. a new size was added
+// in the admin form). Never touches an existing variant's stock — only fills gaps.
+export const ensureVariantsForProduct = async (productId: string, sku: string | undefined, sizes: string[]): Promise<void> => {
+  if (!isSupabaseConfigured || !supabase || !sku?.trim()) return;
+  const cleanSizes = sizes.filter(s => s && s !== 'One Size');
+  if (cleanSizes.length === 0) return;
+
+  try {
+    const rows = cleanSizes.map(size => ({
+      product_id: productId,
+      sku: `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`,
+      size,
+    }));
+    await supabase.from('product_variants').upsert(rows, { onConflict: 'product_id,size', ignoreDuplicates: true });
+  } catch (e: any) {
+    console.warn(`[Atelier DB] ensureVariantsForProduct failed for ${sku}:`, e.message || e);
+  }
+};
+
+// Admin manual stock entry/correction — the fallback before (and alongside) Galla sync.
+export const setInventoryManual = async (productId: string, sku: string, size: string, quantity: number): Promise<InventoryRecord | null> => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+    const { data: variant, error: vErr } = await supabase
+      .from('product_variants')
+      .upsert([{ product_id: productId, sku: variantSku, size }], { onConflict: 'product_id,size' })
+      .select('id,sku,size')
+      .single();
+    if (vErr || !variant) {
+      console.warn('[Atelier DB] setInventoryManual variant upsert failed:', vErr?.message);
+      return null;
+    }
+
+    const { data: inv, error: iErr } = await supabase
+      .from('inventory')
+      .upsert(
+        [{ variant_id: variant.id, quantity_on_hand: Math.max(0, quantity), sync_source: 'manual_admin', last_synced_at: new Date().toISOString() }],
+        { onConflict: 'variant_id' }
+      )
+      .select('*')
+      .single();
+    if (iErr) {
+      console.warn('[Atelier DB] setInventoryManual inventory upsert failed:', iErr.message);
+      return null;
+    }
+
+    broadcastInventoryChanged();
+    return toInventoryRecord(variant, inv as any);
+  } catch (e: any) {
+    console.warn('[Atelier DB] setInventoryManual failed:', e.message || e);
+    return null;
+  }
+};
+
+// Atomically decrements stock for each purchased line item — via a Postgres
+// function (see migration 20260802000100), not a JS read-then-write, so two
+// simultaneous checkouts for the last unit can't both "succeed" client-side.
+// Untracked variants (no inventory row) are treated as always-available and
+// always report success, matching the "don't block a sale we have no data
+// on" policy used everywhere else in this module.
+export const decrementInventoryForOrder = async (
+  items: { product_id: string; selected_size: string; quantity: number }[]
+): Promise<{ product_id: string; selected_size: string; sku: string | null; success: boolean }[]> => {
+  if (!isSupabaseConfigured || !supabase) {
+    return items.map(i => ({ product_id: i.product_id, selected_size: i.selected_size, sku: null, success: true }));
+  }
+
+  const results: { product_id: string; selected_size: string; sku: string | null; success: boolean }[] = [];
+
+  for (const item of items) {
+    try {
+      const { data: variant } = await supabase
+        .from('product_variants')
+        .select('id,sku')
+        .eq('product_id', item.product_id)
+        .eq('size', item.selected_size)
+        .maybeSingle();
+
+      if (!variant) {
+        // Not tracked — allow the sale, nothing to decrement.
+        results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: null, success: true });
+        continue;
+      }
+
+      const { data: applied, error } = await supabase.rpc('decrement_inventory_on_hand', {
+        p_variant_id: variant.id,
+        p_qty: item.quantity,
+      });
+
+      await supabase.from('inventory_sync_log').insert([{
+        direction: 'outbound',
+        variant_sku: variant.sku,
+        payload: { reason: 'order_deduction', quantity: item.quantity },
+        status: error ? 'failed' : applied ? 'applied' : 'failed',
+        error_message: error?.message || (!applied ? 'insufficient stock at time of decrement' : null),
+      }]);
+
+      results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: variant.sku, success: !error && !!applied });
+    } catch (e: any) {
+      console.warn(`[Atelier DB] decrementInventoryForOrder failed for ${item.product_id}/${item.selected_size}:`, e.message || e);
+      results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: null, success: false });
+    }
+  }
+
+  broadcastInventoryChanged();
+  return results;
+};
+
+// Read-only pre-payment check — surfaces an "out of stock" error before
+// charging the customer, rather than after. Best-effort: on any lookup
+// failure it fails open (assumes available) so a transient DB hiccup never
+// blocks a sale outright; the atomic decrement after payment is still the
+// real backstop against overselling.
+export const checkStockForOrderItems = async (
+  items: { product_id: string; title: string; selected_size: string; quantity: number }[]
+): Promise<{ product_id: string; title: string; selected_size: string; available: boolean }[]> => {
+  if (!isSupabaseConfigured || !supabase) {
+    return items.map(i => ({ product_id: i.product_id, title: i.title, selected_size: i.selected_size, available: true }));
+  }
+
+  const results: { product_id: string; title: string; selected_size: string; available: boolean }[] = [];
+  for (const item of items) {
+    try {
+      const { data: variant } = await supabase
+        .from('product_variants')
+        .select('id')
+        .eq('product_id', item.product_id)
+        .eq('size', item.selected_size)
+        .maybeSingle();
+
+      if (!variant) {
+        results.push({ ...item, available: true }); // untracked — don't block
+        continue;
+      }
+
+      const { data: inv } = await supabase
+        .from('inventory')
+        .select('quantity_on_hand,quantity_reserved')
+        .eq('variant_id', variant.id)
+        .maybeSingle();
+
+      const available = !inv || (inv.quantity_on_hand - inv.quantity_reserved) >= item.quantity;
+      results.push({ ...item, available });
+    } catch {
+      results.push({ ...item, available: true }); // fail open
+    }
+  }
+  return results;
+};
+
+export interface InboundInventoryEvent {
+  external_event_id: string;
+  sku: string; // variant SKU, e.g. SATN-CRM-M
+  quantity_on_hand: number;
+  occurred_at: string; // ISO timestamp
+  location_code?: string; // accepted and logged, not yet used to split stock by location
+}
+
+export type InboundSyncStatus = 'applied' | 'skipped_duplicate' | 'skipped_stale' | 'sku_not_found' | 'failed';
+
+// Applies a batch of inbound stock events (e.g. from Galla). Called by
+// /api/inventory/sync after signature verification. Idempotent: a replayed
+// external_event_id is a no-op. Out-of-order deliveries are handled by
+// rejecting any event older than what's already stored for that SKU.
+//
+// dryRun: validates and reports what WOULD happen (unknown SKU, stale,
+// duplicate, or applied) without writing to inventory or the sync log — lets
+// an integration partner test their payload shape against real data before
+// they're trusted to actually move stock.
+export const applyInboundInventorySync = async (
+  events: InboundInventoryEvent[],
+  dryRun = false
+): Promise<{ external_event_id: string; status: InboundSyncStatus }[]> => {
+  if (!isSupabaseConfigured || !supabase) {
+    return events.map(e => ({ external_event_id: e.external_event_id, status: 'failed' as const }));
+  }
+
+  const results: { external_event_id: string; status: InboundSyncStatus }[] = [];
+  let anyApplied = false;
+
+  for (const event of events) {
+    try {
+      // Idempotency: has this exact event already been processed?
+      const { data: existingLog } = await supabase
+        .from('inventory_sync_log')
+        .select('id')
+        .eq('direction', 'inbound')
+        .eq('external_event_id', event.external_event_id)
+        .maybeSingle();
+
+      if (existingLog) {
+        results.push({ external_event_id: event.external_event_id, status: 'skipped_duplicate' });
+        continue;
+      }
+
+      const { data: variant } = await supabase
+        .from('product_variants')
+        .select('id')
+        .eq('sku', event.sku)
+        .maybeSingle();
+
+      if (!variant) {
+        if (!dryRun) {
+          await supabase.from('inventory_sync_log').insert([{
+            direction: 'inbound', external_event_id: event.external_event_id, variant_sku: event.sku,
+            payload: event, status: 'sku_not_found', error_message: `No product_variants row for SKU ${event.sku}`,
+          }]);
+        }
+        results.push({ external_event_id: event.external_event_id, status: 'sku_not_found' });
+        continue;
+      }
+
+      const { data: existingInv } = await supabase
+        .from('inventory')
+        .select('last_synced_at')
+        .eq('variant_id', variant.id)
+        .maybeSingle();
+
+      if (existingInv?.last_synced_at && new Date(event.occurred_at) <= new Date(existingInv.last_synced_at)) {
+        if (!dryRun) {
+          await supabase.from('inventory_sync_log').insert([{
+            direction: 'inbound', external_event_id: event.external_event_id, variant_sku: event.sku,
+            payload: event, status: 'skipped_stale',
+          }]);
+        }
+        results.push({ external_event_id: event.external_event_id, status: 'skipped_stale' });
+        continue;
+      }
+
+      if (dryRun) {
+        results.push({ external_event_id: event.external_event_id, status: 'applied' });
+        continue;
+      }
+
+      const { error: upsertErr } = await supabase.from('inventory').upsert([{
+        variant_id: variant.id,
+        quantity_on_hand: Math.max(0, event.quantity_on_hand),
+        sync_source: 'external_pos',
+        last_synced_at: event.occurred_at,
+      }], { onConflict: 'variant_id' });
+
+      await supabase.from('inventory_sync_log').insert([{
+        direction: 'inbound', external_event_id: event.external_event_id, variant_sku: event.sku,
+        payload: event, status: upsertErr ? 'failed' : 'applied', error_message: upsertErr?.message,
+      }]);
+
+      if (upsertErr) {
+        results.push({ external_event_id: event.external_event_id, status: 'failed' });
+      } else {
+        anyApplied = true;
+        results.push({ external_event_id: event.external_event_id, status: 'applied' });
+      }
+    } catch (e: any) {
+      console.warn(`[Atelier DB] applyInboundInventorySync failed for ${event.external_event_id}:`, e.message || e);
+      results.push({ external_event_id: event.external_event_id, status: 'failed' });
+    }
+  }
+
+  if (anyApplied) broadcastInventoryChanged();
+  return results;
 };
 
 // =========================================================================

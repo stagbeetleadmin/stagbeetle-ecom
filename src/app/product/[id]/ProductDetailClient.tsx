@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Product, getColorHex, getColorName, getProductById, subscribeToProductChanges } from '@/lib/db';
+import { Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -32,12 +32,51 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
   const [quantity, setQuantity] = useState(1);
   const [addedMessage, setAddedMessage] = useState(false);
 
+  // Per-size stock — a size with no record at all is treated as available
+  // (untracked, matches the same "don't block a sale we have no data on"
+  // policy the backend uses), so this never breaks a product that hasn't
+  // been synced with Galla yet.
+  const [stockBySize, setStockBySize] = useState<Record<string, InventoryRecord>>({});
+  const hasAutoSelectedRef = useRef(false);
+
+  const refreshStock = useCallback(() => {
+    getInventoryForProduct(initialProduct.id).then(records => {
+      const bySize: Record<string, InventoryRecord> = {};
+      records.forEach(r => { bySize[r.size] = r; });
+      setStockBySize(bySize);
+
+      // Once, on first load only: if the pre-selected size (just the first
+      // in the list) turns out to already be sold out, quietly land on the
+      // first available size instead. Never re-runs on a later live update,
+      // so we don't yank the selection out from under someone mid-decision.
+      if (!hasAutoSelectedRef.current) {
+        hasAutoSelectedRef.current = true;
+        setSelectedSize(current => {
+          if (bySize[current]?.quantity_available !== 0) return current;
+          const firstAvailable = initialProduct.sizes.find(s => bySize[s]?.quantity_available !== 0);
+          return firstAvailable || current;
+        });
+      }
+    });
+  }, [initialProduct.id, initialProduct.sizes]);
+
+  useEffect(() => { refreshStock(); }, [refreshStock]);
+
   useEffect(() => {
     const unsubscribe = subscribeToProductChanges(() => {
       getProductById(initialProduct.id).then(fresh => { if (fresh) setProduct(fresh); });
     });
     return unsubscribe;
   }, [initialProduct.id]);
+
+  // Live "someone else just bought the last one" updates
+  useEffect(() => {
+    const unsubscribe = subscribeToInventoryChanges(refreshStock);
+    return unsubscribe;
+  }, [refreshStock]);
+
+  const isSizeOutOfStock = (size: string) => stockBySize[size]?.quantity_available === 0;
+  const selectedSizeOutOfStock = isSizeOutOfStock(selectedSize);
 
   const handleAddToCart = () => {
     addToCart(product, selectedSize, selectedColor, quantity);
@@ -140,19 +179,26 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                         <span className="text-[11px] text-[#C5A059] font-semibold cursor-pointer hover:underline">Size Guide</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {product.sizes.map(size => (
-                          <button
-                            key={size}
-                            onClick={() => setSelectedSize(size)}
-                            className={`px-4 py-2 text-[12px] font-bold border transition-all ${
-                              selectedSize === size
-                                ? 'bg-[#0D1B2A] border-[#0D1B2A] text-white'
-                                : 'border-gray-200 text-gray-700 hover:border-gray-400 bg-white'
-                            }`}
-                          >
-                            {size}
-                          </button>
-                        ))}
+                        {product.sizes.map(size => {
+                          const outOfStock = isSizeOutOfStock(size);
+                          return (
+                            <button
+                              key={size}
+                              onClick={() => !outOfStock && setSelectedSize(size)}
+                              disabled={outOfStock}
+                              title={outOfStock ? `${size} is out of stock` : undefined}
+                              className={`relative px-4 py-2 text-[12px] font-bold border transition-all ${
+                                outOfStock
+                                  ? 'border-gray-100 text-gray-300 bg-gray-50 cursor-not-allowed line-through'
+                                  : selectedSize === size
+                                    ? 'bg-[#0D1B2A] border-[#0D1B2A] text-white'
+                                    : 'border-gray-200 text-gray-700 hover:border-gray-400 bg-white'
+                              }`}
+                            >
+                              {size}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -236,9 +282,10 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
 
                     <button
                       onClick={handleAddToCart}
-                      className="w-full bg-[#0D1B2A] text-white py-3.5 text-[11px] font-bold tracking-[0.25em] uppercase hover:bg-[#C5A059] transition-colors"
+                      disabled={selectedSizeOutOfStock}
+                      className="w-full bg-[#0D1B2A] text-white py-3.5 text-[11px] font-bold tracking-[0.25em] uppercase hover:bg-[#C5A059] transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-200"
                     >
-                      Add to Bag
+                      {selectedSizeOutOfStock ? 'Out of Stock' : 'Add to Bag'}
                     </button>
 
                     {addedMessage && (

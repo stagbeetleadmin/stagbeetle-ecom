@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import { createOrder, Product, validateCoupon, Coupon } from '@/lib/db';
+import { createOrder, Product, validateCoupon, Coupon, checkStockForOrderItems, decrementInventoryForOrder } from '@/lib/db';
+import { notifyGallaOfSale } from '@/lib/galla';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
@@ -197,6 +198,23 @@ export default function Checkout() {
         tracking_number: 'DKV' + Math.floor(100000000 + Math.random() * 900000000),
       });
 
+      // Payment is already captured at this point, so a stock or Galla hiccup
+      // here must never block the order confirmation the customer sees —
+      // both are best-effort, logged, and safe to re-drive later.
+      try {
+        const decremented = await decrementInventoryForOrder(
+          orderItems.map(item => ({ product_id: item.product_id, selected_size: item.selected_size, quantity: item.quantity }))
+        );
+        const gallaItems = decremented
+          .filter((d): d is typeof d & { sku: string } => !!d.sku)
+          .map(d => ({ sku: d.sku, quantity: orderItems.find(i => i.product_id === d.product_id && i.selected_size === d.selected_size)?.quantity || 1 }));
+        if (gallaItems.length > 0) {
+          notifyGallaOfSale(result.id, gallaItems); // fire-and-logged, not awaited — never delay redirect to /success
+        }
+      } catch (invErr) {
+        console.warn('Post-payment inventory sync failed (order still confirmed):', invErr);
+      }
+
       if (user) {
         if (saveAddressToProfile) {
           await saveAddress(formData.address, formData.city, formData.zip, formData.country, formData.phone);
@@ -231,6 +249,20 @@ export default function Checkout() {
     setError('');
 
     try {
+      // Step 0: catch an obviously sold-out item before charging the customer for it —
+      // the atomic decrement after payment is still the real backstop against overselling
+      const stockCheck = await checkStockForOrderItems(
+        cart.map(item => ({ product_id: item.product_id, title: item.title, selected_size: item.selected_size, quantity: item.quantity }))
+      );
+      const unavailable = stockCheck.filter(i => !i.available);
+      if (unavailable.length > 0) {
+        setError(
+          `Sorry, we no longer have enough stock for: ${unavailable.map(i => `${i.title} (${i.selected_size})`).join(', ')}. Please update your bag and try again.`
+        );
+        setRazorpayLoading(false);
+        return;
+      }
+
       // Step 1: Create Razorpay order on our server
       const res = await fetch('/api/razorpay/create-order', {
         method: 'POST',
