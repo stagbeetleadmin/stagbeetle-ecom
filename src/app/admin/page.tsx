@@ -14,7 +14,7 @@ import {
   getSkuBase, getColorHex, getColorName, subscribeToProductChanges,
   getInventorySummaryForProducts, getInventoryForProduct, setInventoryManual, subscribeToInventoryChanges,
   getPlusSizesList, getPlusSizesConfig, setPlusSizesConfig, subscribeToPlusSizesChanges,
-  GARMENT_GROUPS, GARMENT_GROUP_OF, SIZE_CHART_PRESETS
+  GARMENT_GROUPS, GARMENT_GROUP_OF, getDefaultSizeChart
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 import PriceDisplay from '@/components/PriceDisplay';
@@ -115,8 +115,13 @@ function AdminDashboardContent() {
   const [skuSearch, setSkuSearch] = useState('');
   const [debouncedSkuSearch, setDebouncedSkuSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [garmentGroupFilter, setGarmentGroupFilter] = useState(''); // 'Tops' | 'Bottoms' | ''
   const [garmentTypeFilter, setGarmentTypeFilter] = useState('');
   const [materialFilter, setMaterialFilter] = useState('');
+
+  // Garment Type options narrow to the selected group (Tops/Bottoms), same
+  // cascading relationship as the add/edit form's own group -> type selects.
+  const garmentTypeFilterOptions = garmentGroupFilter ? GARMENT_GROUPS[garmentGroupFilter] : GARMENT_TYPE_OPTIONS;
 
   // Debounce the search box (same 300ms convention as the storefront search) so
   // filtering — and the table re-render it triggers — doesn't run on every keystroke.
@@ -139,11 +144,12 @@ function AdminDashboardContent() {
     return products.filter(p => {
       if (query && !(p.sku || '').toLowerCase().includes(query) && !p.title.toLowerCase().includes(query)) return false;
       if (categoryFilter && p.category !== categoryFilter) return false;
+      if (garmentGroupFilter && GARMENT_GROUP_OF[p.subcategory || ''] !== garmentGroupFilter) return false;
       if (garmentTypeFilter && p.subcategory !== garmentTypeFilter) return false;
       if (materialFilter && p.material !== materialFilter) return false;
       return true;
     });
-  }, [products, debouncedSkuSearch, categoryFilter, garmentTypeFilter, materialFilter]);
+  }, [products, debouncedSkuSearch, categoryFilter, garmentGroupFilter, garmentTypeFilter, materialFilter]);
 
   // Infinite scroll — keeps the DOM light regardless of catalog size (the filter
   // itself is cheap; rendering thousands of <tr> rows at once is what actually costs)
@@ -831,22 +837,26 @@ function AdminDashboardContent() {
 
           <div className="flex flex-col lg:flex-row gap-8 items-start">
 
-            {/* Sidebar Navigation — collapses to an icon rail on desktop to give the
+            {/* Sidebar Navigation — sticks in place while the workspace scrolls (like a
+                modern app shell), and collapses to an icon rail on desktop to give the
                 workspace (especially the catalog table) more room; persisted via localStorage. */}
             <div
-              className={`shrink-0 w-full bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-1.5 transition-[width] duration-200 ${sidebarCollapsed ? 'lg:w-[68px] lg:p-2.5' : 'lg:w-64'
+              className={`relative shrink-0 w-full bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-1.5 transition-[width] duration-200 lg:sticky lg:top-20 lg:self-start ${sidebarCollapsed ? 'lg:w-[68px] lg:p-2.5' : 'lg:w-64'
                 }`}
             >
+              {/* Collapse/expand handle — sits on the sidebar's outer edge, not in the nav
+                  list itself, so it reads as a panel control rather than another menu item.
+                  Chevron direction mirrors the classic edge-toggle idiom (VS Code, Gmail, etc). */}
               <button
                 type="button"
                 onClick={toggleSidebar}
                 title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                className="hidden lg:flex w-full items-center justify-center gap-2 px-2 py-2 mb-1.5 rounded-sm text-on-surface-variant hover:bg-surface-dim hover:text-on-surface transition-all"
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className="hidden lg:flex absolute -top-3 -right-3 w-7 h-7 items-center justify-center rounded-full bg-white border border-on-surface/15 shadow-md text-zinc-500 hover:text-primary hover:border-primary/40 transition-all z-10"
               >
-                <span className="material-symbols-outlined text-[18px]">
-                  {sidebarCollapsed ? 'dock_to_right' : 'dock_to_left'}
+                <span className="material-symbols-outlined text-[16px]">
+                  {sidebarCollapsed ? 'chevron_right' : 'chevron_left'}
                 </span>
-                {!sidebarCollapsed && <span className="text-[10.5px] font-label-caps tracking-wider font-semibold">COLLAPSE</span>}
               </button>
 
               <button
@@ -1481,12 +1491,28 @@ function AdminDashboardContent() {
                               {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                             <select
+                              value={garmentGroupFilter}
+                              onChange={(e) => {
+                                const nextGroup = e.target.value;
+                                setGarmentGroupFilter(nextGroup);
+                                // Drop a Garment Type pick that no longer belongs to the newly-chosen group
+                                if (nextGroup && garmentTypeFilter && !GARMENT_GROUPS[nextGroup].includes(garmentTypeFilter)) {
+                                  setGarmentTypeFilter('');
+                                }
+                                setVisibleProductCount(PRODUCTS_PER_CHUNK);
+                              }}
+                              className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none"
+                            >
+                              <option value="">Tops &amp; Bottoms</option>
+                              {GARMENT_GROUP_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                            <select
                               value={garmentTypeFilter}
                               onChange={(e) => { setGarmentTypeFilter(e.target.value); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                               className="bg-white border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[12px] outline-none"
                             >
                               <option value="">All Garment Types</option>
-                              {GARMENT_TYPE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                              {garmentTypeFilterOptions.map(g => <option key={g} value={g}>{g}</option>)}
                             </select>
                             <select
                               value={materialFilter}
@@ -1496,10 +1522,10 @@ function AdminDashboardContent() {
                               <option value="">All Materials</option>
                               {materialOptions.map(m => <option key={m} value={m}>{m.length > 40 ? m.slice(0, 40) + '…' : m}</option>)}
                             </select>
-                            {(skuSearch || categoryFilter || garmentTypeFilter || materialFilter) && (
+                            {(skuSearch || categoryFilter || garmentGroupFilter || garmentTypeFilter || materialFilter) && (
                               <button
                                 type="button"
-                                onClick={() => { setSkuSearch(''); setCategoryFilter(''); setGarmentTypeFilter(''); setMaterialFilter(''); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
+                                onClick={() => { setSkuSearch(''); setCategoryFilter(''); setGarmentGroupFilter(''); setGarmentTypeFilter(''); setMaterialFilter(''); setVisibleProductCount(PRODUCTS_PER_CHUNK); }}
                                 className="text-[11px] font-semibold text-zinc-500 hover:text-red-600 underline"
                               >
                                 Clear Filters
@@ -1538,12 +1564,11 @@ function AdminDashboardContent() {
                             <thead>
                               <tr className="border-b border-on-surface/10 font-label-caps text-[10px] tracking-wider text-on-surface-variant font-bold">
                                 <th className="pb-3">GARMENT DETAILS</th>
-                                <th className="pb-3">SKU</th>
                                 <th className="pb-3">CATEGORY</th>
                                 <th className="pb-3 text-right">PRICE</th>
                                 <th className="pb-3 text-center">RATING</th>
                                 <th className="pb-3 text-center">STOCK</th>
-                                <th className="pb-3 text-right">CONTROLS</th>
+                                <th className="pb-3 text-right">ACTIONS</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-on-surface/5">
@@ -1563,9 +1588,9 @@ function AdminDashboardContent() {
                                     )}
                                     <div className="min-w-0">
                                       <div className="font-bold text-on-surface text-[14px] truncate max-w-sm">{prod.title}</div>
+                                      <div className="font-mono text-[10.5px] text-zinc-400 uppercase tracking-wide truncate">{prod.sku || '—'}</div>
                                     </div>
                                   </td>
-                                  <td className="py-4 font-mono text-[11px] text-zinc-500 uppercase">{prod.sku || '—'}</td>
                                   <td className="py-4 font-semibold uppercase text-[11px] text-zinc-500">{prod.subcategory ? `${prod.category} · ${prod.subcategory}` : prod.category}</td>
                                   <td className="py-4 text-right">
                                     <PriceDisplay price={prod.price} mrp={prod.mrp} size="sm" className="justify-end" />
@@ -1574,27 +1599,37 @@ function AdminDashboardContent() {
                                   <td className="py-4 text-center">
                                     <StockPill summary={inventorySummary[prod.id]} />
                                   </td>
-                                  <td className="py-4 text-right space-x-2 whitespace-nowrap">
-                                    <Link
-                                      href={`/product/${prod.id}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[11px] font-label-caps font-semibold text-zinc-500 hover:underline uppercase tracking-wider"
-                                    >
-                                      VIEW
-                                    </Link>
-                                    <button
-                                      onClick={() => openEditProduct(prod)}
-                                      className="text-[11px] font-label-caps font-semibold text-primary hover:underline uppercase tracking-wider"
-                                    >
-                                      EDIT
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteProduct(prod.id, prod.title)}
-                                      className="text-[11px] font-label-caps font-semibold text-red-600 hover:underline uppercase tracking-wider"
-                                    >
-                                      DELETE
-                                    </button>
+                                  <td className="py-4 text-right whitespace-nowrap">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Link
+                                        href={`/product/${prod.id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="View on storefront"
+                                        aria-label="View"
+                                        className="w-8 h-8 flex items-center justify-center rounded-sm text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">visibility</span>
+                                      </Link>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditProduct(prod)}
+                                        title="Edit garment"
+                                        aria-label="Edit"
+                                        className="w-8 h-8 flex items-center justify-center rounded-sm text-primary hover:bg-primary/10 transition-colors"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteProduct(prod.id, prod.title)}
+                                        title="Delete garment"
+                                        aria-label="Delete"
+                                        className="w-8 h-8 flex items-center justify-center rounded-sm text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -1942,7 +1977,7 @@ function AdminDashboardContent() {
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
           <form
             onSubmit={handleProductSubmit}
-            className="bg-white w-full max-w-2xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800 max-h-[90vh] flex flex-col"
+            className="bg-white w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl rounded-sm shadow-2xl border border-on-surface/10 overflow-hidden text-zinc-800 max-h-[90vh] flex flex-col"
           >
             <div className="px-6 py-4 border-b border-on-surface/10 bg-surface-dim/40 flex justify-between items-center shrink-0">
               <h3 className="font-display text-[18px] font-semibold text-on-surface">
@@ -1959,7 +1994,7 @@ function AdminDashboardContent() {
 
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
                 {/* Title */}
                 <div className="space-y-1.5">
@@ -2128,7 +2163,7 @@ function AdminDashboardContent() {
                 )}
 
                 {/* Material */}
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">FABRIC SPECIFICATION</label>
                   <input
                     type="text"
@@ -2141,7 +2176,7 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Description */}
-                <div className="sm:col-span-2 space-y-1.5">
+                <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">DESCRIPTION</label>
                   <RichTextEditor
                     key={editingProduct?.id || 'new'}
@@ -2183,7 +2218,7 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Sizes — multi-select combobox, plus a free-text field for a one-off custom size */}
-                <div className="sm:col-span-2 space-y-1.5">
+                <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">
                     AVAILABLE SIZES {BOTTOM_WEAR_TYPES.includes(productForm.subcategory) && <span className="text-zinc-400 font-normal normal-case">(waist, in inches)</span>}
                   </label>
@@ -2216,7 +2251,7 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Size Chart — collapsed by default, optional */}
-                <div className="sm:col-span-2 space-y-1.5">
+                <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                   <button
                     type="button"
                     onClick={() => setShowSizeChart(o => !o)}
@@ -2233,7 +2268,7 @@ function AdminDashboardContent() {
                   {showSizeChart && (
                     <SizeChartEditor
                       sizes={selectedSizes}
-                      presetMeasurements={SIZE_CHART_PRESETS[garmentGroup] || SIZE_CHART_PRESETS.Tops}
+                      defaultChart={getDefaultSizeChart(garmentGroup, selectedSizes)}
                       value={productForm.size_chart}
                       onChange={(chart) => setProductForm(prev => ({ ...prev, size_chart: chart }))}
                       copyCandidates={products
@@ -2244,7 +2279,7 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* Generated Size SKUs Preview */}
-                <div className="sm:col-span-2 space-y-1.5 bg-zinc-50 border border-zinc-200 rounded-sm p-3">
+                <div className="sm:col-span-2 lg:col-span-3 space-y-1.5 bg-zinc-50 border border-zinc-200 rounded-sm p-3">
                   <span className="text-[10px] font-label-caps font-bold text-[#C5A059] block tracking-wider">
                     Generated Size-Specific SKUs Naming Preview:
                   </span>
@@ -2262,7 +2297,7 @@ function AdminDashboardContent() {
 
                 {/* Stock — only meaningful once the garment (and its SKU) actually exists */}
                 {editingProduct && (
-                  <div className="sm:col-span-2 space-y-1.5">
+                  <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                     <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
                       STOCK PER SIZE
                     </span>
@@ -2275,7 +2310,7 @@ function AdminDashboardContent() {
                 )}
 
                 {/* Images */}
-                <div className="sm:col-span-2 space-y-2">
+                <div className="sm:col-span-2 lg:col-span-3 space-y-2">
                   <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
                     GARMENT IMAGES (UP TO 6)
                   </span>

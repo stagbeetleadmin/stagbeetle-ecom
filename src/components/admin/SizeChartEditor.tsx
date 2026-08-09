@@ -11,23 +11,18 @@ interface CopyCandidate {
 
 interface SizeChartEditorProps {
   sizes: string[]; // the product's currently-selected sizes — determines which rows show
-  presetMeasurements: string[]; // suggested columns for this garment group
+  defaultChart: SizeChart; // this garment group's standard columns, pre-filled with typical values — what "Load Standard Template" loads
   value?: SizeChart;
   onChange: (chart: SizeChart | undefined) => void;
   copyCandidates: CopyCandidate[]; // other products (same garment group) with a chart already set
 }
 
-const emptyChart = (unit: SizeChart['unit'], measurements: string[]): SizeChart => ({
-  unit,
-  measurements,
-  rows: {},
-});
-
 // A compact, optional-by-default measurement table. Starts collapsed to a
 // single "no chart yet" row with two one-click starting points — load the
-// standard columns for this garment type, or copy a similar product's chart
-// wholesale — so filling one in rarely means typing every field from scratch.
-export default function SizeChartEditor({ sizes, presetMeasurements, value, onChange, copyCandidates }: SizeChartEditorProps) {
+// standard columns for this garment type (pre-filled with typical values, so
+// it's a glance-and-adjust rather than type-everything-yourself), or copy a
+// similar product's chart wholesale.
+export default function SizeChartEditor({ sizes, defaultChart, value, onChange, copyCandidates }: SizeChartEditorProps) {
   const [newMeasurement, setNewMeasurement] = useState('');
   const [showCopyMenu, setShowCopyMenu] = useState(false);
 
@@ -67,7 +62,7 @@ export default function SizeChartEditor({ sizes, presetMeasurements, value, onCh
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
-            onClick={() => onChange(emptyChart('in', presetMeasurements))}
+            onClick={() => onChange(defaultChart)}
             className="bg-[#052A42] text-white text-[11px] font-bold px-3.5 py-2 rounded-sm hover:bg-[#052A42]/90 transition-colors"
           >
             Load Standard Template
@@ -98,6 +93,7 @@ export default function SizeChartEditor({ sizes, presetMeasurements, value, onCh
             </div>
           )}
         </div>
+        <p className="text-[10.5px] text-zinc-400">The standard template arrives pre-filled with typical measurements — just review and adjust, no need to type every cell.</p>
       </div>
     );
   }

@@ -49,6 +49,44 @@ export const SIZE_CHART_PRESETS: Record<string, string[]> = {
   Bottoms: ['Waist', 'Inseam', 'Hip', 'Height Range'],
 };
 
+// Typical men's measurements (inches) for each size on the standard scale —
+// a fast starting point for "Load Standard Template" so most products need
+// zero manual typing, just a glance-and-adjust. Approximate industry
+// averages, not a precise spec; every cell stays freely editable.
+const SIZE_CHART_DEFAULTS: Record<string, Record<string, Record<string, string>>> = {
+  Tops: {
+    XS: { Chest: '36', Shoulder: '16.5', Length: '26', 'Sleeve Length': '23' },
+    S: { Chest: '38', Shoulder: '17', Length: '27', 'Sleeve Length': '23.5' },
+    M: { Chest: '40', Shoulder: '17.5', Length: '28', 'Sleeve Length': '24' },
+    L: { Chest: '42', Shoulder: '18', Length: '29', 'Sleeve Length': '24.5' },
+    XL: { Chest: '44', Shoulder: '18.5', Length: '30', 'Sleeve Length': '25' },
+    XXL: { Chest: '46', Shoulder: '19', Length: '31', 'Sleeve Length': '25.5' },
+    '3XL': { Chest: '48', Shoulder: '19.5', Length: '32', 'Sleeve Length': '26' },
+  },
+  Bottoms: {
+    '28': { Waist: '28', Inseam: '30', Hip: '36', 'Height Range': '5\'4"-5\'7"' },
+    '30': { Waist: '30', Inseam: '30', Hip: '38', 'Height Range': '5\'5"-5\'8"' },
+    '32': { Waist: '32', Inseam: '31', Hip: '40', 'Height Range': '5\'6"-5\'9"' },
+    '34': { Waist: '34', Inseam: '31', Hip: '42', 'Height Range': '5\'7"-5\'10"' },
+    '36': { Waist: '36', Inseam: '32', Hip: '44', 'Height Range': '5\'8"-5\'11"' },
+    '38': { Waist: '38', Inseam: '32', Hip: '46', 'Height Range': '5\'9"-6\'0"' },
+    '40': { Waist: '40', Inseam: '33', Hip: '48', 'Height Range': '5\'10"-6\'1"' },
+  },
+};
+
+// Builds a ready-to-edit size chart for "Load Standard Template": the group's
+// preset measurement columns, pre-filled with typical values for whichever
+// of the product's currently-selected sizes fall on the standard scale. A
+// custom, non-standard size (a one-off an admin typed in) just lands with a
+// blank row — nothing breaks, it's simply left for manual entry.
+export function getDefaultSizeChart(group: string, sizes: string[]): SizeChart {
+  const measurements = SIZE_CHART_PRESETS[group] || SIZE_CHART_PRESETS.Tops;
+  const defaultsForGroup = SIZE_CHART_DEFAULTS[group] || {};
+  const rows: Record<string, Record<string, string>> = {};
+  sizes.forEach(size => { rows[size] = { ...(defaultsForGroup[size] || {}) }; });
+  return { unit: 'in', measurements, rows };
+}
+
 // The largest size in each scale — tops (…, XL, XXL, 3XL) and bottoms sized
 // by waist inches (…, 36, 38, 40) — carries a plus-size surcharge if the
 // product has one set. Admin-configurable (see getPlusSizesConfig /
