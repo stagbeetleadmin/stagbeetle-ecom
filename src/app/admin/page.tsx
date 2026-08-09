@@ -181,7 +181,7 @@ function AdminDashboardContent() {
 
   const {
     isAdmin, loading: authLoading, loginWithEmailPassword, logout,
-    mfaPending, verifyMfaCode,
+    mfaPending, mfaFactors, verifyMfaCode,
   } = useAuth();
 
   // Admin login states
@@ -191,8 +191,15 @@ function AdminDashboardContent() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Step-up MFA challenge — shown instead of the login form once the password
-  // check passes but the account has a verified authenticator (see mfaPending
-  // in AuthContext). There's no way into the dashboard from here without it.
+  // check passes but the account has at least one verified authenticator
+  // (see mfaPending in AuthContext). This account is shared across stores'
+  // staff, each with their own device, so a device is picked before the
+  // code is asked for — auto-picked when there's only one to begin with.
+  const [manuallySelectedFactorId, setManuallySelectedFactorId] = useState<string | null>(null);
+  // Auto-picked when there's only one device to begin with — derived, not
+  // synced via an effect, so a single-device account skips the picker
+  // screen entirely with no extra render in between.
+  const selectedFactorId = manuallySelectedFactorId || (mfaFactors.length === 1 ? mfaFactors[0].id : null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaError, setMfaError] = useState('');
   const [mfaVerifying, setMfaVerifying] = useState(false);
@@ -230,10 +237,11 @@ function AdminDashboardContent() {
   const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMfaError('');
+    if (!selectedFactorId) { setMfaError('Select which device this is first.'); return; }
     if (!mfaCode.trim()) { setMfaError('Enter the 6-digit code from your authenticator app.'); return; }
     setMfaVerifying(true);
     try {
-      const res = await verifyMfaCode(mfaCode.trim());
+      const res = await verifyMfaCode(selectedFactorId, mfaCode.trim());
       if (res.error) {
         setMfaError(res.error);
       } else {
@@ -439,49 +447,84 @@ function AdminDashboardContent() {
                   <span className="material-symbols-outlined text-[32px] text-gold-leaf block mb-2">shield_lock</span>
                   <h2 className="font-display text-[24px] font-semibold text-on-surface">Verification Required</h2>
                   <p className="text-[12px] text-zinc-500 font-body mt-2">
-                    Enter the 6-digit code from your authenticator app to finish signing in.
+                    {selectedFactorId
+                      ? 'Enter the 6-digit code from your authenticator app to finish signing in.'
+                      : 'This account is shared across stores — which device is this?'}
                   </p>
                 </div>
 
-                <form onSubmit={handleMfaSubmit} className="space-y-5">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">AUTHENTICATION CODE</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="123456"
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      required
-                      autoFocus
-                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[20px] tracking-[0.4em] outline-none font-mono"
-                    />
+                {!selectedFactorId ? (
+                  <div className="space-y-2">
+                    {mfaFactors.map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setManuallySelectedFactorId(f.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 border border-on-surface/15 rounded-sm text-left hover:border-gold-leaf hover:bg-surface-dim transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[18px] text-zinc-400">smartphone</span>
+                        <span className="text-[13px] font-semibold text-on-surface">{f.friendlyName || 'Unnamed device'}</span>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={async () => { await logout(); setMfaCode(''); setMfaError(''); setManuallySelectedFactorId(null); }}
+                      className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider pt-2"
+                    >
+                      Cancel and sign in as someone else
+                    </button>
                   </div>
+                ) : (
+                  <form onSubmit={handleMfaSubmit} className="space-y-5">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">AUTHENTICATION CODE</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        value={mfaCode}
+                        onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        required
+                        autoFocus
+                        className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[20px] tracking-[0.4em] outline-none font-mono"
+                      />
+                    </div>
 
-                  {mfaError && (
-                    <p className="text-[11px] text-red-600 font-medium text-center">{mfaError}</p>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={mfaVerifying || mfaCode.length < 6}
-                    className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {mfaVerifying && (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    {mfaError && (
+                      <p className="text-[11px] text-red-600 font-medium text-center">{mfaError}</p>
                     )}
-                    {mfaVerifying ? 'VERIFYING…' : 'VERIFY & CONTINUE'}
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={async () => { await logout(); setMfaCode(''); setMfaError(''); }}
-                    className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider"
-                  >
-                    Cancel and sign in as someone else
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={mfaVerifying || mfaCode.length < 6}
+                      className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {mfaVerifying && (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      )}
+                      {mfaVerifying ? 'VERIFYING…' : 'VERIFY & CONTINUE'}
+                    </button>
+
+                    {mfaFactors.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => { setManuallySelectedFactorId(null); setMfaCode(''); setMfaError(''); }}
+                        className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider"
+                      >
+                        ← Choose a different device
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={async () => { await logout(); setMfaCode(''); setMfaError(''); setManuallySelectedFactorId(null); }}
+                      className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider"
+                    >
+                      Cancel and sign in as someone else
+                    </button>
+                  </form>
+                )}
               </>
             ) : (
               <>
