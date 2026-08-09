@@ -4,8 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 export interface Product {
   id: string;
   title: string;
-  price: number; // Selling Price (SP) — what the customer pays
+  price: number; // Selling Price (SP) — what the customer pays for a non-plus size
   mrp?: number; // Maximum Retail Price — shown struck-through when higher than price
+  plus_size_surcharge?: number; // added to price when the selected size is a configured plus size
   category: string;
   subcategory?: string; // e.g. "Shirt", "Jeans", "Tshirt", "Track pant", "Shorts", "Jacket"
   sleeve_type?: 'Half Sleeves' | 'Full Sleeves'; // applicable for Shirts
@@ -17,6 +18,24 @@ export interface Product {
   colors: string[];
   rating?: number;
 }
+
+// The largest size in each scale — tops (…, XL, XXL, 3XL) and bottoms sized
+// by waist inches (…, 36, 38, 40) — carries a plus-size surcharge if the
+// product has one set. Admin-configurable (see getPlusSizesConfig /
+// setPlusSizesConfig further down, near the other realtime config); these
+// are just the starting defaults, live until that config is first fetched.
+const DEFAULT_PLUS_SIZES = ['XXL', '3XL', '38', '40'];
+let plusSizesSet = new Set<string>(DEFAULT_PLUS_SIZES);
+
+export const isPlusSize = (size: string): boolean => plusSizesSet.has(size);
+export const getPlusSizesList = (): string[] => Array.from(plusSizesSet);
+
+// The actual price a customer pays for a given size — base price, plus the
+// product's plus-size surcharge if that size qualifies. This is the one
+// place that math happens; every add-to-cart and price display should route
+// through it rather than reading product.price directly once a size is known.
+export const getEffectivePrice = (product: Pick<Product, 'price' | 'plus_size_surcharge'>, size: string): number =>
+  product.price + (isPlusSize(size) ? product.plus_size_surcharge || 0 : 0);
 
 // One size of one product — the unit stock is actually tracked against.
 // SKU convention matches the admin form's existing preview: STYLE-COLOR-SIZE.
@@ -398,6 +417,85 @@ export const subscribeToProductChanges = (onChange: () => void): (() => void) =>
   ensureProductsChannel();
   productChangeListeners.add(onChange);
   return () => { productChangeListeners.delete(onChange); };
+};
+
+// =========================================================================
+// PLUS-SIZE CONFIGURATION — admin-editable (which sizes carry a surcharge),
+// live-synced across tabs the same way the product catalog is.
+// =========================================================================
+
+const PLUS_SIZES_CHANNEL_NAME = 'plus-sizes-config';
+const PLUS_SIZES_CHANGED_EVENT = 'plus-sizes-changed';
+let plusSizesChannel: RealtimeChannel | null = null;
+const plusSizesChangeListeners = new Set<() => void>();
+
+const loadPlusSizesFromServer = async (): Promise<string[]> => {
+  if (!isSupabaseConfigured || !supabase) return Array.from(plusSizesSet);
+  try {
+    const { data } = await supabaseTimeout(
+      supabase.from('app_settings').select('value').eq('key', 'plus_sizes').maybeSingle()
+    );
+    if (data?.value && Array.isArray(data.value) && data.value.length > 0) {
+      plusSizesSet = new Set(data.value as string[]);
+    }
+  } catch (e: any) {
+    console.warn('[Atelier DB] Failed to load plus-size config, keeping current defaults:', e.message || e);
+  }
+  return Array.from(plusSizesSet);
+};
+
+const ensurePlusSizesChannel = (): RealtimeChannel | null => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  if (!plusSizesChannel) {
+    plusSizesChannel = supabase
+      .channel(PLUS_SIZES_CHANNEL_NAME)
+      .on('broadcast', { event: PLUS_SIZES_CHANGED_EVENT }, () => {
+        loadPlusSizesFromServer().then(() => {
+          plusSizesChangeListeners.forEach(fn => fn());
+        });
+      })
+      .subscribe();
+  }
+  return plusSizesChannel;
+};
+
+const broadcastPlusSizesChanged = () => {
+  const channel = ensurePlusSizesChannel();
+  channel?.send({ type: 'broadcast', event: PLUS_SIZES_CHANGED_EVENT, payload: {} }).catch(() => {});
+};
+
+// Fetches the current plus-size list and refreshes the shared cache that
+// isPlusSize()/getEffectivePrice() read synchronously. Call this once on
+// mount anywhere that displays or edits plus-size-dependent UI.
+export const getPlusSizesConfig = loadPlusSizesFromServer;
+
+// Admin-only: persists a new plus-size list and notifies every open tab immediately.
+export const setPlusSizesConfig = async (sizes: string[]): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'plus_sizes', value: sizes, updated_at: new Date().toISOString() }], { onConflict: 'key' });
+    if (error) {
+      console.warn('[Atelier DB] setPlusSizesConfig failed:', error.message);
+      return false;
+    }
+    plusSizesSet = new Set(sizes);
+    broadcastPlusSizesChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] setPlusSizesConfig failed:', e.message || e);
+    return false;
+  }
+};
+
+// Subscribe to live plus-size config changes (e.g. an admin edited the list
+// in another tab). Returns an unsubscribe function.
+export const subscribeToPlusSizesChanges = (onChange: () => void): (() => void) => {
+  if (!isSupabaseConfigured || !supabase) return () => {};
+  ensurePlusSizesChannel();
+  plusSizesChangeListeners.add(onChange);
+  return () => { plusSizesChangeListeners.delete(onChange); };
 };
 
 export const getProducts = async (): Promise<Product[]> => {

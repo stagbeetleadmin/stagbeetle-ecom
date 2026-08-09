@@ -12,7 +12,8 @@ import {
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage,
   getSkuBase, getColorHex, getColorName, subscribeToProductChanges,
-  getInventorySummaryForProducts, getInventoryForProduct, setInventoryManual, subscribeToInventoryChanges
+  getInventorySummaryForProducts, getInventoryForProduct, setInventoryManual, subscribeToInventoryChanges,
+  getPlusSizesList, getPlusSizesConfig, setPlusSizesConfig, subscribeToPlusSizesChanges
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 import PriceDisplay from '@/components/PriceDisplay';
@@ -20,9 +21,17 @@ import RichTextEditor from '@/components/RichTextEditor';
 import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
 import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
 import InventoryPanel from '@/components/admin/InventoryPanel';
+import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
 
 const CATEGORY_OPTIONS = ['Men', 'Accessories'];
 const GARMENT_TYPE_OPTIONS = ['Shirt', 'Jeans', 'Tshirt', 'Track pant', 'Shorts', 'Jacket'];
+
+// Bottoms are sized by waist measurement, not S/M/L — everything else uses the standard scale.
+const BOTTOM_WEAR_TYPES = ['Jeans', 'Track pant', 'Shorts'];
+const TOP_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+const BOTTOM_SIZE_OPTIONS = ['28', '30', '32', '34', '36', '38', '40'];
+const getSizeOptionsFor = (subcategory: string) =>
+  BOTTOM_WEAR_TYPES.includes(subcategory) ? BOTTOM_SIZE_OPTIONS : TOP_SIZE_OPTIONS;
 
 const parseSku = (sku?: string) => {
   if (!sku) return { styleCode: '', colorCode: '' };
@@ -82,6 +91,8 @@ function AdminDashboardContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [inventorySummary, setInventorySummary] = useState<Record<string, ProductStockSummary>>({});
+  const [plusSizes, setPlusSizes] = useState<string[]>(getPlusSizesList());
+  const [showPlusSizeSettings, setShowPlusSizeSettings] = useState(false);
 
   // Product catalog search + filters
   const [skuSearch, setSkuSearch] = useState('');
@@ -203,6 +214,7 @@ function AdminDashboardContent() {
     title: '',
     price: 0,
     mrp: 0,
+    plus_size_surcharge: 0,
     category: 'Men',
     subcategory: 'Shirt', // default garment type
     sleeve_type: 'Full Sleeves', // default sleeves for Shirt
@@ -314,6 +326,8 @@ function AdminDashboardContent() {
       setOrders(allOrders);
       const stockSummary = await getInventorySummaryForProducts();
       setInventorySummary(stockSummary);
+      const currentPlusSizes = await getPlusSizesConfig();
+      setPlusSizes(currentPlusSizes);
     } catch (e) {
       console.error(e);
     }
@@ -332,6 +346,15 @@ function AdminDashboardContent() {
     if (!isAdmin) return;
     const unsubscribe = subscribeToInventoryChanges(() => {
       getInventorySummaryForProducts().then(setInventorySummary);
+    });
+    return unsubscribe;
+  }, [isAdmin]);
+
+  // Live-refresh which sizes count as "plus size" if another admin edits the list.
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unsubscribe = subscribeToPlusSizesChanges(() => {
+      getPlusSizesConfig().then(setPlusSizes);
     });
     return unsubscribe;
   }, [isAdmin]);
@@ -481,6 +504,16 @@ function AdminDashboardContent() {
     setTimeout(() => setFeedbackMsg({ type: '', text: '' }), 4000);
   };
 
+  const handlePlusSizesChange = async (sizes: string[]) => {
+    const previous = plusSizes;
+    setPlusSizes(sizes); // optimistic — feels instant, matches every other toggle in this UI
+    const ok = await setPlusSizesConfig(sizes);
+    if (!ok) {
+      setPlusSizes(previous);
+      triggerFeedback('error', 'Failed to save plus-size settings.');
+    }
+  };
+
   // =========================================================================
   // PRODUCT CRUD HANDLERS
   // =========================================================================
@@ -495,6 +528,7 @@ function AdminDashboardContent() {
       title: '',
       price: 0,
       mrp: 0,
+      plus_size_surcharge: 0,
       category: 'Men',
       subcategory: 'Shirt',
       sleeve_type: 'Full Sleeves',
@@ -525,6 +559,7 @@ function AdminDashboardContent() {
       title: prod.title,
       price: prod.price,
       mrp: prod.mrp || 0,
+      plus_size_surcharge: prod.plus_size_surcharge || 0,
       category: prod.category,
       subcategory: prod.subcategory || 'Shirt',
       sleeve_type: prod.sleeve_type || 'Full Sleeves',
@@ -553,6 +588,7 @@ function AdminDashboardContent() {
       title: productForm.title,
       price: Number(productForm.price),
       mrp: Number(productForm.mrp) > 0 ? Number(productForm.mrp) : undefined,
+      plus_size_surcharge: Number(productForm.plus_size_surcharge) > 0 ? Number(productForm.plus_size_surcharge) : undefined,
       category: productForm.category,
       subcategory: productForm.subcategory,
       sleeve_type: productForm.subcategory === 'Shirt' ? (productForm.sleeve_type as any) : undefined,
@@ -586,6 +622,7 @@ function AdminDashboardContent() {
     title: productForm.title,
     price: Number(productForm.price) || 0,
     mrp: Number(productForm.mrp) > 0 ? Number(productForm.mrp) : undefined,
+    plus_size_surcharge: Number(productForm.plus_size_surcharge) > 0 ? Number(productForm.plus_size_surcharge) : undefined,
     category: productForm.category,
     subcategory: productForm.subcategory,
     sleeve_type: productForm.subcategory === 'Shirt' ? (productForm.sleeve_type as any) : undefined,
@@ -1334,6 +1371,37 @@ function AdminDashboardContent() {
                         </button>
                       </div>
 
+                      {/* Plus-Size Settings — store-wide, which sizes trigger a per-product surcharge */}
+                      <div className="border border-on-surface/5 bg-surface-dim/30 rounded-sm">
+                        <button
+                          type="button"
+                          onClick={() => setShowPlusSizeSettings(o => !o)}
+                          className="w-full flex items-center justify-between px-4 py-3 text-left"
+                        >
+                          <span className="flex items-center gap-2 text-[12px] font-label-caps font-semibold text-on-surface">
+                            <span className="w-4 h-4 rounded-full bg-gold-leaf text-obsidian-charcoal text-[9px] font-bold flex items-center justify-center shrink-0">+</span>
+                            PLUS-SIZE SETTINGS
+                            <span className="text-zinc-400 font-normal normal-case">— which sizes carry a surcharge, store-wide</span>
+                          </span>
+                          <span className="material-symbols-outlined text-[18px] text-zinc-400">
+                            {showPlusSizeSettings ? 'expand_less' : 'expand_more'}
+                          </span>
+                        </button>
+                        {showPlusSizeSettings && (
+                          <div className="px-4 pb-4 space-y-2">
+                            <SizeMultiSelect
+                              options={[...TOP_SIZE_OPTIONS, ...BOTTOM_SIZE_OPTIONS]}
+                              selected={plusSizes}
+                              onChange={handlePlusSizesChange}
+                              placeholder="No plus sizes configured — every size prices the same"
+                            />
+                            <p className="text-[11px] text-zinc-400">
+                              Any of these sizes, on any product that has a surcharge amount set, adds that amount to the price. Applies immediately, everywhere — the storefront, cart, and checkout all read this same list.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Search + Filters */}
                       {products.length > 0 && (
                         <div className="border border-on-surface/5 bg-surface-dim/30 p-4 rounded-sm space-y-3">
@@ -1437,9 +1505,8 @@ function AdminDashboardContent() {
                                         No Image
                                       </div>
                                     )}
-                                    <div>
-                                      <div className="font-bold text-on-surface text-[14px]">{prod.title}</div>
-                                      <div className="text-[11px] text-zinc-400 font-medium truncate max-w-sm">{prod.material}</div>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-on-surface text-[14px] truncate max-w-sm">{prod.title}</div>
                                     </div>
                                   </td>
                                   <td className="py-4 font-mono text-[11px] text-zinc-500 uppercase">{prod.sku || '—'}</td>
@@ -1952,7 +2019,16 @@ function AdminDashboardContent() {
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT TYPE (SUBCATEGORY)</label>
                   <select
                     value={productForm.subcategory}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, subcategory: e.target.value }))}
+                    onChange={(e) => {
+                      const nextSubcategory = e.target.value;
+                      setProductForm(prev => ({ ...prev, subcategory: nextSubcategory }));
+                      // Switching between the S/M/L scale and the waist-size scale invalidates
+                      // whatever was selected under the old scale — clear it rather than silently
+                      // saving sizes that no longer make sense for this garment type.
+                      const wasBottom = BOTTOM_WEAR_TYPES.includes(productForm.subcategory);
+                      const isBottom = BOTTOM_WEAR_TYPES.includes(nextSubcategory);
+                      if (wasBottom !== isBottom) setSelectedSizes([]);
+                    }}
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   >
                     <option value="Shirt">Shirt</option>
@@ -2034,32 +2110,37 @@ function AdminDashboardContent() {
                   </div>
                 </div>
 
-                {/* Sizes Toggles */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">AVAILABLE SIZES</label>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'].map(sz => {
-                      const isSelected = selectedSizes.includes(sz);
-                      return (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSizes(prev => 
-                              prev.includes(sz) ? prev.filter(s => s !== sz) : [...prev, sz]
-                            );
-                          }}
-                          className={`min-w-[40px] h-9 border text-[11px] font-bold rounded-sm flex items-center justify-center transition-all ${
-                            isSelected 
-                              ? 'bg-[#052A42] border-[#052A42] text-white' 
-                              : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-400'
-                          }`}
-                        >
-                          {sz}
-                        </button>
-                      );
-                    })}
-                  </div>
+                {/* Sizes — multi-select combobox, plus a free-text field for a one-off custom size */}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">
+                    AVAILABLE SIZES {BOTTOM_WEAR_TYPES.includes(productForm.subcategory) && <span className="text-zinc-400 font-normal normal-case">(waist, in inches)</span>}
+                  </label>
+                  <SizeMultiSelect
+                    options={getSizeOptionsFor(productForm.subcategory)}
+                    selected={selectedSizes}
+                    onChange={setSelectedSizes}
+                    plusSizes={plusSizes}
+                  />
+                  {selectedSizes.some(sz => plusSizes.includes(sz)) && (
+                    <div className="pt-1 space-y-1">
+                      <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded-full bg-gold-leaf text-obsidian-charcoal text-[8px] font-bold flex items-center justify-center shrink-0">+</span>
+                        PLUS SIZE SURCHARGE (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={productForm.plus_size_surcharge || ''}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, plus_size_surcharge: Number(e.target.value) }))}
+                        placeholder="e.g. 100"
+                        className="w-full max-w-[160px] bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3 text-[13px] outline-none"
+                      />
+                      <p className="text-[10.5px] text-zinc-400">
+                        Added to the price only for {selectedSizes.filter(sz => plusSizes.includes(sz)).join(' & ')} — every other size stays at ₹{productForm.price || 0}.
+                        {' '}Which sizes count as &quot;plus&quot; is configurable — see Plus-Size Settings above the catalog table.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Generated Size SKUs Preview */}

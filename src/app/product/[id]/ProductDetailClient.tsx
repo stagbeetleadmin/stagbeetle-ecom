@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges } from '@/lib/db';
+import { Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges, getEffectivePrice, isPlusSize, getPlusSizesConfig, subscribeToPlusSizesChanges } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -69,6 +69,16 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
     return unsubscribe;
   }, [initialProduct.id]);
 
+  // isPlusSize()/getEffectivePrice() read a shared module-level cache, not
+  // component state — this just forces a re-render when that cache changes
+  // (e.g. an admin edits the plus-size list live) so the price actually updates.
+  const [, forceRerenderOnPlusSizesChange] = useState(0);
+  useEffect(() => {
+    getPlusSizesConfig().then(() => forceRerenderOnPlusSizesChange(n => n + 1));
+    const unsubscribe = subscribeToPlusSizesChanges(() => forceRerenderOnPlusSizesChange(n => n + 1));
+    return unsubscribe;
+  }, []);
+
   // Live "someone else just bought the last one" updates
   useEffect(() => {
     const unsubscribe = subscribeToInventoryChanges(refreshStock);
@@ -123,7 +133,7 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                   {product.title}
                 </h1>
                 <div className="flex items-center gap-4">
-                  <PriceDisplay price={product.price} mrp={product.mrp} size="lg" />
+                  <PriceDisplay price={getEffectivePrice(product, selectedSize)} mrp={product.mrp} size="lg" />
                   {product.rating && (
                     <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-sm">
                       <span className="material-symbols-outlined text-[13px] text-amber-500 fill-1">star</span>
@@ -181,12 +191,13 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                       <div className="flex flex-wrap gap-2">
                         {product.sizes.map(size => {
                           const outOfStock = isSizeOutOfStock(size);
+                          const plusSize = isPlusSize(size) && !!product.plus_size_surcharge;
                           return (
                             <button
                               key={size}
                               onClick={() => !outOfStock && setSelectedSize(size)}
                               disabled={outOfStock}
-                              title={outOfStock ? `${size} is out of stock` : undefined}
+                              title={outOfStock ? `${size} is out of stock` : plusSize ? `Includes a ₹${product.plus_size_surcharge} plus-size surcharge` : undefined}
                               className={`relative px-4 py-2 text-[12px] font-bold border transition-all ${
                                 outOfStock
                                   ? 'border-gray-100 text-gray-300 bg-gray-50 cursor-not-allowed line-through'
@@ -196,10 +207,20 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                               }`}
                             >
                               {size}
+                              {plusSize && !outOfStock && (
+                                <span className={`ml-1 text-[9px] font-semibold ${selectedSize === size ? 'text-[#C5A059]' : 'text-gray-400'}`}>
+                                  +₹{product.plus_size_surcharge}
+                                </span>
+                              )}
                             </button>
                           );
                         })}
                       </div>
+                      {isPlusSize(selectedSize) && !!product.plus_size_surcharge && (
+                        <p className="text-[11px] text-gray-500 mt-2">
+                          Size {selectedSize} includes a <span className="font-semibold text-gray-700">₹{product.plus_size_surcharge}</span> plus-size surcharge, already reflected in the price above.
+                        </p>
+                      )}
                     </div>
                   )}
 

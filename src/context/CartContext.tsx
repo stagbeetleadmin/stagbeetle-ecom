@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Product, OrderItem, getSuggestions, getCart, saveCart } from '@/lib/db';
+import { Product, OrderItem, getSuggestions, getCart, saveCart, getEffectivePrice, getPlusSizesConfig, subscribeToPlusSizesChanges } from '@/lib/db';
 import { useAuth } from './AuthContext';
 
 interface CartItem extends OrderItem {}
@@ -51,6 +51,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // server copy before it has been read and merged)
   const hydratedUserRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // CartProvider wraps every page (see layout.tsx), so this is the one place
+  // that guarantees the plus-size config is fetched — and kept fresh via
+  // realtime — for the whole app. addToCart below reads it synchronously
+  // through getEffectivePrice/isPlusSize, not from state, so nothing else
+  // needs to await this; it just needs to have been kicked off.
+  useEffect(() => {
+    getPlusSizesConfig();
+    const unsubscribe = subscribeToPlusSizesChanges(() => {});
+    return unsubscribe;
+  }, []);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -145,7 +156,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newItem: CartItem = {
           product_id: product.id,
           title: product.title,
-          price: product.price,
+          price: getEffectivePrice(product, size), // includes the plus-size surcharge, if this size carries one
           quantity: quantity,
           selected_size: size,
           selected_color: color,
