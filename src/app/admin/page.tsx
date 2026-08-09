@@ -498,7 +498,7 @@ function AdminDashboardContent() {
                     <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
                     <input
                       type="email"
-                      placeholder="stagbeetlebilling@gmail.com"
+                      placeholder="you@example.com"
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
                       required
