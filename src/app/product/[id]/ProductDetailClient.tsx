@@ -11,6 +11,7 @@ import Footer from '@/components/Footer';
 import ProductGallery from '@/components/ProductGallery';
 import PriceDisplay from '@/components/PriceDisplay';
 import RichText from '@/components/RichText';
+import SizeGuideModal from '@/components/SizeGuideModal';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -31,6 +32,7 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
   const [selectedColor, setSelectedColor] = useState(getColorName(initialProduct.colors[0]) || 'Default');
   const [quantity, setQuantity] = useState(1);
   const [addedMessage, setAddedMessage] = useState(false);
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
 
   // Per-size stock — a size with no record at all is treated as available
   // (untracked, matches the same "don't block a sale we have no data on"
@@ -186,7 +188,16 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                     <div className="border-t border-gray-100 pt-4">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-[11px] font-bold tracking-widest text-gray-500 uppercase">Size</span>
-                        <span className="text-[11px] text-[#C5A059] font-semibold cursor-pointer hover:underline">Size Guide</span>
+                        {product.size_chart && (
+                          <button
+                            type="button"
+                            onClick={() => setShowSizeGuide(true)}
+                            className="flex items-center gap-1 text-[11px] text-[#C5A059] font-semibold hover:underline"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">straighten</span>
+                            Size Guide
+                          </button>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {product.sizes.map(size => {
@@ -386,6 +397,14 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
       </main>
 
       <Footer />
+
+      {showSizeGuide && product.size_chart && (
+        <SizeGuideModal
+          title={product.title}
+          chart={product.size_chart}
+          onClose={() => setShowSizeGuide(false)}
+        />
+      )}
     </div>
   );
 }

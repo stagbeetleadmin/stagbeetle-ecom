@@ -17,7 +17,37 @@ export interface Product {
   sizes: string[];
   colors: string[];
   rating?: number;
+  size_chart?: SizeChart; // optional — powers the customer-facing "Size Guide"
 }
+
+// A per-product measurement table: which columns apply (Chest/Waist/…), the
+// unit they're in, and the actual number for each of the product's sizes.
+export interface SizeChart {
+  unit: 'in' | 'cm';
+  measurements: string[]; // ordered column names, e.g. ['Chest', 'Shoulder', 'Length']
+  rows: Record<string, Record<string, string>>; // size -> { measurement -> value }
+}
+
+// Garment grouping used by the admin form so "Garment Type" only ever shows
+// options relevant to what's actually being listed — picking "Bottoms" first
+// means Jeans/Shorts/Track Pant/Joggers, never Shirt. This drives which size
+// scale (S–3XL vs waist inches) and which measurement columns get suggested;
+// it isn't persisted on the product — subcategory (already stored) is enough
+// to derive the group back on edit, via GARMENT_GROUP_OF below.
+export const GARMENT_GROUPS: Record<string, string[]> = {
+  Tops: ['Shirt', 'Tshirt', 'Jacket'],
+  Bottoms: ['Jeans', 'Track pant', 'Shorts', 'Joggers'],
+};
+export const GARMENT_GROUP_OF: Record<string, string> = Object.fromEntries(
+  Object.entries(GARMENT_GROUPS).flatMap(([group, types]) => types.map(t => [t, group]))
+);
+
+// Suggested measurement columns per group — a starting point admins can add
+// to or trim, not a rigid schema.
+export const SIZE_CHART_PRESETS: Record<string, string[]> = {
+  Tops: ['Chest', 'Shoulder', 'Length', 'Sleeve Length'],
+  Bottoms: ['Waist', 'Inseam', 'Hip', 'Height Range'],
+};
 
 // The largest size in each scale — tops (…, XL, XXL, 3XL) and bottoms sized
 // by waist inches (…, 36, 38, 40) — carries a plus-size surcharge if the

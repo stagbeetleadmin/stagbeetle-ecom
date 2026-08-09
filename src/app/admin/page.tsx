@@ -7,13 +7,14 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
-  Product, Coupon, Order, InventoryRecord, ProductStockSummary,
+  Product, Coupon, Order, InventoryRecord, ProductStockSummary, SizeChart,
   getProducts, addProduct, updateProduct, deleteProduct, bulkUploadProducts,
   getCoupons, createCoupon, deleteCoupon,
   getOrders, updateOrderShipping, uploadGarmentImage, deleteStorageImage,
   getSkuBase, getColorHex, getColorName, subscribeToProductChanges,
   getInventorySummaryForProducts, getInventoryForProduct, setInventoryManual, subscribeToInventoryChanges,
-  getPlusSizesList, getPlusSizesConfig, setPlusSizesConfig, subscribeToPlusSizesChanges
+  getPlusSizesList, getPlusSizesConfig, setPlusSizesConfig, subscribeToPlusSizesChanges,
+  GARMENT_GROUPS, GARMENT_GROUP_OF, SIZE_CHART_PRESETS
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 import PriceDisplay from '@/components/PriceDisplay';
@@ -22,12 +23,14 @@ import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
 import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
+import SizeChartEditor from '@/components/admin/SizeChartEditor';
 
 const CATEGORY_OPTIONS = ['Men', 'Accessories'];
-const GARMENT_TYPE_OPTIONS = ['Shirt', 'Jeans', 'Tshirt', 'Track pant', 'Shorts', 'Jacket'];
+const GARMENT_GROUP_OPTIONS = Object.keys(GARMENT_GROUPS); // ['Tops', 'Bottoms']
+const GARMENT_TYPE_OPTIONS = Object.values(GARMENT_GROUPS).flat(); // flat list, for the catalog filter dropdown
 
 // Bottoms are sized by waist measurement, not S/M/L — everything else uses the standard scale.
-const BOTTOM_WEAR_TYPES = ['Jeans', 'Track pant', 'Shorts'];
+const BOTTOM_WEAR_TYPES = GARMENT_GROUPS.Bottoms;
 const TOP_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const BOTTOM_SIZE_OPTIONS = ['28', '30', '32', '34', '36', '38', '40'];
 const getSizeOptionsFor = (subcategory: string) =>
@@ -93,6 +96,20 @@ function AdminDashboardContent() {
   const [inventorySummary, setInventorySummary] = useState<Record<string, ProductStockSummary>>({});
   const [plusSizes, setPlusSizes] = useState<string[]>(getPlusSizesList());
   const [showPlusSizeSettings, setShowPlusSizeSettings] = useState(false);
+
+  // Sidebar collapse — persisted so the choice sticks across visits. Read via a lazy
+  // initializer (not an effect) so there's no extra render/flash on mount.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem('admin-sidebar-collapsed') === '1'; } catch { return false; }
+  });
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { window.localStorage.setItem('admin-sidebar-collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // Product catalog search + filters
   const [skuSearch, setSkuSearch] = useState('');
@@ -223,10 +240,18 @@ function AdminDashboardContent() {
     description: '',
     images: [] as string[],
     sizes: 'S, M, L, XL',
-    colors: 'Obsidian Black, Iridescent Silver, Beetle Navy'
+    colors: 'Obsidian Black, Iridescent Silver, Beetle Navy',
+    size_chart: undefined as SizeChart | undefined
   });
 
   const [showPreview, setShowPreview] = useState(false);
+
+  // Which group (Tops/Bottoms/...) the current garment type belongs to — filters
+  // the Garment Type dropdown so admins only ever see relevant options.
+  const [garmentGroup, setGarmentGroup] = useState('Tops');
+  // Size chart starts collapsed — it's optional, secondary information that
+  // shouldn't add to the visual weight of the form unless someone opens it.
+  const [showSizeChart, setShowSizeChart] = useState(false);
 
   // SKU, sizes, colors helper states
   const [styleCode, setStyleCode] = useState('');
@@ -524,6 +549,8 @@ function AdminDashboardContent() {
     setSelectedSizes(['S', 'M', 'L', 'XL']);
     setColorName('');
     setColorHexState('#A0AAB2');
+    setGarmentGroup('Tops');
+    setShowSizeChart(false);
     setProductForm({
       title: '',
       price: 0,
@@ -537,7 +564,8 @@ function AdminDashboardContent() {
       description: '',
       images: [],
       sizes: 'S, M, L, XL',
-      colors: ''
+      colors: '',
+      size_chart: undefined
     });
     setShowProductModal(true);
   };
@@ -548,6 +576,8 @@ function AdminDashboardContent() {
     setStyleCode(parsedStyle);
     setColorCode(parsedColor);
     setSelectedSizes(prod.sizes);
+    setGarmentGroup(GARMENT_GROUP_OF[prod.subcategory || 'Shirt'] || 'Tops');
+    setShowSizeChart(false);
 
     const rawColor = prod.colors[0] || '';
     const namePart = rawColor.split('|')[0] || '';
@@ -568,7 +598,8 @@ function AdminDashboardContent() {
       description: prod.description,
       images: prod.images || [],
       sizes: prod.sizes.join(', '),
-      colors: prod.colors.join(', ')
+      colors: prod.colors.join(', '),
+      size_chart: prod.size_chart
     });
     setShowProductModal(true);
   };
@@ -597,7 +628,8 @@ function AdminDashboardContent() {
       description: productForm.description,
       images: imagesArray,
       sizes: selectedSizes.length > 0 ? selectedSizes : ["One Size"],
-      colors: colorName.trim() ? [`${colorName.trim()}|${colorHex.trim()}`] : ["Default"]
+      colors: colorName.trim() ? [`${colorName.trim()}|${colorHex.trim()}`] : ["Default"],
+      size_chart: productForm.size_chart
     };
 
     try {
@@ -633,6 +665,7 @@ function AdminDashboardContent() {
     sizes: selectedSizes.length > 0 ? selectedSizes : ['One Size'],
     colors: colorName.trim() ? [`${colorName.trim()}|${colorHex.trim()}`] : ['Default'],
     rating: editingProduct?.rating,
+    size_chart: productForm.size_chart,
   });
 
   const handleDeleteProduct = async (id: string, name: string) => {
@@ -796,69 +829,92 @@ function AdminDashboardContent() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
 
-            {/* Sidebar Navigation */}
-            <div className="lg:col-span-3 bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-2">
+            {/* Sidebar Navigation — collapses to an icon rail on desktop to give the
+                workspace (especially the catalog table) more room; persisted via localStorage. */}
+            <div
+              className={`shrink-0 w-full bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-1.5 transition-[width] duration-200 ${sidebarCollapsed ? 'lg:w-[68px] lg:p-2.5' : 'lg:w-64'
+                }`}
+            >
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className="hidden lg:flex w-full items-center justify-center gap-2 px-2 py-2 mb-1.5 rounded-sm text-on-surface-variant hover:bg-surface-dim hover:text-on-surface transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {sidebarCollapsed ? 'dock_to_right' : 'dock_to_left'}
+                </span>
+                {!sidebarCollapsed && <span className="text-[10.5px] font-label-caps tracking-wider font-semibold">COLLAPSE</span>}
+              </button>
+
               <button
                 type="button"
                 onClick={() => router.push('/admin?tab=analytics')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'analytics'
+                title={sidebarCollapsed ? 'Atelier Analytics' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'analytics'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
                   }`}
               >
                 <span className="material-symbols-outlined text-[18px]">query_stats</span>
-                ATELIER ANALYTICS
+                {!sidebarCollapsed && 'ATELIER ANALYTICS'}
               </button>
 
               <button
                 type="button"
                 onClick={() => router.push('/admin?tab=products')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'products'
+                title={sidebarCollapsed ? 'Garment Catalog' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'products'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
                   }`}
               >
                 <span className="material-symbols-outlined text-[18px]">apparel</span>
-                GARMENT CATALOG
+                {!sidebarCollapsed && 'GARMENT CATALOG'}
               </button>
 
               <button
+                type="button"
                 onClick={() => router.push('/admin?tab=coupons')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'coupons'
+                title={sidebarCollapsed ? 'Discount Coupons' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'coupons'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
                   }`}
               >
                 <span className="material-symbols-outlined text-[18px]">sell</span>
-                DISCOUNT COUPONS
+                {!sidebarCollapsed && 'DISCOUNT COUPONS'}
               </button>
 
               <button
+                type="button"
                 onClick={() => router.push('/admin?tab=orders')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${activeTab === 'orders'
+                title={sidebarCollapsed ? 'Order Registry' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'orders'
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
                   }`}
               >
                 <span className="material-symbols-outlined text-[18px]">receipt_long</span>
-                ORDER REGISTRY
+                {!sidebarCollapsed && 'ORDER REGISTRY'}
               </button>
 
               <div className="border-t border-on-surface/10 my-2"></div>
 
               <Link
                 href="/admin/integration"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold text-on-surface-variant hover:bg-surface-dim hover:text-on-surface"
+                title={sidebarCollapsed ? 'Galla Integration Docs' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold text-on-surface-variant hover:bg-surface-dim hover:text-on-surface ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'}`}
               >
                 <span className="material-symbols-outlined text-[18px]">sync_alt</span>
-                GALLA INTEGRATION DOCS
+                {!sidebarCollapsed && 'GALLA INTEGRATION DOCS'}
               </Link>
             </div>
 
             {/* Dashboard Workspace */}
-            <div className="lg:col-span-9 bg-white border border-on-surface/5 p-6 md:p-8 min-h-[500px]">
+            <div className="min-w-0 flex-1 w-full bg-white border border-on-surface/5 p-6 md:p-8 min-h-[500px]">
 
               {loading ? (
                 <div className="flex justify-center py-24">
@@ -2014,9 +2070,30 @@ function AdminDashboardContent() {
                   </select>
                 </div>
 
-                {/* Garment Type (Subcategory) */}
+                {/* Garment Group — picked first, so Garment Type below only ever shows relevant options */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT TYPE (SUBCATEGORY)</label>
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT GROUP</label>
+                  <select
+                    value={garmentGroup}
+                    onChange={(e) => {
+                      const nextGroup = e.target.value;
+                      const firstType = GARMENT_GROUPS[nextGroup][0];
+                      const wasBottom = BOTTOM_WEAR_TYPES.includes(productForm.subcategory);
+                      const isBottom = BOTTOM_WEAR_TYPES.includes(firstType);
+                      setGarmentGroup(nextGroup);
+                      setProductForm(prev => ({ ...prev, subcategory: firstType }));
+                      // New group almost always means a new size scale too — start clean.
+                      if (wasBottom !== isBottom) setSelectedSizes([]);
+                    }}
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+                  >
+                    {GARMENT_GROUP_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+
+                {/* Garment Type (Subcategory) — filtered to the selected group */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant">GARMENT TYPE</label>
                   <select
                     value={productForm.subcategory}
                     onChange={(e) => {
@@ -2031,12 +2108,7 @@ function AdminDashboardContent() {
                     }}
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   >
-                    <option value="Shirt">Shirt</option>
-                    <option value="Jeans">Jeans</option>
-                    <option value="Tshirt">Tshirt</option>
-                    <option value="Track pant">Track pant</option>
-                    <option value="Shorts">Shorts</option>
-                    <option value="Jacket">Jacket</option>
+                    {GARMENT_GROUPS[garmentGroup].map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
 
@@ -2140,6 +2212,34 @@ function AdminDashboardContent() {
                         {' '}Which sizes count as &quot;plus&quot; is configurable — see Plus-Size Settings above the catalog table.
                       </p>
                     </div>
+                  )}
+                </div>
+
+                {/* Size Chart — collapsed by default, optional */}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowSizeChart(o => !o)}
+                    className="w-full flex items-center justify-between text-left"
+                  >
+                    <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[15px] text-zinc-400">straighten</span>
+                      SIZE CHART <span className="text-zinc-400 font-normal normal-case">(optional — powers the customer &quot;Size Guide&quot;)</span>
+                    </span>
+                    <span className="material-symbols-outlined text-[18px] text-zinc-400">
+                      {showSizeChart ? 'expand_less' : 'expand_more'}
+                    </span>
+                  </button>
+                  {showSizeChart && (
+                    <SizeChartEditor
+                      sizes={selectedSizes}
+                      presetMeasurements={SIZE_CHART_PRESETS[garmentGroup] || SIZE_CHART_PRESETS.Tops}
+                      value={productForm.size_chart}
+                      onChange={(chart) => setProductForm(prev => ({ ...prev, size_chart: chart }))}
+                      copyCandidates={products
+                        .filter(p => p.id !== editingProduct?.id && p.size_chart && GARMENT_GROUP_OF[p.subcategory || ''] === garmentGroup)
+                        .map(p => ({ id: p.id, title: p.title, size_chart: p.size_chart }))}
+                    />
                   )}
                 </div>
 
