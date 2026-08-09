@@ -128,29 +128,12 @@ export default function ProductGallery({ images, title, className = '' }: Produc
   }
 
   return (
-    <div className={`flex gap-3 ${className}`}>
-      {images.length > 1 && (
-        <div className="flex lg:flex-col gap-2 shrink-0 order-2 lg:order-1 overflow-x-auto lg:overflow-visible hide-scrollbar">
-          {images.map((img, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => goTo(idx)}
-              aria-label={`View image ${idx + 1}`}
-              className={`w-14 h-[70px] lg:w-16 lg:h-20 shrink-0 overflow-hidden border-2 bg-gray-50 flex items-center justify-center transition-all ${
-                safeIndex === idx ? 'border-[#C5A059]' : 'border-transparent hover:border-gray-300'
-              }`}
-            >
-              <img src={img} alt={`${title} view ${idx + 1}`} loading="lazy" className="w-full h-full object-contain" />
-            </button>
-          ))}
-        </div>
-      )}
-
+    <div className={`flex flex-col gap-3 ${className}`}>
+      {/* Main image — full width of its block at every screen size; thumbnails live below, not beside it */}
       <div
         ref={containerRef}
-        className="relative flex-1 order-1 lg:order-2 overflow-hidden bg-gray-50 border border-gray-100 select-none"
-        style={{ height: 'min(70vh, 560px)', cursor: isZoomed ? 'zoom-out' : 'zoom-in' }}
+        className="relative w-full overflow-hidden bg-gray-50 border border-gray-100 select-none shadow-sm"
+        style={{ aspectRatio: '3 / 4', cursor: isZoomed ? 'zoom-out' : 'zoom-in' }}
         onMouseMove={handleMouseMove}
         onMouseLeave={resetZoom}
         onTouchStart={handleTouchStart}
@@ -175,24 +158,49 @@ export default function ProductGallery({ images, title, className = '' }: Produc
               type="button"
               onClick={(e) => { e.stopPropagation(); goTo(safeIndex - 1); }}
               aria-label="Previous image"
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/85 hover:bg-white flex items-center justify-center shadow-sm text-gray-600 hover:text-[#C5A059] transition-all"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 hover:bg-white flex items-center justify-center rounded-full shadow-md text-gray-700 hover:text-[#C5A059] transition-all hover:scale-105"
             >
-              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+              <span className="material-symbols-outlined text-[20px]">chevron_left</span>
             </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); goTo(safeIndex + 1); }}
               aria-label="Next image"
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/85 hover:bg-white flex items-center justify-center shadow-sm text-gray-600 hover:text-[#C5A059] transition-all"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 hover:bg-white flex items-center justify-center rounded-full shadow-md text-gray-700 hover:text-[#C5A059] transition-all hover:scale-105"
             >
-              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
             </button>
-            <span className="absolute bottom-3 right-3 bg-white/90 text-[10px] font-bold text-gray-600 px-2 py-1 rounded-sm">
+            <span className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide">
               {safeIndex + 1} / {images.length}
             </span>
           </>
         )}
       </div>
+
+      {/* Thumbnails — a single row below the main image, same layout on mobile and desktop */}
+      {images.length > 1 && (
+        <div className="flex gap-2.5 overflow-x-auto hide-scrollbar pb-0.5">
+          {images.map((img, idx) => {
+            const isActive = safeIndex === idx;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => goTo(idx)}
+                aria-label={`View image ${idx + 1}`}
+                aria-current={isActive}
+                className={`relative w-16 h-20 sm:w-[72px] sm:h-[92px] shrink-0 overflow-hidden bg-gray-50 border-2 flex items-center justify-center transition-all duration-200 ${
+                  isActive
+                    ? 'border-[#C5A059] shadow-sm'
+                    : 'border-transparent opacity-70 hover:opacity-100 hover:border-gray-200'
+                }`}
+              >
+                <img src={img} alt={`${title} view ${idx + 1}`} loading="lazy" className="w-full h-full object-contain" />
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
