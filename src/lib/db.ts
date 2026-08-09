@@ -1251,12 +1251,15 @@ export const applyInboundInventorySync = async (
         continue;
       }
 
-      const { error: upsertErr } = await supabase.from('inventory').upsert([{
-        variant_id: variant.id,
-        quantity_on_hand: Math.max(0, event.quantity_on_hand),
-        sync_source: 'external_pos',
-        last_synced_at: event.occurred_at,
-      }], { onConflict: 'variant_id' });
+      // Direct inventory writes require the admin session (see RLS migration
+      // 20260811000000) — this route authenticates the caller via HMAC
+      // signature instead, so it goes through a narrow SECURITY DEFINER RPC
+      // that does exactly this one upsert rather than needing a service-role key.
+      const { error: upsertErr } = await supabase.rpc('upsert_inventory_from_sync', {
+        p_variant_id: variant.id,
+        p_quantity_on_hand: event.quantity_on_hand,
+        p_last_synced_at: event.occurred_at,
+      });
 
       await supabase.from('inventory_sync_log').insert([{
         direction: 'inbound', external_event_id: event.external_event_id, variant_sku: event.sku,
@@ -1466,22 +1469,25 @@ export const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>): 
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.from('orders').insert([newOrder]).select().single();
-      if (!error && data) return data as Order;
+      // No .select() here — guest checkout (most orders) has no Supabase Auth
+      // session for the post-insert read-back to authenticate under RLS, and
+      // there's nothing it would tell us anyway: newOrder above already has
+      // every field, exactly as sent. See the RLS hardening migration
+      // (20260811000000) for why a SELECT-back would otherwise be blocked.
+      const { error } = await supabase.from('orders').insert([newOrder]);
+      if (!error) return newOrder;
 
       // Handle missing shipping columns retry (Postgres code 42703 is undefined_column)
       if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
         console.warn("Supabase orders table missing shipping columns, retrying insert without them...");
         const { shipping_status, shipping_carrier, tracking_number, ...strippedOrderData } = newOrder as any;
-        const { data: retryData, error: retryError } = await supabase
+        const { error: retryError } = await supabase
           .from('orders')
-          .insert([strippedOrderData])
-          .select()
-          .single();
-        if (!retryError && retryData) {
+          .insert([strippedOrderData]);
+        if (!retryError) {
           // Return the full order (including shipping details) so the client has them
           return newOrder;
-        } else if (retryError) {
+        } else {
           console.error("Retry insert failed:", retryError.message);
         }
       } else if (error) {

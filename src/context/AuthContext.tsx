@@ -3,6 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserProfile, upsertProfile, supabase, supabaseTimeout } from '@/lib/db';
 
+interface MfaFactor {
+  id: string;
+  status: string;
+  friendlyName?: string;
+}
+
 interface AuthContextType {
   user: UserProfile | null;
   isAdmin: boolean;
@@ -17,7 +23,16 @@ interface AuthContextType {
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   triggerLoginModal: (onSuccessCallback?: () => void) => void;
   closeLoginModal: () => void;
-  setAdminStatus: (status: boolean) => void;
+  // Two-factor auth (Supabase TOTP) — currently only enforced for the admin
+  // account. mfaPending means: password check passed, but the session is
+  // still aal1 while a verified authenticator exists — admin access is held
+  // back until verifyMfaCode succeeds.
+  mfaPending: boolean;
+  verifyMfaCode: (code: string) => Promise<{ error: string | null }>;
+  enrollMfa: () => Promise<{ qrCode: string | null; secret: string | null; factorId: string | null; error: string | null }>;
+  confirmMfaEnrollment: (factorId: string, code: string) => Promise<{ error: string | null }>;
+  unenrollMfa: (factorId: string) => Promise<{ error: string | null }>;
+  getMfaFactors: () => Promise<MfaFactor[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,6 +83,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loading, setLoading] = useState(true); // true by default to avoid flickering/stale rendering on mount
   const [onSuccessCallback, setOnSuccessCallback] = useState<(() => void) | null>(null);
+  const [mfaPending, setMfaPending] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
 
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
   const resolveAndSetProfile = useCallback(async (supabaseUser: {
@@ -77,14 +94,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user_metadata?: Record<string, string>;
   }) => {
     // Check admin status immediately before any async network calls to avoid stale state delays
-    const isAdminEmail = supabaseUser.email?.toLowerCase() === 'admin@stagbeetle.co.in';
-    if (isAdminEmail) {
-      setIsAdminState(true);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('stag_beetle_admin_session', 'true');
+    const isAdminEmail = supabaseUser.email?.toLowerCase() === 'stagbeetlebilling@gmail.com';
+    if (isAdminEmail && supabase) {
+      // Step-up check: if this account has a verified authenticator enrolled,
+      // the session needs to actually be at aal2 before it counts as admin —
+      // a correct password alone isn't enough once MFA is turned on. A brand
+      // new admin with no factor enrolled yet has nextLevel === currentLevel,
+      // so this is a no-op until they set MFA up from the Security panel.
+      let requiresStepUp = false;
+      try {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== aal.nextLevel) {
+          requiresStepUp = true;
+          const { data: factorsData } = await supabase.auth.mfa.listFactors();
+          const verifiedTotp = factorsData?.totp?.find(f => f.status === 'verified');
+          setMfaFactorId(verifiedTotp?.id || null);
+        }
+      } catch (e) {
+        console.warn('MFA assurance-level check failed — denying admin by default:', e);
+        requiresStepUp = true; // fail closed, not open
+      }
+
+      if (requiresStepUp) {
+        setIsAdminState(false);
+        setMfaPending(true);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('stag_beetle_admin_session');
+        }
+      } else {
+        setIsAdminState(true);
+        setMfaPending(false);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('stag_beetle_admin_session', 'true');
+        }
       }
     } else {
       setIsAdminState(false);
+      setMfaPending(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stag_beetle_admin_session');
       }
@@ -359,6 +405,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // ── MFA: verify a code against the pending step-up challenge ──────────────
+  // Called after a correct password when resolveAndSetProfile found a
+  // verified authenticator but the session hasn't stepped up to aal2 yet.
+  const verifyMfaCode = async (code: string) => {
+    if (!supabase) return { error: 'Supabase is not configured' };
+    if (!mfaFactorId) return { error: 'No pending verification — please sign in again.' };
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaFactorId, code: code.trim() });
+      if (error) return { error: error.message };
+      // Session is now aal2 — re-resolve so isAdmin actually flips true
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (freshUser) {
+        const profile = await resolveAndSetProfile(freshUser);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('stag_beetle_user', JSON.stringify(profile));
+        }
+      }
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Verification failed.' };
+    }
+  };
+
+  // ── MFA: begin enrolling a new authenticator (TOTP) ────────────────────────
+  // Must be called from an already-authenticated session. Returns a QR code
+  // (SVG data URI, straight from Supabase — no extra QR library needed) plus
+  // the secret for manual entry, and the factorId to confirm with next.
+  const enrollMfa = async () => {
+    if (!supabase) return { qrCode: null, secret: null, factorId: null, error: 'Supabase is not configured' };
+    try {
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator App' });
+      if (error) return { qrCode: null, secret: null, factorId: null, error: error.message };
+      return { qrCode: data.totp.qr_code, secret: data.totp.secret, factorId: data.id, error: null };
+    } catch (err) {
+      return { qrCode: null, secret: null, factorId: null, error: err instanceof Error ? err.message : 'Enrollment failed.' };
+    }
+  };
+
+  // ── MFA: confirm enrollment with the first code from the authenticator app ─
+  // Activates the factor and, since this runs in the current session, also
+  // elevates it to aal2 immediately — no forced re-login right after setup.
+  const confirmMfaEnrollment = async (factorId: string, code: string) => {
+    if (!supabase) return { error: 'Supabase is not configured' };
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
+      if (error) return { error: error.message };
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (freshUser) await resolveAndSetProfile(freshUser);
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Verification failed.' };
+    }
+  };
+
+  // ── MFA: remove an authenticator (lost device, resetting, etc.) ───────────
+  const unenrollMfa = async (factorId: string) => {
+    if (!supabase) return { error: 'Supabase is not configured' };
+    try {
+      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Could not remove authenticator.' };
+    }
+  };
+
+  // ── MFA: list enrolled factors, for the Security panel's status display ───
+  const getMfaFactors = async (): Promise<MfaFactor[]> => {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error || !data) return [];
+      return (data.totp || []).map(f => ({ id: f.id, status: f.status, friendlyName: f.friendly_name }));
+    } catch {
+      return [];
+    }
+  };
+
   // ── Email + Password registration (real Supabase Auth) ────────────────────
   const registerWithEmailPassword = async (name: string, email: string, password: string, phone: string) => {
     if (!supabase) {
@@ -402,6 +526,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setIsAdminState(false);
+    setMfaPending(false);
+    setMfaFactorId(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('stag_beetle_user');
       localStorage.removeItem('stag_beetle_admin_session');
@@ -439,14 +565,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOnSuccessCallback(null);
   };
 
-  const setAdminStatus = (status: boolean) => {
-    setIsAdminState(status);
-    if (typeof window !== 'undefined') {
-      if (status) localStorage.setItem('stag_beetle_admin_session', 'true');
-      else localStorage.removeItem('stag_beetle_admin_session');
-    }
-  };
-
   return (
     <AuthContext.Provider value={{
       user,
@@ -462,7 +580,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateProfile,
       triggerLoginModal,
       closeLoginModal,
-      setAdminStatus,
+      mfaPending,
+      verifyMfaCode,
+      enrollMfa,
+      confirmMfaEnrollment,
+      unenrollMfa,
+      getMfaFactors,
     }}>
       {children}
     </AuthContext.Provider>

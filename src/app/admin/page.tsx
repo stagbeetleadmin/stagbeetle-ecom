@@ -24,6 +24,7 @@ import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
 import SizeChartEditor from '@/components/admin/SizeChartEditor';
+import SecurityPanel from '@/components/admin/SecurityPanel';
 
 const CATEGORY_OPTIONS = ['Men', 'Accessories'];
 const GARMENT_GROUP_OPTIONS = Object.keys(GARMENT_GROUPS); // ['Tops', 'Bottoms']
@@ -79,11 +80,11 @@ function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
 
-  // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics'
-  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics'>('analytics');
+  // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics' | 'security'
+  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics' | 'security'>('analytics');
 
   useEffect(() => {
-    if (tabParam && ['products', 'coupons', 'orders', 'analytics'].includes(tabParam)) {
+    if (tabParam && ['products', 'coupons', 'orders', 'analytics', 'security'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
@@ -178,26 +179,23 @@ function AdminDashboardContent() {
     observerRef.current.observe(node);
   }, []);
 
-  const { isAdmin, loading: authLoading, setAdminStatus, loginWithEmailPassword, logout } = useAuth();
-  const [passcode, setPasscode] = useState('');
-  const [passcodeError, setPasscodeError] = useState('');
+  const {
+    isAdmin, loading: authLoading, loginWithEmailPassword, logout,
+    mfaPending, verifyMfaCode,
+  } = useAuth();
 
   // Admin login states
-  const [activeGateTab, setActiveGateTab] = useState<'login' | 'passcode'>('login');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const handlePasscodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passcode.trim() === 'STAGADMIN2026') {
-      setAdminStatus(true);
-      setPasscodeError('');
-    } else {
-      setPasscodeError('Invalid Administrative Passcode.');
-    }
-  };
+  // Step-up MFA challenge — shown instead of the login form once the password
+  // check passes but the account has a verified authenticator (see mfaPending
+  // in AuthContext). There's no way into the dashboard from here without it.
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaError, setMfaError] = useState('');
+  const [mfaVerifying, setMfaVerifying] = useState(false);
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,17 +212,35 @@ function AdminDashboardContent() {
       const res = await loginWithEmailPassword(adminEmail.trim(), adminPassword.trim());
       if (res.error) {
         setLoginError(res.error);
-      } else {
-        // Successful login, check if they are the admin email
-        if (adminEmail.trim().toLowerCase() !== 'admin@stagbeetle.co.in') {
-          setLoginError('Access Denied: This account does not have administrative privileges.');
-          await logout();
-        }
+      } else if (adminEmail.trim().toLowerCase() !== 'stagbeetlebilling@gmail.com') {
+        // Successful login, but not the admin account — mfaPending never applies here
+        setLoginError('Access Denied: This account does not have administrative privileges.');
+        await logout();
       }
+      // If it is the admin account and a verified authenticator exists, the
+      // context flips mfaPending true and this component re-renders the
+      // challenge form below instead — nothing further to do here.
     } catch (err: any) {
       setLoginError(err.message || 'An error occurred during authentication.');
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMfaError('');
+    if (!mfaCode.trim()) { setMfaError('Enter the 6-digit code from your authenticator app.'); return; }
+    setMfaVerifying(true);
+    try {
+      const res = await verifyMfaCode(mfaCode.trim());
+      if (res.error) {
+        setMfaError(res.error);
+      } else {
+        setMfaCode('');
+      }
+    } finally {
+      setMfaVerifying(false);
     }
   };
 
@@ -417,111 +433,114 @@ function AdminDashboardContent() {
           <div className="fixed inset-0 marble-overlay z-0"></div>
 
           <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
-            <div className="text-center mb-6">
-              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
-              <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
-              <p className="text-[12px] text-zinc-500 font-body mt-2">
-                Log in with your administrator account or enter the administrative passcode.
-              </p>
-            </div>
-
-            {/* Gate Tabs */}
-            <div className="flex border-b border-on-surface/10 mb-6 text-[10px] font-bold uppercase tracking-wider">
-              <button
-                type="button"
-                onClick={() => { setActiveGateTab('login'); setLoginError(''); setPasscodeError(''); }}
-                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${activeGateTab === 'login'
-                    ? 'border-gold-leaf text-on-surface'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-600'
-                  }`}
-              >
-                Admin Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveGateTab('passcode'); setLoginError(''); setPasscodeError(''); }}
-                className={`flex-1 pb-2.5 transition-colors border-b-2 text-center font-semibold tracking-widest ${activeGateTab === 'passcode'
-                    ? 'border-gold-leaf text-on-surface'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-600'
-                  }`}
-              >
-                Atelier Passcode
-              </button>
-            </div>
-
-            {activeGateTab === 'login' ? (
-              <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
-                  <input
-                    type="email"
-                    placeholder="admin@stagbeetle.co.in"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    required
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
-                  />
+            {mfaPending ? (
+              <>
+                <div className="text-center mb-6">
+                  <span className="material-symbols-outlined text-[32px] text-gold-leaf block mb-2">shield_lock</span>
+                  <h2 className="font-display text-[24px] font-semibold text-on-surface">Verification Required</h2>
+                  <p className="text-[12px] text-zinc-500 font-body mt-2">
+                    Enter the 6-digit code from your authenticator app to finish signing in.
+                  </p>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    required
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
-                  />
-                </div>
+                <form onSubmit={handleMfaSubmit} className="space-y-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">AUTHENTICATION CODE</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      required
+                      autoFocus
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[20px] tracking-[0.4em] outline-none font-mono"
+                    />
+                  </div>
 
-                {loginError && (
-                  <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loginLoading}
-                  className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
-                >
-                  {loginLoading && (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {mfaError && (
+                    <p className="text-[11px] text-red-600 font-medium text-center">{mfaError}</p>
                   )}
-                  {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
-                </button>
-              </form>
+
+                  <button
+                    type="submit"
+                    disabled={mfaVerifying || mfaCode.length < 6}
+                    className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {mfaVerifying && (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {mfaVerifying ? 'VERIFYING…' : 'VERIFY & CONTINUE'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => { await logout(); setMfaCode(''); setMfaError(''); }}
+                    className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider"
+                  >
+                    Cancel and sign in as someone else
+                  </button>
+                </form>
+              </>
             ) : (
-              <form onSubmit={handlePasscodeSubmit} className="space-y-5">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSCODE</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••••••••"
-                    value={passcode}
-                    onChange={(e) => setPasscode(e.target.value)}
-                    required
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[16px] tracking-[0.25em] outline-none"
-                  />
+              <>
+                <div className="text-center mb-6">
+                  <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
+                  <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
+                  <p className="text-[12px] text-zinc-500 font-body mt-2">
+                    Log in with your administrator account.
+                  </p>
                 </div>
 
-                {passcodeError && (
-                  <p className="text-[11px] text-red-600 font-medium text-center">{passcodeError}</p>
-                )}
+                <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
+                    <input
+                      type="email"
+                      placeholder="stagbeetlebilling@gmail.com"
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                      required
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-primary text-white py-3.5 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md"
-                >
-                  AUTHORIZE ACCESS
-                </button>
-              </form>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      required
+                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
+                  >
+                    {loginLoading && (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
+                  </button>
+                </form>
+
+                <div className="text-center mt-6">
+                  <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
+                    ← Return to Storefront
+                  </Link>
+                </div>
+              </>
             )}
-
-            <div className="text-center mt-6">
-              <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
-                ← Return to Storefront
-              </Link>
-            </div>
           </div>
         </main>
 
@@ -925,6 +944,19 @@ function AdminDashboardContent() {
               >
                 <span className="material-symbols-outlined text-[18px]">receipt_long</span>
                 {!sidebarCollapsed && 'ORDER REGISTRY'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/admin?tab=security')}
+                title={sidebarCollapsed ? 'Security' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'security'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">shield_lock</span>
+                {!sidebarCollapsed && 'SECURITY'}
               </button>
 
               <div className="border-t border-on-surface/10 my-2"></div>
@@ -1976,6 +2008,9 @@ function AdminDashboardContent() {
 
                     </div>
                   )}
+
+                  {/* TAB: SECURITY */}
+                  {activeTab === 'security' && <SecurityPanel />}
                 </>
               )}
 

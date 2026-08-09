@@ -45,7 +45,7 @@ export default function LoginModal() {
           setAuthLoading(false);
           return;
         }
-        if (email.trim().toLowerCase() === 'admin@stagbeetle.co.in') {
+        if (email.trim().toLowerCase() === 'stagbeetlebilling@gmail.com') {
           setFormError('Admin accounts cannot log in here. Please use the administrative portal.');
           setAuthLoading(false);
           return;
@@ -60,7 +60,7 @@ export default function LoginModal() {
           setAuthLoading(false);
           return;
         }
-        if (email.trim().toLowerCase() === 'admin@stagbeetle.co.in') {
+        if (email.trim().toLowerCase() === 'stagbeetlebilling@gmail.com') {
           setFormError('Admin accounts cannot be registered.');
           setAuthLoading(false);
           return;
@@ -80,7 +80,7 @@ export default function LoginModal() {
           setAuthLoading(false);
           return;
         }
-        if (email.trim().toLowerCase() === 'admin@stagbeetle.co.in') {
+        if (email.trim().toLowerCase() === 'stagbeetlebilling@gmail.com') {
           setFormError('Admin email cannot be used for guest checkout.');
           setAuthLoading(false);
           return;
