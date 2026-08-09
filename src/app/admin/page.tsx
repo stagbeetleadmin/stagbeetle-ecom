@@ -548,6 +548,19 @@ function AdminDashboardContent() {
   // =========================================================================
   // PRODUCT CRUD HANDLERS
   // =========================================================================
+  // Products sharing a style code (different colours of the same physical
+  // cut) always use the same size chart — syncSizeChartAcrossStyle in db.ts
+  // keeps every sibling's own copy in sync whenever any one of them is
+  // saved with a chart. This is the read side: given a style code, find
+  // whether any sibling already has a chart, so a new colour (or an existing
+  // one that's never had its own set) can start from it instead of blank.
+  const findSiblingSizeChart = (styleCodeValue: string, excludeId?: string): SizeChart | undefined => {
+    const target = styleCodeValue.trim().toUpperCase();
+    if (!target) return undefined;
+    const match = products.find(p => p.id !== excludeId && p.size_chart && getSkuBase(p.sku) === target);
+    return match?.size_chart;
+  };
+
   const openAddProduct = () => {
     setEditingProduct(null);
     setStyleCode('');
@@ -583,7 +596,10 @@ function AdminDashboardContent() {
     setColorCode(parsedColor);
     setSelectedSizes(prod.sizes);
     setGarmentGroup(GARMENT_GROUP_OF[prod.subcategory || 'Shirt'] || 'Tops');
-    setShowSizeChart(false);
+    // This product's own chart wins if it has one; otherwise, adopt a
+    // sibling colour's chart automatically rather than opening blank.
+    const sharedChart = prod.size_chart || findSiblingSizeChart(parsedStyle, prod.id);
+    setShowSizeChart(!!sharedChart);
 
     const rawColor = prod.colors[0] || '';
     const namePart = rawColor.split('|')[0] || '';
@@ -605,7 +621,7 @@ function AdminDashboardContent() {
       images: prod.images || [],
       sizes: prod.sizes.join(', '),
       colors: prod.colors.join(', '),
-      size_chart: prod.size_chart
+      size_chart: sharedChart ? JSON.parse(JSON.stringify(sharedChart)) : undefined
     });
     setShowProductModal(true);
   };
@@ -2018,6 +2034,15 @@ function AdminDashboardContent() {
                       required
                       value={styleCode}
                       onChange={(e) => setStyleCode(e.target.value.toUpperCase())}
+                      onBlur={() => {
+                        // Never clobber a chart the admin already has loaded (their own, or already adopted)
+                        if (productForm.size_chart) return;
+                        const sibling = findSiblingSizeChart(styleCode, editingProduct?.id);
+                        if (sibling) {
+                          setProductForm(prev => ({ ...prev, size_chart: JSON.parse(JSON.stringify(sibling)) }));
+                          setShowSizeChart(true);
+                        }
+                      }}
                       placeholder="e.g. SATN"
                       className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none font-mono"
                     />
@@ -2266,15 +2291,21 @@ function AdminDashboardContent() {
                     </span>
                   </button>
                   {showSizeChart && (
-                    <SizeChartEditor
-                      sizes={selectedSizes}
-                      defaultChart={getDefaultSizeChart(garmentGroup, selectedSizes)}
-                      value={productForm.size_chart}
-                      onChange={(chart) => setProductForm(prev => ({ ...prev, size_chart: chart }))}
-                      copyCandidates={products
-                        .filter(p => p.id !== editingProduct?.id && p.size_chart && GARMENT_GROUP_OF[p.subcategory || ''] === garmentGroup)
-                        .map(p => ({ id: p.id, title: p.title, size_chart: p.size_chart }))}
-                    />
+                    <>
+                      <p className="text-[10.5px] text-zinc-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px] text-[#C5A059]">sync</span>
+                        Shared automatically across every colour of style {styleCode.trim() ? <span className="font-mono font-semibold text-zinc-500">{styleCode.trim().toUpperCase()}</span> : 'this'} — save here and matching SKUs update to match, no need to re-enter it per colour.
+                      </p>
+                      <SizeChartEditor
+                        sizes={selectedSizes}
+                        defaultChart={getDefaultSizeChart(garmentGroup, selectedSizes)}
+                        value={productForm.size_chart}
+                        onChange={(chart) => setProductForm(prev => ({ ...prev, size_chart: chart }))}
+                        copyCandidates={products
+                          .filter(p => p.id !== editingProduct?.id && p.size_chart && GARMENT_GROUP_OF[p.subcategory || ''] === garmentGroup)
+                          .map(p => ({ id: p.id, title: p.title, size_chart: p.size_chart }))}
+                      />
+                    </>
                   )}
                 </div>
 

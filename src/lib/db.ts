@@ -603,6 +603,36 @@ export const getProductById = async (id: string): Promise<Product | null> => {
   return getLocalProducts().find(p => p.id === id) || null;
 };
 
+// Products with the same style code (different colours of the same physical
+// cut — see getSkuBase, which strips the trailing colour segment) always
+// share one size chart: a chest/waist measurement doesn't change by colour.
+// Whenever a product is saved with a chart, every sibling colour is updated
+// to match automatically — edit or add it on any one variant, the rest pick
+// it up without the admin touching them. Deliberately never propagates a
+// *cleared* chart (undefined): that would risk wiping a sibling's real data
+// via something as unrelated as a plain price edit, or a bulk upload row
+// that simply didn't carry a chart column.
+async function syncSizeChartAcrossStyle(sku: string | undefined, chart: SizeChart | undefined, excludeId: string): Promise<void> {
+  if (!chart || !supabase) return;
+  const styleCode = getSkuBase(sku);
+  if (!styleCode) return;
+  try {
+    const { error } = await supabase
+      .from('products')
+      .update({ size_chart: chart })
+      .ilike('sku', `${styleCode}-%`)
+      .neq('id', excludeId);
+    if (error) {
+      console.warn('[Atelier DB] Failed to sync size chart across style variants:', error.message);
+      return;
+    }
+    invalidateProductsCache();
+    broadcastProductsChanged();
+  } catch (e) {
+    console.warn('[Atelier DB] syncSizeChartAcrossStyle failed:', e);
+  }
+}
+
 export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product> => {
   invalidateProductsCache();
   broadcastProductsChanged();
@@ -617,6 +647,7 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
       const { data, error } = await supabase.from('products').insert([newProduct]).select().single();
       if (!error && data) {
         await ensureVariantsForProduct(data.id, data.sku, data.sizes || []);
+        await syncSizeChartAcrossStyle(data.sku, data.size_chart, data.id);
         return data as Product;
       }
     } catch (e) {
@@ -708,6 +739,7 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
       const { data, error } = await supabase.from('products').update(finalFields).eq('id', id).select().single();
       if (!error && data) {
         await ensureVariantsForProduct(data.id, data.sku, data.sizes || []);
+        await syncSizeChartAcrossStyle(data.sku, data.size_chart, data.id);
         return data as Product;
       }
       if (error) console.warn("Supabase updateProduct returned error:", error.message);
