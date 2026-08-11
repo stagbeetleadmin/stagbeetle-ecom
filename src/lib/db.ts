@@ -111,6 +111,7 @@ export interface InventoryRecord {
   variant_id: string;
   sku: string;
   size: string;
+  galla_sku: string | null; // Galla's own numeric product code for this size — not our sku; required for outbound order sync to reach the right item
   quantity_on_hand: number;
   quantity_reserved: number;
   quantity_available: number; // on_hand - reserved, floored at 0
@@ -916,13 +917,14 @@ export const subscribeToInventoryChanges = (onChange: () => void): (() => void) 
   return () => { inventoryChangeListeners.delete(onChange); };
 };
 
-const toInventoryRecord = (variant: { id: string; sku: string; size: string }, inv?: {
+const toInventoryRecord = (variant: { id: string; sku: string; size: string; galla_sku?: string | null }, inv?: {
   quantity_on_hand: number; quantity_reserved: number; low_stock_threshold: number;
   sync_source: string; last_synced_at: string | null;
 } | null): InventoryRecord => ({
   variant_id: variant.id,
   sku: variant.sku,
   size: variant.size,
+  galla_sku: variant.galla_sku ?? null,
   quantity_on_hand: inv?.quantity_on_hand ?? 0,
   quantity_reserved: inv?.quantity_reserved ?? 0,
   quantity_available: inv ? Math.max(0, inv.quantity_on_hand - inv.quantity_reserved) : Infinity, // untracked = don't block a sale
@@ -935,7 +937,7 @@ export const getInventoryForProduct = async (productId: string): Promise<Invento
   if (!isSupabaseConfigured || !supabase) return [];
   try {
     const { data: variants, error: vErr } = await supabaseTimeout(
-      supabase.from('product_variants').select('id,sku,size').eq('product_id', productId)
+      supabase.from('product_variants').select('id,sku,size,galla_sku').eq('product_id', productId)
     );
     if (vErr || !variants || variants.length === 0) return [];
 
@@ -1002,7 +1004,7 @@ export const getInventoryBySku = async (sku: string): Promise<InventoryRecord | 
   if (!isSupabaseConfigured || !supabase) return null;
   try {
     const { data: variant, error: vErr } = await supabaseTimeout(
-      supabase.from('product_variants').select('id,sku,size').eq('sku', sku).maybeSingle()
+      supabase.from('product_variants').select('id,sku,size,galla_sku').eq('sku', sku).maybeSingle()
     );
     if (vErr || !variant) return null;
 
@@ -1043,7 +1045,7 @@ export const setInventoryManual = async (productId: string, sku: string, size: s
     const { data: variant, error: vErr } = await supabase
       .from('product_variants')
       .upsert([{ product_id: productId, sku: variantSku, size }], { onConflict: 'product_id,size' })
-      .select('id,sku,size')
+      .select('id,sku,size,galla_sku')
       .single();
     if (vErr || !variant) {
       console.warn('[Atelier DB] setInventoryManual variant upsert failed:', vErr?.message);
@@ -1071,6 +1073,33 @@ export const setInventoryManual = async (productId: string, sku: string, size: s
   }
 };
 
+// Records Galla's own numeric product code for one size of one product —
+// their SKU scheme, not ours (see migration 20260812000000). Outbound order
+// sync (notifyGallaOfSale) looks this up per line item and skips any size
+// that has no mapping set, rather than sending our own SKU format, which
+// Galla's catalog wouldn't recognize.
+export const setGallaSkuForVariant = async (productId: string, sku: string, size: string, gallaSku: string): Promise<InventoryRecord | null> => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+    const { data: variant, error: vErr } = await supabase
+      .from('product_variants')
+      .upsert([{ product_id: productId, sku: variantSku, size, galla_sku: gallaSku.trim() || null }], { onConflict: 'product_id,size' })
+      .select('id,sku,size,galla_sku')
+      .single();
+    if (vErr || !variant) {
+      console.warn('[Atelier DB] setGallaSkuForVariant variant upsert failed:', vErr?.message);
+      return null;
+    }
+
+    const { data: inv } = await supabase.from('inventory').select('*').eq('variant_id', variant.id).maybeSingle();
+    return toInventoryRecord(variant, inv as any);
+  } catch (e: any) {
+    console.warn('[Atelier DB] setGallaSkuForVariant failed:', e.message || e);
+    return null;
+  }
+};
+
 // Atomically decrements stock for each purchased line item — via a Postgres
 // function (see migration 20260802000100), not a JS read-then-write, so two
 // simultaneous checkouts for the last unit can't both "succeed" client-side.
@@ -1079,25 +1108,25 @@ export const setInventoryManual = async (productId: string, sku: string, size: s
 // on" policy used everywhere else in this module.
 export const decrementInventoryForOrder = async (
   items: { product_id: string; selected_size: string; quantity: number }[]
-): Promise<{ product_id: string; selected_size: string; sku: string | null; success: boolean }[]> => {
+): Promise<{ product_id: string; selected_size: string; sku: string | null; galla_sku: string | null; success: boolean }[]> => {
   if (!isSupabaseConfigured || !supabase) {
-    return items.map(i => ({ product_id: i.product_id, selected_size: i.selected_size, sku: null, success: true }));
+    return items.map(i => ({ product_id: i.product_id, selected_size: i.selected_size, sku: null, galla_sku: null, success: true }));
   }
 
-  const results: { product_id: string; selected_size: string; sku: string | null; success: boolean }[] = [];
+  const results: { product_id: string; selected_size: string; sku: string | null; galla_sku: string | null; success: boolean }[] = [];
 
   for (const item of items) {
     try {
       const { data: variant } = await supabase
         .from('product_variants')
-        .select('id,sku')
+        .select('id,sku,galla_sku')
         .eq('product_id', item.product_id)
         .eq('size', item.selected_size)
         .maybeSingle();
 
       if (!variant) {
         // Not tracked — allow the sale, nothing to decrement.
-        results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: null, success: true });
+        results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: null, galla_sku: null, success: true });
         continue;
       }
 
@@ -1114,10 +1143,10 @@ export const decrementInventoryForOrder = async (
         error_message: error?.message || (!applied ? 'insufficient stock at time of decrement' : null),
       }]);
 
-      results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: variant.sku, success: !error && !!applied });
+      results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: variant.sku, galla_sku: variant.galla_sku, success: !error && !!applied });
     } catch (e: any) {
       console.warn(`[Atelier DB] decrementInventoryForOrder failed for ${item.product_id}/${item.selected_size}:`, e.message || e);
-      results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: null, success: false });
+      results.push({ product_id: item.product_id, selected_size: item.selected_size, sku: null, galla_sku: null, success: false });
     }
   }
 

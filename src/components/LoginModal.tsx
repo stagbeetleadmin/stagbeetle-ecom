@@ -18,6 +18,7 @@ export default function LoginModal() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [formError, setFormError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -224,14 +225,27 @@ export default function LoginModal() {
                 <label className="block text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">
                   Password
                 </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2 px-3 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full border border-gray-200 focus:border-[#C5A059] outline-none py-2 pl-3 pr-9 text-[13px] text-gray-800 placeholder:text-gray-300 transition-colors rounded-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(o => !o)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">
+                      {showPassword ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
+                </div>
               </div>
             )}
 

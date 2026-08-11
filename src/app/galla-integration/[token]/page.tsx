@@ -134,10 +134,10 @@ export default async function GallaIntegrationGuidePage({ params }: { params: Pr
           </div>
           <div className="border border-zinc-200 rounded-sm p-4 bg-white">
             <div className="flex items-center gap-2 font-mono text-[12px] font-bold mb-2">
-              <span className="bg-amber-50 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-sm">TBD</span>
-              <span>your endpoint</span>
+              <span className="bg-amber-50 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-sm">BLOCKED</span>
+              <span>/webhooks/orders</span>
             </div>
-            <p className="text-[12.5px] text-zinc-500 leading-relaxed">We call you — after an online sale. Needs your input, see below.</p>
+            <p className="text-[12.5px] text-zinc-500 leading-relaxed">We call you — after an online sale. Contract confirmed, blocked on a loc_code 422 — see below.</p>
           </div>
         </div>
 
@@ -179,14 +179,27 @@ export default async function GallaIntegrationGuidePage({ params }: { params: Pr
         </Section>
 
         {/* Computing the signature */}
-        <Section id="auth" eyebrow="Reference" title="Computing the signature" subtitle="The one piece every integration gets stuck on first.">
+        <Section id="auth" eyebrow="Reference" title="Authenticating your requests" subtitle="Two options — use whichever your platform can actually produce. Either is accepted on every request.">
+          <div className="bg-[#F9F6F0] border border-[#C5A059]/25 rounded-sm p-4 text-[12.5px] text-[#0D1B2A] leading-relaxed">
+            <strong className="text-[#8a6a2f]">Simplest option — bearer token.</strong> Send{' '}
+            <code className="font-mono bg-white/60 px-1 rounded-sm">Authorization: Bearer &lt;API key&gt;</code>{' '}
+            on every request, the same style your own order webhook (below) already uses. We send this key separately from this document.
+            No signature computation needed — if your platform is a generic &quot;URL + API key&quot; integration, use this.
+          </div>
           <p className="text-[13px] text-zinc-600 leading-relaxed">
-            Every request needs <code className="font-mono bg-zinc-100 px-1 rounded-sm">X-Stagbeetle-Signature: sha256=&lt;hex digest&gt;</code> — an
-            HMAC-SHA256 of the <strong>exact raw request body</strong> (empty string for the health check), keyed with the shared secret we send separately.
+            <strong>Stronger option — HMAC signature.</strong> If your platform supports custom request signing, send{' '}
+            <code className="font-mono bg-zinc-100 px-1 rounded-sm">X-Stagbeetle-Signature: sha256=&lt;hex digest&gt;</code> — an
+            HMAC-SHA256 of the <strong>exact raw request body</strong> (empty string for the health check), keyed with a separate shared secret (also sent separately).
             <code className="font-mono bg-zinc-100 px-1 rounded-sm ml-1">YOUR_SHARED_SECRET</code> below is a placeholder.
           </p>
 
-          <p className="text-[11px] font-label-caps font-bold text-zinc-400 uppercase tracking-wider">Command line (openssl)</p>
+          <p className="text-[11px] font-label-caps font-bold text-zinc-400 uppercase tracking-wider">Bearer token (simplest)</p>
+          <CodeBlock>{`curl -X POST https://stagbeetle.co.in/api/inventory/sync \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{"events":[{"external_event_id":"test-1","sku":"SATN-CRM-M","quantity_on_hand":5,"occurred_at":"2026-08-06T10:00:00Z"}]}'`}</CodeBlock>
+
+          <p className="text-[11px] font-label-caps font-bold text-zinc-400 uppercase tracking-wider">HMAC signature — command line (openssl)</p>
           <CodeBlock>{`BODY='{"events":[{"external_event_id":"test-1","sku":"SATN-CRM-M","quantity_on_hand":5,"occurred_at":"2026-08-06T10:00:00Z"}]}'
 SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "YOUR_SHARED_SECRET" | sed 's/^.* //')
 
@@ -309,16 +322,43 @@ X-Stagbeetle-Signature: sha256=<hmac of empty string>
           />
         </Section>
 
-        {/* What we need from you */}
-        <Section id="outbound" eyebrow="Outstanding" title="What we need from you" subtitle="The other direction — us calling you after an online sale. This is what's blocking that half.">
+        {/* Outbound: order sync to Galla — confirmed contract */}
+        <Section id="outbound" eyebrow="Confirmed 2026-08-11" title="Outbound: order sync (us calling you)" subtitle="The other direction — after an online sale, we POST to your orders webhook. Contract confirmed against your demo account.">
+          <p className="text-[13px] font-bold font-mono text-[#0D1B2A]">POST /mystorev2/api/v2/webhooks/orders</p>
+          <CodeBlock>{`POST https://retail.galla.app/mystorev2/api/v2/webhooks/orders
+Content-Type: application/json
+store-code: <your store code>
+Authorization: Bearer <API key>
+loc_code: <location code>
+
+{
+  "event": "order.created",
+  "external_order_id": "order_ab12cd34e",
+  "line_items": [
+    { "sku": "SATN-CRM-M", "qty": 1 }
+  ]
+}`}</CodeBlock>
+          <p className="text-[13px] text-zinc-600 leading-relaxed">
+            One request per order — every line item in that order goes in a single <code className="font-mono bg-zinc-100 px-1 rounded-sm">line_items</code> array,
+            not one call per SKU. <code className="font-mono bg-zinc-100 px-1 rounded-sm">external_order_id</code> is our order number, stable and unique per order.
+          </p>
+
+          <div className="bg-red-50 border border-red-200 rounded-sm p-4 text-[12.5px] text-red-900 leading-relaxed">
+            <strong className="text-red-700">Currently blocked:</strong> tested live against your demo credentials (store-code <code className="font-mono bg-white/60 px-1 rounded-sm">2h337h00ch</code>,
+            loc_code <code className="font-mono bg-white/60 px-1 rounded-sm">KRT88</code>) using your exact documented request — every attempt gets back{' '}
+            <code className="font-mono bg-white/60 px-1 rounded-sm">422 {'{"error":"loc_code header is required"}'}</code> even though the header is present.
+            Verified this isn&apos;t on our end: same result whether <code className="font-mono bg-white/60 px-1 rounded-sm">loc_code</code> is sent as a header,
+            a query param, or a body field. The 422 (not a 401) confirms auth and routing succeed — this looks like{' '}
+            <code className="font-mono bg-white/60 px-1 rounded-sm">KRT88</code> isn&apos;t recognized as a valid location for this store-code/API key on your side.
+            Need this resolved before we can confirm the full flow.
+          </div>
+
+          <p className="text-[13px] text-zinc-600 leading-relaxed">Still open, once the above is resolved:</p>
           <div>
-            <ChecklistItem n={1} title="The endpoint URL">Where do we POST a stock adjustment after an online order? A staging/sandbox URL first, if you have one.</ChecklistItem>
-            <ChecklistItem n={2} title="Auth mechanism">API key in a header, HMAC signing like ours, OAuth — whatever you issue per-integration.</ChecklistItem>
-            <ChecklistItem n={3} title="How you identify a SKU">Style-colour-size like us, or coarser? See &quot;SKU &amp; schema&quot; above.</ChecklistItem>
-            <ChecklistItem n={4} title="Delta or absolute?">We&apos;d send a relative adjustment (e.g. -1) — confirm that&apos;s wanted, not us sending a new total.</ChecklistItem>
-            <ChecklistItem n={5} title="Your expected payload field names">Ours are a proposal — sku, delta, reason, reference, occurred_at — happy to match your schema instead.</ChecklistItem>
-            <ChecklistItem n={6} title="Do you dedupe on your end?">We retry a failed call up to 3 times — does a duplicate delivery double-deduct on your side?</ChecklistItem>
-            <ChecklistItem n={7} title="Sandbox environment?">So we can verify real responses before this touches live store inventory.</ChecklistItem>
+            <ChecklistItem n={1} title="Production credentials">Store code, location code, and API key for the live account — everything above is your demo account.</ChecklistItem>
+            <ChecklistItem n={2} title="Which loc_code for online orders?">We have 3 physical stores plus the online channel — should online sales report against one specific store, or a dedicated &quot;online&quot; location code?</ChecklistItem>
+            <ChecklistItem n={3} title="Response contract on failure">What should we expect back for a rejected SKU (unknown SKU, insufficient stock, etc.) so we can log it usefully on our side?</ChecklistItem>
+            <ChecklistItem n={4} title="Do you dedupe on your end?">We retry a failed call up to 3 times with the same external_order_id — does a duplicate delivery double-count on your side?</ChecklistItem>
           </div>
         </Section>
 

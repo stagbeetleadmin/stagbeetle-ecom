@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { InventoryRecord, getInventoryForProduct, setInventoryManual } from '@/lib/db';
+import { InventoryRecord, getInventoryForProduct, setInventoryManual, setGallaSkuForVariant } from '@/lib/db';
 
 interface InventoryPanelProps {
   productId: string;
@@ -23,6 +23,8 @@ export default function InventoryPanel({ productId, productSku, sizes }: Invento
   const [loading, setLoading] = useState(true);
   const [savingSize, setSavingSize] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [gallaSkuDrafts, setGallaSkuDrafts] = useState<Record<string, string>>({});
+  const [savingGallaSkuSize, setSavingGallaSkuSize] = useState<string | null>(null);
 
   // Fetched once per product (the "Save" handler below updates `records`
   // directly from its own response, so no re-fetch is needed after a save).
@@ -55,6 +57,19 @@ export default function InventoryPanel({ productId, productSku, sizes }: Invento
     setSavingSize(null);
   };
 
+  const handleSaveGallaSku = async (size: string) => {
+    const draft = gallaSkuDrafts[size];
+    if (draft === undefined) return;
+
+    setSavingGallaSkuSize(size);
+    const updated = await setGallaSkuForVariant(productId, productSku, size, draft);
+    if (updated) {
+      setRecords(prev => ({ ...prev, [size]: updated }));
+      setGallaSkuDrafts(prev => { const next = { ...prev }; delete next[size]; return next; });
+    }
+    setSavingGallaSkuSize(null);
+  };
+
   if (sizes.length === 0) {
     return <p className="text-[12px] text-zinc-400 italic">Select at least one size above to track stock.</p>;
   }
@@ -70,42 +85,68 @@ export default function InventoryPanel({ productId, productSku, sizes }: Invento
           const isSaving = savingSize === size;
           const isOut = record && record.quantity_available === 0;
           const isLow = record && record.quantity_available > 0 && record.quantity_available <= record.low_stock_threshold;
+          const gallaSkuDraftValue = gallaSkuDrafts[size] ?? (record?.galla_sku || '');
+          const isSavingGallaSku = savingGallaSkuSize === size;
 
           return (
-            <div key={size} className="flex items-center gap-3 px-3 py-2.5">
-              <span className="w-10 shrink-0 text-[12px] font-bold text-zinc-700">{size}</span>
+            <div key={size} className="px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-3">
+                <span className="w-10 shrink-0 text-[12px] font-bold text-zinc-700">{size}</span>
 
-              <input
-                type="number"
-                min={0}
-                value={draftValue}
-                onChange={(e) => setDrafts(prev => ({ ...prev, [size]: e.target.value }))}
-                placeholder="Not set"
-                className={`w-20 bg-surface-dim border rounded-sm py-1.5 px-2 text-[12px] outline-none ${
-                  isOut ? 'border-red-300' : isLow ? 'border-amber-300' : 'border-on-surface/15'
-                }`}
-              />
+                <input
+                  type="number"
+                  min={0}
+                  value={draftValue}
+                  onChange={(e) => setDrafts(prev => ({ ...prev, [size]: e.target.value }))}
+                  placeholder="Not set"
+                  className={`w-20 bg-surface-dim border rounded-sm py-1.5 px-2 text-[12px] outline-none ${
+                    isOut ? 'border-red-300' : isLow ? 'border-amber-300' : 'border-on-surface/15'
+                  }`}
+                />
 
-              <button
-                type="button"
-                onClick={() => handleSave(size)}
-                disabled={isSaving || drafts[size] === undefined}
-                className="text-[10px] font-label-caps font-bold text-primary hover:underline uppercase tracking-wider disabled:opacity-30 disabled:no-underline shrink-0"
-              >
-                {isSaving ? 'Saving…' : 'Save'}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleSave(size)}
+                  disabled={isSaving || drafts[size] === undefined}
+                  className="text-[10px] font-label-caps font-bold text-primary hover:underline uppercase tracking-wider disabled:opacity-30 disabled:no-underline shrink-0"
+                >
+                  {isSaving ? 'Saving…' : 'Save'}
+                </button>
 
-              <span className="flex-1 text-right text-[10px] text-zinc-400">
-                {record ? (
-                  <>
-                    {SOURCE_LABEL[record.sync_source]}
-                    {isOut && <span className="ml-1.5 font-bold text-red-600 uppercase">· Out of stock</span>}
-                    {isLow && <span className="ml-1.5 font-bold text-amber-600 uppercase">· Low</span>}
-                  </>
-                ) : (
-                  'Not tracked yet — sale not blocked'
+                <span className="flex-1 text-right text-[10px] text-zinc-400">
+                  {record ? (
+                    <>
+                      {SOURCE_LABEL[record.sync_source]}
+                      {isOut && <span className="ml-1.5 font-bold text-red-600 uppercase">· Out of stock</span>}
+                      {isLow && <span className="ml-1.5 font-bold text-amber-600 uppercase">· Low</span>}
+                    </>
+                  ) : (
+                    'Not tracked yet — sale not blocked'
+                  )}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 pl-[52px]">
+                <span className="text-[9.5px] font-label-caps font-semibold text-zinc-400 uppercase tracking-wider shrink-0">Galla SKU</span>
+                <input
+                  type="text"
+                  value={gallaSkuDraftValue}
+                  onChange={(e) => setGallaSkuDrafts(prev => ({ ...prev, [size]: e.target.value }))}
+                  placeholder="e.g. 10056"
+                  className="w-28 bg-surface-dim border border-on-surface/15 rounded-sm py-1 px-2 text-[11px] font-mono outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveGallaSku(size)}
+                  disabled={isSavingGallaSku || gallaSkuDrafts[size] === undefined}
+                  className="text-[10px] font-label-caps font-bold text-primary hover:underline uppercase tracking-wider disabled:opacity-30 disabled:no-underline shrink-0"
+                >
+                  {isSavingGallaSku ? 'Saving…' : 'Save'}
+                </button>
+                {!record?.galla_sku && (
+                  <span className="text-[10px] text-amber-600">Not set — this size won&apos;t sync to Galla after a sale</span>
                 )}
-              </span>
+              </div>
             </div>
           );
         })

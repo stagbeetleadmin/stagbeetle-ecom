@@ -90,6 +90,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mfaPending, setMfaPending] = useState(false);
   const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
 
+  // Step-up check, split out so it can run concurrently with the profile
+  // fetch below instead of adding a sequential round-trip — this alone was
+  // making the admin login noticeably slower than before MFA existed.
+  // Pure (no setState) so Promise.all can run it alongside fetchProfile.
+  const checkAdminStepUp = useCallback(async (): Promise<{ requiresStepUp: boolean; factors: MfaFactor[] }> => {
+    if (!supabase) return { requiresStepUp: false, factors: [] };
+    try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== aal.nextLevel) {
+        // Every verified factor is a legitimate staff member's own device —
+        // list all of them so the login screen can ask "which one is yours"
+        // rather than only ever accepting whichever enrolled first.
+        const { data: factorsData } = await supabase.auth.mfa.listFactors();
+        const verifiedTotp = (factorsData?.totp || []).filter(f => f.status === 'verified');
+        return { requiresStepUp: true, factors: verifiedTotp.map(f => ({ id: f.id, status: f.status, friendlyName: f.friendly_name })) };
+      }
+      return { requiresStepUp: false, factors: [] };
+    } catch (e) {
+      console.warn('MFA assurance-level check failed — denying admin by default:', e);
+      return { requiresStepUp: true, factors: [] }; // fail closed, not open
+    }
+  }, []);
+
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
   const resolveAndSetProfile = useCallback(async (supabaseUser: {
     id: string;
@@ -99,32 +122,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }) => {
     // Check admin status immediately before any async network calls to avoid stale state delays
     const isAdminEmail = supabaseUser.email?.toLowerCase() === 'stagbeetlebilling@gmail.com';
-    if (isAdminEmail && supabase) {
-      // Step-up check: if this account has a verified authenticator enrolled,
-      // the session needs to actually be at aal2 before it counts as admin —
-      // a correct password alone isn't enough once MFA is turned on. A brand
-      // new admin with no factor enrolled yet has nextLevel === currentLevel,
-      // so this is a no-op until they set MFA up from the Security panel.
-      let requiresStepUp = false;
-      try {
-        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== aal.nextLevel) {
-          requiresStepUp = true;
-          // Every verified factor is a legitimate staff member's own device —
-          // list all of them so the login screen can ask "which one is yours"
-          // rather than only ever accepting whichever enrolled first.
-          const { data: factorsData } = await supabase.auth.mfa.listFactors();
-          const verifiedTotp = (factorsData?.totp || []).filter(f => f.status === 'verified');
-          setMfaFactors(verifiedTotp.map(f => ({ id: f.id, status: f.status, friendlyName: f.friendly_name })));
-        }
-      } catch (e) {
-        console.warn('MFA assurance-level check failed — denying admin by default:', e);
-        requiresStepUp = true; // fail closed, not open
-      }
 
-      if (requiresStepUp) {
+    // The step-up check (admin only, a Supabase Auth MFA call) and the
+    // profile fetch (everyone, a Postgres read) are independent — running
+    // them together instead of one-after-the-other cuts login latency
+    // roughly in half for the admin account.
+    const [stepUp, profile0] = await Promise.all([
+      isAdminEmail && supabase ? checkAdminStepUp() : Promise.resolve({ requiresStepUp: false, factors: [] as MfaFactor[] }),
+      fetchProfile(supabaseUser.id),
+    ]);
+
+    if (isAdminEmail && supabase) {
+      if (stepUp.requiresStepUp) {
         setIsAdminState(false);
         setMfaPending(true);
+        setMfaFactors(stepUp.factors);
         if (typeof window !== 'undefined') {
           localStorage.removeItem('stag_beetle_admin_session');
         }
@@ -145,7 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Try to load existing profile first
-    let profile = await fetchProfile(supabaseUser.id);
+    let profile = profile0;
 
     if (!profile) {
       // First login — create profile from OAuth metadata
@@ -166,7 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUser(profile);
     return profile;
-  }, []);
+  }, [checkAdminStepUp]);
 
   // ── Bootstrap: check existing session on mount ─────────────────────────────
   useEffect(() => {

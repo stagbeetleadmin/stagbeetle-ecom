@@ -4,8 +4,11 @@
 export async function GET() {
   return Response.json({
     inboundSecretConfigured: !!process.env.INVENTORY_SYNC_SECRET,
+    inboundApiKeyConfigured: !!process.env.INVENTORY_SYNC_API_KEY?.trim(),
     ipAllowlistConfigured: !!process.env.INVENTORY_SYNC_ALLOWED_IPS?.trim(),
-    gallaOutboundUrlConfigured: !!process.env.GALLA_API_URL?.trim(),
+    gallaOutboundUrlConfigured: !!process.env.GALLA_ORDERS_SYNC_URL?.trim(),
     gallaApiKeyConfigured: !!process.env.GALLA_API_KEY?.trim(),
+    gallaStoreCodeConfigured: !!process.env.GALLA_STORE_CODE?.trim(),
+    gallaLocCodeConfigured: !!process.env.GALLA_LOC_CODE?.trim(),
   });
 }

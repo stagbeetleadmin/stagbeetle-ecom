@@ -8,9 +8,12 @@ import { useAuth } from '@/context/AuthContext';
 
 interface IntegrationStatus {
   inboundSecretConfigured: boolean;
+  inboundApiKeyConfigured: boolean;
   ipAllowlistConfigured: boolean;
   gallaOutboundUrlConfigured: boolean;
   gallaApiKeyConfigured: boolean;
+  gallaStoreCodeConfigured: boolean;
+  gallaLocCodeConfigured: boolean;
 }
 
 function StatusBadge({ done, urgent }: { done: boolean; urgent: boolean }) {
@@ -109,9 +112,12 @@ export default function GallaIntegrationPage() {
   }
 
   const statusItems: { key: keyof IntegrationStatus; label: string; urgent: boolean; note: string }[] = [
-    { key: 'inboundSecretConfigured', label: 'INVENTORY_SYNC_SECRET', urgent: true, note: 'Required — /api/inventory/sync returns 500 without it. Galla needs this value to sign their requests.' },
-    { key: 'gallaOutboundUrlConfigured', label: 'GALLA_API_URL', urgent: true, note: 'Required for the outbound call after payment to actually reach Galla. Still a placeholder — see "What we need from Galla" below.' },
-    { key: 'gallaApiKeyConfigured', label: 'GALLA_API_KEY', urgent: false, note: 'Needed only if Galla\'s auth scheme requires an API key — depends on their answer to question 2 below.' },
+    { key: 'inboundSecretConfigured', label: 'INVENTORY_SYNC_SECRET', urgent: false, note: 'HMAC option for Galla calling us — either this or the API key below is required, not both.' },
+    { key: 'inboundApiKeyConfigured', label: 'INVENTORY_SYNC_API_KEY', urgent: false, note: 'Simple bearer-token option for Galla calling us — the value to hand them as "the API Key" for our Inventory Sync API.' },
+    { key: 'gallaOutboundUrlConfigured', label: 'GALLA_ORDERS_SYNC_URL', urgent: true, note: 'Confirmed 2026-08-11: https://retail.galla.app/mystorev2/api/v2/webhooks/orders. Currently their demo account — live-tested, blocked on a loc_code 422 on their side, see the integration guide.' },
+    { key: 'gallaApiKeyConfigured', label: 'GALLA_API_KEY', urgent: true, note: 'Bearer token for calling Galla\'s order webhook — currently their demo key.' },
+    { key: 'gallaStoreCodeConfigured', label: 'GALLA_STORE_CODE', urgent: true, note: 'store-code header value for the order webhook — currently their demo store code.' },
+    { key: 'gallaLocCodeConfigured', label: 'GALLA_LOC_CODE', urgent: true, note: 'loc_code header value — currently their demo location (KRT88), which their API is rejecting. Needs the real production location(s) for our 3 stores + online.' },
     { key: 'ipAllowlistConfigured', label: 'INVENTORY_SYNC_ALLOWED_IPS', urgent: false, note: 'Optional hardening. Add once Galla shares their server\'s static egress IP.' },
   ];
 

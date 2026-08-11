@@ -207,7 +207,11 @@ export default function Checkout() {
         );
         const gallaItems = decremented
           .filter((d): d is typeof d & { sku: string } => !!d.sku)
-          .map(d => ({ sku: d.sku, quantity: orderItems.find(i => i.product_id === d.product_id && i.selected_size === d.selected_size)?.quantity || 1 }));
+          .map(d => ({
+            sku: d.sku,
+            galla_sku: d.galla_sku,
+            quantity: orderItems.find(i => i.product_id === d.product_id && i.selected_size === d.selected_size)?.quantity || 1,
+          }));
         if (gallaItems.length > 0) {
           notifyGallaOfSale(result.id, gallaItems); // fire-and-logged, not awaited — never delay redirect to /success
         }
