@@ -24,7 +24,6 @@ import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
 import SizeChartEditor from '@/components/admin/SizeChartEditor';
-import SecurityPanel from '@/components/admin/SecurityPanel';
 
 const CATEGORY_OPTIONS = ['Men', 'Accessories'];
 const GARMENT_GROUP_OPTIONS = Object.keys(GARMENT_GROUPS); // ['Tops', 'Bottoms']
@@ -80,11 +79,11 @@ function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
 
-  // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics' | 'security'
-  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics' | 'security'>('analytics');
+  // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics'
+  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics'>('analytics');
 
   useEffect(() => {
-    if (tabParam && ['products', 'coupons', 'orders', 'analytics', 'security'].includes(tabParam)) {
+    if (tabParam && ['products', 'coupons', 'orders', 'analytics'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
@@ -181,7 +180,6 @@ function AdminDashboardContent() {
 
   const {
     isAdmin, loading: authLoading, loginWithEmailPassword, logout,
-    mfaPending, mfaFactors, verifyMfaCode,
   } = useAuth();
 
   // Admin login states
@@ -190,20 +188,6 @@ function AdminDashboardContent() {
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-
-  // Step-up MFA challenge — shown instead of the login form once the password
-  // check passes but the account has at least one verified authenticator
-  // (see mfaPending in AuthContext). This account is shared across stores'
-  // staff, each with their own device, so a device is picked before the
-  // code is asked for — auto-picked when there's only one to begin with.
-  const [manuallySelectedFactorId, setManuallySelectedFactorId] = useState<string | null>(null);
-  // Auto-picked when there's only one device to begin with — derived, not
-  // synced via an effect, so a single-device account skips the picker
-  // screen entirely with no extra render in between.
-  const selectedFactorId = manuallySelectedFactorId || (mfaFactors.length === 1 ? mfaFactors[0].id : null);
-  const [mfaCode, setMfaCode] = useState('');
-  const [mfaError, setMfaError] = useState('');
-  const [mfaVerifying, setMfaVerifying] = useState(false);
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,35 +205,13 @@ function AdminDashboardContent() {
       if (res.error) {
         setLoginError(res.error);
       } else if (adminEmail.trim().toLowerCase() !== 'stagbeetlebilling@gmail.com') {
-        // Successful login, but not the admin account — mfaPending never applies here
         setLoginError('Access Denied: This account does not have administrative privileges.');
         await logout();
       }
-      // If it is the admin account and a verified authenticator exists, the
-      // context flips mfaPending true and this component re-renders the
-      // challenge form below instead — nothing further to do here.
     } catch (err: any) {
       setLoginError(err.message || 'An error occurred during authentication.');
     } finally {
       setLoginLoading(false);
-    }
-  };
-
-  const handleMfaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMfaError('');
-    if (!selectedFactorId) { setMfaError('Select which device this is first.'); return; }
-    if (!mfaCode.trim()) { setMfaError('Enter the 6-digit code from your authenticator app.'); return; }
-    setMfaVerifying(true);
-    try {
-      const res = await verifyMfaCode(selectedFactorId, mfaCode.trim());
-      if (res.error) {
-        setMfaError(res.error);
-      } else {
-        setMfaCode('');
-      }
-    } finally {
-      setMfaVerifying(false);
     }
   };
 
@@ -442,162 +404,73 @@ function AdminDashboardContent() {
           <div className="fixed inset-0 marble-overlay z-0"></div>
 
           <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
-            {mfaPending ? (
-              <>
-                <div className="text-center mb-6">
-                  <span className="material-symbols-outlined text-[32px] text-gold-leaf block mb-2">shield_lock</span>
-                  <h2 className="font-display text-[24px] font-semibold text-on-surface">Verification Required</h2>
-                  <p className="text-[12px] text-zinc-500 font-body mt-2">
-                    {selectedFactorId
-                      ? 'Enter the 6-digit code from your authenticator app to finish signing in.'
-                      : 'This account is shared across stores — which device is this?'}
-                  </p>
-                </div>
+            <div className="text-center mb-6">
+              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
+              <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
+              <p className="text-[12px] text-zinc-500 font-body mt-2">
+                Log in with your administrator account.
+              </p>
+            </div>
 
-                {!selectedFactorId ? (
-                  <div className="space-y-2">
-                    {mfaFactors.map(f => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setManuallySelectedFactorId(f.id)}
-                        className="w-full flex items-center gap-3 px-4 py-3 border border-on-surface/15 rounded-sm text-left hover:border-gold-leaf hover:bg-surface-dim transition-all"
-                      >
-                        <span className="material-symbols-outlined text-[18px] text-zinc-400">smartphone</span>
-                        <span className="text-[13px] font-semibold text-on-surface">{f.friendlyName || 'Unnamed device'}</span>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={async () => { await logout(); setMfaCode(''); setMfaError(''); setManuallySelectedFactorId(null); }}
-                      className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider pt-2"
-                    >
-                      Cancel and sign in as someone else
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleMfaSubmit} className="space-y-5">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">AUTHENTICATION CODE</label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        placeholder="123456"
-                        value={mfaCode}
-                        onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        required
-                        autoFocus
-                        className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-3 px-4 text-center text-[20px] tracking-[0.4em] outline-none font-mono"
-                      />
-                    </div>
+            <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  required
+                  className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
+                />
+              </div>
 
-                    {mfaError && (
-                      <p className="text-[11px] text-red-600 font-medium text-center">{mfaError}</p>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={mfaVerifying || mfaCode.length < 6}
-                      className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {mfaVerifying && (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      )}
-                      {mfaVerifying ? 'VERIFYING…' : 'VERIFY & CONTINUE'}
-                    </button>
-
-                    {mfaFactors.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => { setManuallySelectedFactorId(null); setMfaCode(''); setMfaError(''); }}
-                        className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider"
-                      >
-                        ← Choose a different device
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={async () => { await logout(); setMfaCode(''); setMfaError(''); setManuallySelectedFactorId(null); }}
-                      className="w-full text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 uppercase tracking-wider"
-                    >
-                      Cancel and sign in as someone else
-                    </button>
-                  </form>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="text-center mb-6">
-                  <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
-                  <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
-                  <p className="text-[12px] text-zinc-500 font-body mt-2">
-                    Log in with your administrator account.
-                  </p>
-                </div>
-
-                <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                      required
-                      className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
-                    <div className="relative">
-                      <input
-                        type={showAdminPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        required
-                        className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 pl-3 pr-10 text-[14px] outline-none text-left"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAdminPassword(o => !o)}
-                        aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
-                        tabIndex={-1}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          {showAdminPassword ? 'visibility_off' : 'visibility'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {loginError && (
-                    <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
-                  )}
-
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
+                <div className="relative">
+                  <input
+                    type={showAdminPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    required
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 pl-3 pr-10 text-[14px] outline-none text-left"
+                  />
                   <button
-                    type="submit"
-                    disabled={loginLoading}
-                    className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
+                    type="button"
+                    onClick={() => setShowAdminPassword(o => !o)}
+                    aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
                   >
-                    {loginLoading && (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    )}
-                    {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
+                    <span className="material-symbols-outlined text-[18px]">
+                      {showAdminPassword ? 'visibility_off' : 'visibility'}
+                    </span>
                   </button>
-                </form>
-
-                <div className="text-center mt-6">
-                  <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
-                    ← Return to Storefront
-                  </Link>
                 </div>
-              </>
-            )}
+              </div>
+
+              {loginError && (
+                <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                {loginLoading && (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
+              </button>
+            </form>
+
+            <div className="text-center mt-6">
+              <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
+                ← Return to Storefront
+              </Link>
+            </div>
           </div>
         </main>
 
@@ -1001,19 +874,6 @@ function AdminDashboardContent() {
               >
                 <span className="material-symbols-outlined text-[18px]">receipt_long</span>
                 {!sidebarCollapsed && 'ORDER REGISTRY'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push('/admin?tab=security')}
-                title={sidebarCollapsed ? 'Security' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'security'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">shield_lock</span>
-                {!sidebarCollapsed && 'SECURITY'}
               </button>
 
               <div className="border-t border-on-surface/10 my-2"></div>
@@ -2066,8 +1926,6 @@ function AdminDashboardContent() {
                     </div>
                   )}
 
-                  {/* TAB: SECURITY */}
-                  {activeTab === 'security' && <SecurityPanel />}
                 </>
               )}
 

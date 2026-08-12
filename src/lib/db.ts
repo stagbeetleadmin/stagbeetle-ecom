@@ -1099,17 +1099,23 @@ export interface ProductStockSummary {
 // keeps the admin table's stock column cheap even at a few thousand SKUs.
 // If this ever needs to scale further (tens of thousands of variants), page
 // it the same way the products table itself now does.
+// Same reasoning as coupons/orders above: on a timeout this used to return
+// {} (empty), which every caller reads as "0 stock everywhere" — an admin
+// could see every product flagged out-of-stock purely because of a network
+// blip. Stale-but-real numbers beat that.
+let inventorySummaryCache: Record<string, ProductStockSummary> | null = null;
+
 export const getInventorySummaryForProducts = async (): Promise<Record<string, ProductStockSummary>> => {
   if (!isSupabaseConfigured || !supabase) return {};
   try {
-    const { data: variants } = await supabaseTimeout(
+    const { data: variants } = await withOneRetry(() => supabaseTimeout(
       supabase.from('product_variants').select('id,product_id')
-    );
+    ));
     if (!variants || variants.length === 0) return {};
 
-    const { data: invRows } = await supabaseTimeout(
+    const { data: invRows } = await withOneRetry(() => supabaseTimeout(
       supabase.from('inventory').select('variant_id,quantity_on_hand,quantity_reserved,low_stock_threshold')
-    );
+    ));
     const invByVariant = new Map<string, { quantity_on_hand: number; quantity_reserved: number; low_stock_threshold: number }>(
       (invRows || []).map((r: any) => [r.variant_id, r])
     );
@@ -1127,9 +1133,14 @@ export const getInventorySummaryForProducts = async (): Promise<Record<string, P
       if (available === 0) summary[v.product_id].outOfStockSizes += 1;
       else if (available <= inv.low_stock_threshold) summary[v.product_id].lowStockSizes += 1;
     }
+    inventorySummaryCache = summary;
     return summary;
   } catch (e: any) {
     console.warn('[Atelier DB] getInventorySummaryForProducts failed:', e.message || e);
+    if (inventorySummaryCache) {
+      console.warn('[Atelier DB] Serving last known-good inventory summary while the connection recovers.');
+      return inventorySummaryCache;
+    }
     return {};
   }
 };
@@ -1449,22 +1460,34 @@ export const applyInboundInventorySync = async (
 // COUPONS OPERATIONS
 // =========================================================================
 
+// In-memory only (not persisted like products) — coupons are admin-only,
+// low-traffic, and change often enough that a stale session-scoped cache is
+// the right tradeoff: enough to survive one timeout, not stale for long.
+let couponsCache: Coupon[] | null = null;
+
 export const getCoupons = async (): Promise<Coupon[]> => {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      console.log("[Atelier DB] Fetching coupons from Supabase...");
-      const { data, error } = await supabaseTimeout(supabase.from('coupons').select('*'));
-      if (!error && data && data.length > 0) {
-        console.log("[Atelier DB] Successfully loaded coupons from Supabase.");
-        return data as Coupon[];
-      }
-      if (error) console.warn("[Atelier DB] Supabase coupons error:", error.message);
-    } catch (e: any) {
-      console.warn("[Atelier DB] Supabase coupons failed or timed out:", e.message || e);
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    console.log("[Atelier DB] Supabase not configured, returning local mock coupons.");
+    return getLocalCoupons();
   }
-  console.log("[Atelier DB] Returning local mock coupons.");
-  return getLocalCoupons();
+  try {
+    console.log("[Atelier DB] Fetching coupons from Supabase...");
+    const { data, error } = await withOneRetry(() => supabaseTimeout(supabase.from('coupons').select('*')));
+    if (error) throw error;
+    console.log("[Atelier DB] Successfully loaded coupons from Supabase.");
+    couponsCache = data as Coupon[];
+    return couponsCache;
+  } catch (e: any) {
+    console.warn("[Atelier DB] Supabase coupons failed or timed out:", e.message || e);
+    // Real coupons loaded earlier this session beat showing fake/empty ones —
+    // an admin seeing "no coupons" here could genuinely believe there are
+    // none, when it's really just a timeout.
+    if (couponsCache) {
+      console.warn("[Atelier DB] Serving last known-good coupon list while the connection recovers.");
+      return couponsCache;
+    }
+    throw new Error("We couldn't load coupons right now. Please check your connection and try again.");
+  }
 };
 
 export const createCoupon = async (coupon: Coupon): Promise<Coupon> => {
@@ -1532,35 +1555,44 @@ export const validateCoupon = async (code: string, orderValue: number): Promise<
 // ORDERS OPERATIONS
 // =========================================================================
 
+// Same reasoning as couponsCache above — real (if slightly stale) orders
+// beat an admin looking at an empty/fake order list and concluding the
+// store has no orders, when it's really just a timed-out request.
+let ordersCache: Order[] | null = null;
+
 export const getOrders = async (): Promise<Order[]> => {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      console.log("[Atelier DB] Fetching orders from Supabase...");
-      const { data, error } = await supabaseTimeout(
-        supabase.from('orders').select('*').order('created_at', { ascending: false })
-      );
-      if (!error && data) {
-        console.log(`[Atelier DB] Successfully loaded ${data.length} orders from Supabase.`);
-        return data as Order[];
+  if (!isSupabaseConfigured || !supabase) {
+    console.log("[Atelier DB] Supabase not configured, returning local mock orders.");
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem('stag_beetle_orders');
+    if (stored) {
+      try {
+        return JSON.parse(stored).sort((a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      } catch (e) {
+        console.error(e);
       }
-      if (error) console.warn("[Atelier DB] Supabase orders error:", error.message);
-    } catch (e: any) {
-      console.warn("Supabase failed fetching orders or timed out, falling back to mock:", e.message || e);
     }
+    return [];
   }
-  console.log("[Atelier DB] Returning local mock orders.");
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem('stag_beetle_orders');
-  if (stored) {
-    try {
-      return JSON.parse(stored).sort((a: any, b: any) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    } catch (e) {
-      console.error(e);
+  try {
+    console.log("[Atelier DB] Fetching orders from Supabase...");
+    const { data, error } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('orders').select('*').order('created_at', { ascending: false }))
+    );
+    if (error) throw error;
+    console.log(`[Atelier DB] Successfully loaded ${data.length} orders from Supabase.`);
+    ordersCache = data as Order[];
+    return ordersCache;
+  } catch (e: any) {
+    console.warn("Supabase failed fetching orders or timed out:", e.message || e);
+    if (ordersCache) {
+      console.warn("[Atelier DB] Serving last known-good orders list while the connection recovers.");
+      return ordersCache;
     }
+    throw new Error("We couldn't load orders right now. Please check your connection and try again.");
   }
-  return [];
 };
 
 // =========================================================================

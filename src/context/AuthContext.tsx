@@ -3,12 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserProfile, upsertProfile, supabase, supabaseTimeout, withOneRetry } from '@/lib/db';
 
-interface MfaFactor {
-  id: string;
-  status: string;
-  friendlyName?: string;
-}
-
 interface AuthContextType {
   user: UserProfile | null;
   isAdmin: boolean;
@@ -23,20 +17,6 @@ interface AuthContextType {
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   triggerLoginModal: (onSuccessCallback?: () => void) => void;
   closeLoginModal: () => void;
-  // Two-factor auth (Supabase TOTP) — currently only enforced for the admin
-  // account, which multiple staff across stores share. mfaPending means:
-  // password check passed, but the session is still aal1 while at least one
-  // verified authenticator exists — admin access is held back until
-  // verifyMfaCode succeeds. Each staff member enrolls their own factor (own
-  // phone, own name), so mfaFactors lists all of them for the login screen's
-  // "which device is this" picker — verifying any one is sufficient.
-  mfaPending: boolean;
-  mfaFactors: MfaFactor[];
-  verifyMfaCode: (factorId: string, code: string) => Promise<{ error: string | null }>;
-  enrollMfa: (friendlyName: string) => Promise<{ qrCode: string | null; secret: string | null; factorId: string | null; error: string | null }>;
-  confirmMfaEnrollment: (factorId: string, code: string) => Promise<{ error: string | null }>;
-  unenrollMfa: (factorId: string) => Promise<{ error: string | null }>;
-  getMfaFactors: () => Promise<MfaFactor[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -109,19 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loading, setLoading] = useState(true); // true by default to avoid flickering/stale rendering on mount
   const [onSuccessCallback, setOnSuccessCallback] = useState<(() => void) | null>(null);
-  const [mfaPending, setMfaPending] = useState(false);
-  const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
-
-  // MFA step-up is intentionally disabled — it was adding two more unbounded
-  // network calls to every admin login (on top of everything else that was
-  // already timing out), and would fail closed (block admin entirely) on a
-  // mere timeout. Kept as a no-op stub, rather than removing every call
-  // site, so the enroll/verify/unenroll plumbing further down (used by the
-  // Security panel) and its callers don't need to change. Re-enabling later
-  // just means restoring the real check here.
-  const checkAdminStepUp = useCallback(async (): Promise<{ requiresStepUp: boolean; factors: MfaFactor[] }> => {
-    return { requiresStepUp: false, factors: [] };
-  }, []);
 
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
   const resolveAndSetProfile = useCallback(async (supabaseUser: {
@@ -130,40 +97,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     phone?: string | null;
     user_metadata?: Record<string, string>;
   }) => {
-    // Check admin status immediately before any async network calls to avoid stale state delays
+    // Admin access is just this one check — any successful login to this
+    // email is granted admin immediately, no step-up.
     const isAdminEmail = supabaseUser.email?.toLowerCase() === 'stagbeetlebilling@gmail.com';
     console.log(`[Auth] resolveAndSetProfile: resolving ${supabaseUser.email || supabaseUser.id} (isAdminEmail=${isAdminEmail})`);
 
-    // The step-up check (admin only, a Supabase Auth MFA call) and the
-    // profile fetch (everyone, a Postgres read) are independent — running
-    // them together instead of one-after-the-other cuts login latency
-    // roughly in half for the admin account.
-    const [stepUp, profile0] = await Promise.all([
-      isAdminEmail && supabase ? checkAdminStepUp() : Promise.resolve({ requiresStepUp: false, factors: [] as MfaFactor[] }),
-      fetchProfile(supabaseUser.id),
-    ]);
+    const profile0 = await fetchProfile(supabaseUser.id);
 
-    if (isAdminEmail && supabase) {
-      if (stepUp.requiresStepUp) {
-        console.log(`[Auth] resolveAndSetProfile: admin email but MFA step-up required (${stepUp.factors.length} factor(s) available) — NOT granting admin yet`);
-        setIsAdminState(false);
-        setMfaPending(true);
-        setMfaFactors(stepUp.factors);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('stag_beetle_admin_session');
-        }
-      } else {
-        console.log('[Auth] resolveAndSetProfile: admin email, aal2 confirmed — granting admin');
-        setIsAdminState(true);
-        setMfaPending(false);
-        setMfaFactors([]);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('stag_beetle_admin_session', 'true');
-        }
+    if (isAdminEmail) {
+      console.log('[Auth] resolveAndSetProfile: admin email — granting admin');
+      setIsAdminState(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('stag_beetle_admin_session', 'true');
       }
     } else {
       setIsAdminState(false);
-      setMfaPending(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stag_beetle_admin_session');
       }
@@ -215,7 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUser(profile);
     return profile;
-  }, [checkAdminStepUp]);
+  }, []);
 
   // ── Bootstrap: check existing session on mount ─────────────────────────────
   useEffect(() => {
@@ -537,89 +485,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // ── MFA: verify a code against the pending step-up challenge ──────────────
-  // Called after a correct password when resolveAndSetProfile found at least
-  // one verified authenticator but the session hasn't stepped up to aal2
-  // yet. factorId identifies which staff member's device is being used —
-  // the login screen collects this via a picker when more than one exists.
-  const verifyMfaCode = async (factorId: string, code: string) => {
-    if (!supabase) return { error: 'Supabase is not configured' };
-    if (!factorId) return { error: 'No device selected — please sign in again.' };
-    try {
-      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.challengeAndVerify({ factorId, code: code.trim() })));
-      if (error) return { error: error.message };
-      // Session is now aal2 — re-resolve so isAdmin actually flips true
-      const { data: { user: freshUser } } = await withOneRetry(() => supabaseTimeout(supabase!.auth.getUser()));
-      if (freshUser) {
-        const profile = await resolveAndSetProfile(freshUser);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('stag_beetle_user', JSON.stringify(profile));
-        }
-      }
-      return { error: null };
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : 'Verification failed.' };
-    }
-  };
-
-  // ── MFA: begin enrolling a new authenticator (TOTP) ────────────────────────
-  // Must be called from an already-authenticated session. Multiple staff
-  // share this one admin account, so each enrollment is named (e.g. "Amit —
-  // Store 1") rather than assuming there's only ever one device on the
-  // account. Returns a QR code (SVG data URI, straight from Supabase — no
-  // extra QR library needed) plus the secret for manual entry, and the
-  // factorId to confirm with next.
-  const enrollMfa = async (friendlyName: string) => {
-    if (!supabase) return { qrCode: null, secret: null, factorId: null, error: 'Supabase is not configured' };
-    try {
-      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.enroll({ factorType: 'totp', friendlyName: friendlyName.trim() })));
-      if (error) return { qrCode: null, secret: null, factorId: null, error: error.message };
-      return { qrCode: data.totp.qr_code, secret: data.totp.secret, factorId: data.id, error: null };
-    } catch (err) {
-      return { qrCode: null, secret: null, factorId: null, error: err instanceof Error ? err.message : 'Enrollment failed.' };
-    }
-  };
-
-  // ── MFA: confirm enrollment with the first code from the authenticator app ─
-  // Activates the factor and, since this runs in the current session, also
-  // elevates it to aal2 immediately — no forced re-login right after setup.
-  const confirmMfaEnrollment = async (factorId: string, code: string) => {
-    if (!supabase) return { error: 'Supabase is not configured' };
-    try {
-      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.challengeAndVerify({ factorId, code: code.trim() })));
-      if (error) return { error: error.message };
-      const { data: { user: freshUser } } = await withOneRetry(() => supabaseTimeout(supabase!.auth.getUser()));
-      if (freshUser) await resolveAndSetProfile(freshUser);
-      return { error: null };
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : 'Verification failed.' };
-    }
-  };
-
-  // ── MFA: remove an authenticator (lost device, resetting, etc.) ───────────
-  const unenrollMfa = async (factorId: string) => {
-    if (!supabase) return { error: 'Supabase is not configured' };
-    try {
-      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.unenroll({ factorId })));
-      if (error) return { error: error.message };
-      return { error: null };
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : 'Could not remove authenticator.' };
-    }
-  };
-
-  // ── MFA: list enrolled factors, for the Security panel's status display ───
-  const getMfaFactors = async (): Promise<MfaFactor[]> => {
-    if (!supabase) return [];
-    try {
-      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.listFactors()));
-      if (error || !data) return [];
-      return (data.totp || []).map((f: any) => ({ id: f.id, status: f.status, friendlyName: f.friendly_name }));
-    } catch {
-      return [];
-    }
-  };
-
   // ── Email + Password registration (real Supabase Auth) ────────────────────
   const registerWithEmailPassword = async (name: string, email: string, password: string, phone: string) => {
     if (!supabase) {
@@ -667,8 +532,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // network call; the remote call below is now best-effort cleanup only.
     setUser(null);
     setIsAdminState(false);
-    setMfaPending(false);
-    setMfaFactors([]);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('stag_beetle_user');
       localStorage.removeItem('stag_beetle_admin_session');
@@ -730,13 +593,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateProfile,
       triggerLoginModal,
       closeLoginModal,
-      mfaPending,
-      mfaFactors,
-      verifyMfaCode,
-      enrollMfa,
-      confirmMfaEnrollment,
-      unenrollMfa,
-      getMfaFactors,
     }}>
       {children}
     </AuthContext.Provider>
