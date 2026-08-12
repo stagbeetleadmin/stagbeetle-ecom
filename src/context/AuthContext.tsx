@@ -255,60 +255,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        // ── Supabase path ──────────────────────────────────────────────────────
+        // ── Optimistic first paint ──────────────────────────────────────────────
+        // Hydrate from whatever's cached locally, synchronously, and drop
+        // `loading` right away — a gated page (e.g. /admin) can render
+        // immediately instead of blocking on a Supabase round trip (worst
+        // case several seconds, between the retry and the timeout) before
+        // showing anything at all. The verification below still runs, in
+        // the background, and corrects this if it turns out to be wrong
+        // (expired session, revoked admin access, etc). This is a
+        // first-paint speed optimization only — every real read/write is
+        // still independently authorized server-side via RLS, so an
+        // optimistic isAdmin=true here can't grant access beyond what the
+        // actual session already allows; worst case is a brief flash of the
+        // wrong UI, never a real permissions bypass.
+        if (typeof window !== 'undefined') {
+          const storedUser = localStorage.getItem('stag_beetle_user');
+          if (storedUser) {
+            try {
+              const parsed = JSON.parse(storedUser) as UserProfile;
+              setUser(parsed);
+              haveUser = true;
+              if (localStorage.getItem('stag_beetle_admin_session') === 'true') {
+                console.log('[Auth] bootstrap: optimistic paint — restoring cached session + admin flag for', parsed.email || parsed.id);
+                setIsAdminState(true);
+              } else {
+                console.log('[Auth] bootstrap: optimistic paint — restoring cached session for', parsed.email || parsed.id);
+              }
+            } catch { /* ignore */ }
+          }
+        }
+        setLoading(false); // the page can render now — verification continues below, in the background
+
+        // ── Supabase path (background verification / correction) ──────────────
         // haveUser / supabaseConfirmedNoSession (declared above, outside the
-        // try) track what THIS bootstrap run actually learned, so the
-        // fallback below can tell "Supabase confirmed there's no session"
-        // apart from "we don't actually know because the call timed out".
-        // Collapsing those two cases used to wipe a perfectly valid cached
-        // session (and could leave isAdmin=true with no user at all — a
-        // broken, contradictory state) just because one request was slow.
+        // try) track what THIS bootstrap run actually confirmed, so the
+        // correction pass below can tell "Supabase confirmed there's no
+        // session" apart from "we don't actually know because the call
+        // timed out". Collapsing those two cases used to wipe a perfectly
+        // valid cached session (and could leave isAdmin=true with no user
+        // at all — a broken, contradictory state) just because one request
+        // was slow.
         if (supabase) {
           try {
-            console.log('[Auth] bootstrap: checking Supabase session...');
+            console.log('[Auth] bootstrap: verifying session with Supabase in the background...');
             const { data: { session } } = await withOneRetry(() => supabaseTimeout(supabase!.auth.getSession()));
             if (session?.user && mounted) {
-              console.log('[Auth] bootstrap: session found for', session.user.email || session.user.id);
+              console.log('[Auth] bootstrap: verified — session confirmed for', session.user.email || session.user.id);
               await resolveAndSetProfile(session.user);
               haveUser = true;
             } else {
-              console.log('[Auth] bootstrap: Supabase confirmed no active session');
+              console.log('[Auth] bootstrap: verified — Supabase confirmed no active session');
               supabaseConfirmedNoSession = true;
             }
           } catch (e: any) {
-            console.warn('[Auth] bootstrap: session check failed or timed out — status unknown, falling back to cached state:', e.message || e);
+            console.warn('[Auth] bootstrap: verification failed or timed out — status unknown, keeping the optimistic cached state as-is:', e.message || e);
           }
         }
 
-        // ── localStorage fallback (email/phone login, or Supabase's answer
-        // above was inconclusive) ──────────────────────────────────────────
+        // ── Correction pass ─────────────────────────────────────────────────────
         if (typeof window !== 'undefined' && mounted) {
-          if (!haveUser) {
+          if (supabase && supabaseConfirmedNoSession) {
+            // Supabase actively confirmed there is no session. If we
+            // optimistically painted a cached one above, it was stale (e.g.
+            // the session genuinely expired since the last visit) — clear
+            // it rather than leaving the UI showing a login that doesn't
+            // actually exist server-side. Email/phone sessions are never
+            // Supabase-backed in the first place, so this doesn't apply to them.
             const storedUser = localStorage.getItem('stag_beetle_user');
-            if (storedUser) {
-              try {
-                const parsed = JSON.parse(storedUser) as UserProfile;
-                const isEmailPhoneSession = parsed.id?.startsWith('usr_');
-                if (!supabase || isEmailPhoneSession) {
-                  setUser(prev => prev ?? parsed);
-                  haveUser = true;
-                } else if (supabaseConfirmedNoSession) {
-                  // Supabase actively confirmed there's no session — this
-                  // cached copy is genuinely stale.
-                  console.log('[Auth] bootstrap: dropping stale cached profile (Supabase confirmed logged out)');
-                  localStorage.removeItem('stag_beetle_user');
-                } else {
-                  // Couldn't reach Supabase to confirm either way — keep
-                  // showing the last known session optimistically rather
-                  // than silently logging someone out over a network blip.
-                  // Every real read/write is still independently authorized
-                  // server-side, so this can't grant anything the actual
-                  // session doesn't already allow.
-                  console.log('[Auth] bootstrap: session check was inconclusive — keeping cached profile optimistically');
-                  setUser(prev => prev ?? parsed);
-                  haveUser = true;
-                }
-              } catch { /* ignore */ }
+            let isEmailPhoneSession = false;
+            try { isEmailPhoneSession = !!(storedUser && (JSON.parse(storedUser) as UserProfile).id?.startsWith('usr_')); } catch { /* ignore */ }
+            if (storedUser && !isEmailPhoneSession) {
+              console.warn('[Auth] bootstrap: cached session was stale — Supabase confirmed logged out, clearing optimistic state');
+              setUser(null);
+              setIsAdminState(false);
+              haveUser = false;
+              localStorage.removeItem('stag_beetle_user');
+              localStorage.removeItem('stag_beetle_admin_session');
             }
           }
 
@@ -317,14 +339,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // half-logged-in admin" state a timed-out refresh could produce
           // before this fix — looks logged in in the UI, but there's no
           // session behind it, and logout has nothing coherent to clear.
-          if (localStorage.getItem('stag_beetle_admin_session') === 'true') {
-            if (haveUser) {
-              console.log('[Auth] bootstrap: restoring isAdmin=true alongside resolved user');
-              setIsAdminState(true);
-            } else {
-              console.warn('[Auth] bootstrap: found admin flag with no resolved user — discarding it instead of entering a broken half-logged-in state');
-              localStorage.removeItem('stag_beetle_admin_session');
-            }
+          if (!haveUser && localStorage.getItem('stag_beetle_admin_session') === 'true') {
+            console.warn('[Auth] bootstrap: found admin flag with no resolved user — discarding it instead of entering a broken half-logged-in state');
+            localStorage.removeItem('stag_beetle_admin_session');
+            setIsAdminState(false);
           }
         }
       } finally {
