@@ -61,9 +61,22 @@ function profileFromSupabaseUser(supabaseUser: {
 }
 
 // ─── Helper: fetch profile from Supabase profiles table ──────────────────────
-async function fetchProfile(id: string): Promise<UserProfile | null> {
-  if (!supabase) return null;
-  if (id.startsWith('usr_')) return null;
+// Returns a discriminated result rather than plain `UserProfile | null` —
+// resolveAndSetProfile below needs to tell "confirmed: no profile row exists
+// yet" (a genuinely new user) apart from "couldn't confirm either way, the
+// query timed out". Collapsing those two into one `null` used to make a mere
+// timeout look identical to a first-ever login, which made resolveAndSetProfile
+// create-and-upsert a bare, OAuth-metadata-only profile over whatever was
+// really stored — silently erasing address/city/etc, and any manually-edited
+// name or phone, on nothing more than a slow network.
+type ProfileFetchResult =
+  | { status: 'found'; profile: UserProfile }
+  | { status: 'not_found' }
+  | { status: 'unknown' };
+
+async function fetchProfile(id: string): Promise<ProfileFetchResult> {
+  if (!supabase) return { status: 'not_found' };
+  if (id.startsWith('usr_')) return { status: 'not_found' };
   try {
     // Same 8s-timeout-plus-one-retry budget the product catalog gets — this
     // used to be a tighter, unretried 4s here, so a momentary blip failed
@@ -77,11 +90,16 @@ async function fetchProfile(id: string): Promise<UserProfile | null> {
           .single()
       )
     );
-    if (error || !data) return null;
-    return data as UserProfile;
-  } catch (e) {
-    console.warn("fetchProfile query timed out or failed:", e);
-    return null;
+    if (error) {
+      if (error.code === 'PGRST116') return { status: 'not_found' }; // confirmed: no matching row
+      console.warn('fetchProfile query error:', error.message);
+      return { status: 'unknown' };
+    }
+    if (!data) return { status: 'not_found' };
+    return { status: 'found', profile: data as UserProfile };
+  } catch (e: any) {
+    console.warn('fetchProfile query timed out or failed — status unknown:', e.message || e);
+    return { status: 'unknown' };
   }
 }
 
@@ -163,14 +181,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Try to load existing profile first
-    let profile = profile0;
+    // Resolve the actual profile object from what fetchProfile found.
+    let profile: UserProfile;
 
-    if (!profile) {
-      // First login — create profile from OAuth metadata
-      profile = profileFromSupabaseUser(supabaseUser);
-      await upsertProfile(profile);
-    } else {
+    if (profile0.status === 'found') {
+      profile = profile0.profile;
       // Merge any new OAuth metadata (e.g. name updated in Google)
       const merged: UserProfile = {
         ...profile,
@@ -181,6 +196,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await upsertProfile(merged);
         profile = merged;
       }
+    } else if (profile0.status === 'not_found') {
+      // Confirmed by Supabase: no profile row exists yet — a genuine first
+      // login, safe to create.
+      console.log('[Auth] resolveAndSetProfile: no existing profile — creating one from OAuth metadata');
+      profile = profileFromSupabaseUser(supabaseUser);
+      await upsertProfile(profile);
+    } else {
+      // 'unknown' — the profile read timed out or errored, so we genuinely
+      // don't know whether a real profile exists. Treating that the same as
+      // "not found" would create-and-upsert a bare {id, name, email, phone}
+      // object over whatever's actually stored, silently erasing address/
+      // city/etc and any manually-edited name or phone. Instead: show the
+      // best data we already have (the cached copy from localStorage, if
+      // it's for this same user — set during the optimistic-paint step in
+      // bootstrap — otherwise a bare OAuth-derived stand-in for display
+      // only) and deliberately skip upsertProfile entirely, so a mere
+      // network hiccup can never overwrite real saved data.
+      console.warn('[Auth] resolveAndSetProfile: profile fetch inconclusive (timeout/error) — keeping last known profile, not overwriting saved data');
+      let cachedForThisUser: UserProfile | null = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = localStorage.getItem('stag_beetle_user');
+          const parsed = cached ? (JSON.parse(cached) as UserProfile) : null;
+          if (parsed && parsed.id === supabaseUser.id) cachedForThisUser = parsed;
+        } catch { /* ignore */ }
+      }
+      profile = cachedForThisUser || profileFromSupabaseUser(supabaseUser);
     }
 
     setUser(profile);
