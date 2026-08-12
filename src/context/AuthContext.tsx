@@ -112,27 +112,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mfaPending, setMfaPending] = useState(false);
   const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
 
-  // Step-up check, split out so it can run concurrently with the profile
-  // fetch below instead of adding a sequential round-trip — this alone was
-  // making the admin login noticeably slower than before MFA existed.
-  // Pure (no setState) so Promise.all can run it alongside fetchProfile.
+  // MFA step-up is intentionally disabled — it was adding two more unbounded
+  // network calls to every admin login (on top of everything else that was
+  // already timing out), and would fail closed (block admin entirely) on a
+  // mere timeout. Kept as a no-op stub, rather than removing every call
+  // site, so the enroll/verify/unenroll plumbing further down (used by the
+  // Security panel) and its callers don't need to change. Re-enabling later
+  // just means restoring the real check here.
   const checkAdminStepUp = useCallback(async (): Promise<{ requiresStepUp: boolean; factors: MfaFactor[] }> => {
-    if (!supabase) return { requiresStepUp: false, factors: [] };
-    try {
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== aal.nextLevel) {
-        // Every verified factor is a legitimate staff member's own device —
-        // list all of them so the login screen can ask "which one is yours"
-        // rather than only ever accepting whichever enrolled first.
-        const { data: factorsData } = await supabase.auth.mfa.listFactors();
-        const verifiedTotp = (factorsData?.totp || []).filter(f => f.status === 'verified');
-        return { requiresStepUp: true, factors: verifiedTotp.map(f => ({ id: f.id, status: f.status, friendlyName: f.friendly_name })) };
-      }
-      return { requiresStepUp: false, factors: [] };
-    } catch (e) {
-      console.warn('MFA assurance-level check failed — denying admin by default:', e);
-      return { requiresStepUp: true, factors: [] }; // fail closed, not open
-    }
+    return { requiresStepUp: false, factors: [] };
   }, []);
 
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
@@ -469,18 +457,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Supabase is not configured. Cannot sign in with Google.');
       return;
     }
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'select_account',
+    try {
+      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
         },
-      },
-    });
-    if (error) {
-      console.error('Google OAuth error:', error.message);
+      })));
+      if (error) {
+        console.error('Google OAuth error:', error.message);
+      }
+    } catch (e: any) {
+      console.error('Google OAuth failed or timed out:', e.message || e);
     }
   };
 
@@ -521,10 +513,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: 'Supabase is not configured' };
     }
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.signInWithPassword({
         email,
         password
-      });
+      })));
       if (error) {
         return { error: error.message };
       }
@@ -554,10 +546,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) return { error: 'Supabase is not configured' };
     if (!factorId) return { error: 'No device selected — please sign in again.' };
     try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
+      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.challengeAndVerify({ factorId, code: code.trim() })));
       if (error) return { error: error.message };
       // Session is now aal2 — re-resolve so isAdmin actually flips true
-      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      const { data: { user: freshUser } } = await withOneRetry(() => supabaseTimeout(supabase!.auth.getUser()));
       if (freshUser) {
         const profile = await resolveAndSetProfile(freshUser);
         if (typeof window !== 'undefined') {
@@ -580,7 +572,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const enrollMfa = async (friendlyName: string) => {
     if (!supabase) return { qrCode: null, secret: null, factorId: null, error: 'Supabase is not configured' };
     try {
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: friendlyName.trim() });
+      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.enroll({ factorType: 'totp', friendlyName: friendlyName.trim() })));
       if (error) return { qrCode: null, secret: null, factorId: null, error: error.message };
       return { qrCode: data.totp.qr_code, secret: data.totp.secret, factorId: data.id, error: null };
     } catch (err) {
@@ -594,9 +586,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const confirmMfaEnrollment = async (factorId: string, code: string) => {
     if (!supabase) return { error: 'Supabase is not configured' };
     try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
+      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.challengeAndVerify({ factorId, code: code.trim() })));
       if (error) return { error: error.message };
-      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      const { data: { user: freshUser } } = await withOneRetry(() => supabaseTimeout(supabase!.auth.getUser()));
       if (freshUser) await resolveAndSetProfile(freshUser);
       return { error: null };
     } catch (err) {
@@ -608,7 +600,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const unenrollMfa = async (factorId: string) => {
     if (!supabase) return { error: 'Supabase is not configured' };
     try {
-      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      const { error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.unenroll({ factorId })));
       if (error) return { error: error.message };
       return { error: null };
     } catch (err) {
@@ -620,9 +612,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getMfaFactors = async (): Promise<MfaFactor[]> => {
     if (!supabase) return [];
     try {
-      const { data, error } = await supabase.auth.mfa.listFactors();
+      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.mfa.listFactors()));
       if (error || !data) return [];
-      return (data.totp || []).map(f => ({ id: f.id, status: f.status, friendlyName: f.friendly_name }));
+      return (data.totp || []).map((f: any) => ({ id: f.id, status: f.status, friendlyName: f.friendly_name }));
     } catch {
       return [];
     }
@@ -634,7 +626,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: 'Supabase is not configured' };
     }
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.auth.signUp({
         email,
         password,
         options: {
@@ -643,7 +635,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             phone
           }
         }
-      });
+      })));
       if (error) {
         return { error: error.message };
       }

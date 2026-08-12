@@ -108,10 +108,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchedUserRef.current = user.id;
 
     (async () => {
-      const serverItems = await getCart(user.id);
+      const result = await getCart(user.id);
+      if (result.status === 'unknown') {
+        // Couldn't confirm the real server cart (timed out/errored) — do
+        // NOT mark this user as hydrated. hydratedUserRef gates the save
+        // effect below; marking it here on an unconfirmed read used to let
+        // that effect write the local (possibly incomplete) cart back to
+        // Supabase ~800ms later, silently overwriting whatever was really
+        // saved there. Leave fetchedUserRef cleared too, so a later change
+        // (e.g. the background auth verification updating `user`) retries
+        // this fetch instead of being permanently skipped.
+        console.warn('[Cart] Could not confirm server cart — skipping hydration to avoid overwriting it');
+        fetchedUserRef.current = null;
+        return;
+      }
+      const serverItems = result.status === 'found' ? result.items : [];
       hydratedUserRef.current = user.id;
       // New array identity also triggers the save effect, pushing the merge result up
-      setCart(prev => mergeCarts(serverItems || [], owner && owner !== user.id ? [] : prev));
+      setCart(prev => mergeCarts(serverItems, owner && owner !== user.id ? [] : prev));
     })();
   }, [user, authLoading]);
 

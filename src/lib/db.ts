@@ -526,13 +526,19 @@ const plusSizesChangeListeners = new Set<() => void>();
 const loadPlusSizesFromServer = async (): Promise<string[]> => {
   if (!isSupabaseConfigured || !supabase) return Array.from(plusSizesSet);
   try {
-    const { data } = await supabaseTimeout(
-      supabase.from('app_settings').select('value').eq('key', 'plus_sizes').maybeSingle()
+    const { data } = await withOneRetry(() =>
+      supabaseTimeout(
+        supabase.from('app_settings').select('value').eq('key', 'plus_sizes').maybeSingle()
+      )
     );
     if (data?.value && Array.isArray(data.value) && data.value.length > 0) {
       plusSizesSet = new Set(data.value as string[]);
     }
   } catch (e: any) {
+    // Already safe on failure — plusSizesSet only ever gets overwritten
+    // above, on a confirmed successful response, never here. A timeout just
+    // means this client keeps whatever it already had (its built-in
+    // defaults, or the last successfully-synced value).
     console.warn('[Atelier DB] Failed to load plus-size config, keeping current defaults:', e.message || e);
   }
   return Array.from(plusSizesSet);
@@ -1506,19 +1512,39 @@ export const getOrders = async (): Promise<Order[]> => {
 // as upsertProfile does.
 // =========================================================================
 
-export const getCart = async (userId: string): Promise<OrderItem[] | null> => {
-  if (isSupabaseConfigured && supabase && !userId.startsWith('usr_')) {
-    try {
-      const { data, error } = await supabaseTimeout(
-        supabase.from('carts').select('items').eq('user_id', userId).maybeSingle()
-      );
-      if (!error && data) return (data.items as OrderItem[]) || [];
-      if (error) console.warn("[Atelier DB] Supabase getCart error:", error.message);
-    } catch (e: any) {
-      console.warn("Supabase getCart failed or timed out:", e.message || e);
-    }
+// Discriminated result, same reasoning as fetchProfile in AuthContext: the
+// caller (CartContext) needs to tell "confirmed: no server cart" apart from
+// "couldn't check, the query timed out". Collapsing both into a plain `null`
+// used to make a mere timeout look identical to a genuinely empty cart —
+// CartContext would then mark itself "hydrated" regardless and, ~800ms
+// later, write the local (incomplete) cart back to Supabase, silently
+// overwriting whatever was really saved there (e.g. items added on another
+// device) purely because of a network hiccup on this page load.
+export type CartFetchResult =
+  | { status: 'found'; items: OrderItem[] }
+  | { status: 'confirmed_empty' }
+  | { status: 'unknown' };
+
+export const getCart = async (userId: string): Promise<CartFetchResult> => {
+  // Email/phone (mock) sessions never had a server-side cart to begin with —
+  // this isn't an unknown, it's correctly "nothing to sync".
+  if (!isSupabaseConfigured || !supabase || userId.startsWith('usr_')) {
+    return { status: 'confirmed_empty' };
   }
-  return null;
+  try {
+    const { data, error } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('carts').select('items').eq('user_id', userId).maybeSingle())
+    );
+    if (error) {
+      console.warn("[Atelier DB] Supabase getCart error:", error.message);
+      return { status: 'unknown' };
+    }
+    if (!data) return { status: 'confirmed_empty' };
+    return { status: 'found', items: (data.items as OrderItem[]) || [] };
+  } catch (e: any) {
+    console.warn("Supabase getCart failed or timed out:", e.message || e);
+    return { status: 'unknown' };
+  }
 };
 
 export const saveCart = async (userId: string, items: OrderItem[]): Promise<void> => {

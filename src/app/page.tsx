@@ -35,35 +35,6 @@ const HERO_SLIDES: HeroSlide[] = [
     ctaHref: '/?category=all',
     align: 'left',
   },
-  /*
-  {
-    image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=1600&q=85',
-    tag: 'LIMITED TIME OFFER',
-    headline: 'Last chance!\nUP TO 30% OFF*',
-    sub: 'Premium fabrics, modern silhouettes, tailored for the contemporary wardrobe.',
-    cta: 'Shop Steals',
-    ctaHref: '/?category=all',
-    align: 'left',
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1600&q=85',
-    tag: 'NEW COLLECTION',
-    headline: 'Crafted for the\nModern Sovereign',
-    sub: 'Heirloom garments in Kashmir wool, Banarasi silk & Jaipur linen.',
-    cta: 'Shop Men',
-    ctaHref: '/?category=men',
-    align: 'left',
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1600&q=85',
-    tag: "MEN'S EDIT",
-    headline: 'Architecture\nMeets Fabric',
-    sub: 'Bandhgala jackets, ikat shirts & structured trousers for the discerning man.',
-    cta: 'Explore Men',
-    ctaHref: '/?category=men',
-    align: 'left',
-  },
-  */
 ];
 
 function VideoSlide({ src, poster, isActive }: { src: string; poster?: string; isActive: boolean }) {
