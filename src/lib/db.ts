@@ -391,8 +391,10 @@ export const supabaseTimeout = (promise: any, ms = 8000): Promise<any> => {
 
 // Retries a flaky/slow request once after a short pause before giving up —
 // smooths over a single dropped packet or momentary network blip instead of
-// immediately falling back to stale/demo data on the first hiccup.
-const withOneRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+// immediately falling back to stale/demo data on the first hiccup. Exported
+// so auth (AuthContext) gets the same resilience as the product catalog
+// instead of a separately-maintained, easier-to-forget-about timeout.
+export const withOneRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
   try {
     return await fn();
   } catch (e) {

@@ -129,11 +129,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveTimerRef.current = setTimeout(() => saveCart(userId, cart), 800);
     }
 
-    // Fetch suggestions
+    // Fetch suggestions — a "you might also like" widget, not core cart
+    // functionality. A failed/timed-out fetch should just leave suggestions
+    // as they were, not surface an error over someone's cart.
     const fetchSuggestions = async () => {
       const cartIds = cart.map(item => item.product_id);
-      const recs = await getSuggestions(cartIds);
-      setSuggestions(recs);
+      try {
+        const recs = await getSuggestions(cartIds);
+        setSuggestions(recs);
+      } catch (e: any) {
+        console.warn('[Cart] Failed to load suggestions:', e.message || e);
+      }
     };
 
     fetchSuggestions();
@@ -200,8 +206,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshSuggestions = async () => {
     const cartIds = cart.map(item => item.product_id);
-    const recs = await getSuggestions(cartIds);
-    setSuggestions(recs);
+    try {
+      const recs = await getSuggestions(cartIds);
+      setSuggestions(recs);
+    } catch (e: any) {
+      console.warn('[Cart] Failed to refresh suggestions:', e.message || e);
+    }
   };
 
   const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
