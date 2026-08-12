@@ -420,7 +420,7 @@ function AdminDashboardContent() {
   useEffect(() => {
     if (!isAdmin) return;
     const unsubscribe = subscribeToProductChanges(() => {
-      getProducts().then(setProducts);
+      getProducts().then(setProducts).catch(e => console.warn('[Admin] Live product refresh failed:', e.message || e));
     });
     return unsubscribe;
   }, [isAdmin]);

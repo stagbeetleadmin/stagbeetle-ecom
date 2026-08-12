@@ -380,11 +380,25 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-export const supabaseTimeout = (promise: any, ms = 4000): Promise<any> => {
+// 8s (not 4s): a genuinely slow-but-working connection should still get a
+// chance to finish rather than being treated the same as a dead connection.
+export const supabaseTimeout = (promise: any, ms = 8000): Promise<any> => {
   return Promise.race([
     Promise.resolve(promise),
     new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), ms))
   ]);
+};
+
+// Retries a flaky/slow request once after a short pause before giving up —
+// smooths over a single dropped packet or momentary network blip instead of
+// immediately falling back to stale/demo data on the first hiccup.
+const withOneRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+  try {
+    return await fn();
+  } catch (e) {
+    await new Promise(res => setTimeout(res, 600));
+    return fn();
+  }
 };
 
 // =========================================================================
@@ -572,36 +586,63 @@ export const getProducts = async (): Promise<Product[]> => {
     return productsCache.data;
   }
 
-  if (isSupabaseConfigured && supabase) {
-    try {
-      console.log("[Atelier DB] Fetching products from Supabase...");
-      const { data, error } = await supabaseTimeout(supabase.from('products').select('*'));
-      if (!error && data) {
-        console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
-        productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
-        return productsCache.data;
-      }
-      if (error) console.warn("[Atelier DB] Supabase products query error:", error.message);
-    } catch (e: any) {
-      console.warn("[Atelier DB] Supabase products failed or timed out:", e.message || e);
-    }
+  // Not configured at all (no env vars, e.g. local dev without Supabase) —
+  // the local/demo catalog is the intended experience, not a failure.
+  if (!isSupabaseConfigured || !supabase) {
+    console.log("[Atelier DB] Supabase not configured, returning local mock products.");
+    return getLocalProducts();
   }
-  console.log("[Atelier DB] Returning local mock products.");
-  return getLocalProducts();
+
+  try {
+    console.log("[Atelier DB] Fetching products from Supabase...");
+    const { data, error } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('products').select('*'))
+    );
+    if (error) throw error;
+    console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
+    productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
+    return productsCache.data;
+  } catch (e: any) {
+    console.warn("[Atelier DB] Supabase products failed or timed out:", e.message || e);
+    // A real catalog was loaded before (even if its TTL has since expired) —
+    // showing that stale-but-real data beats swapping in unrelated demo
+    // products whose images live on the very host that just failed.
+    if (productsCache) {
+      console.warn("[Atelier DB] Serving last known-good product list while the connection recovers.");
+      return productsCache.data;
+    }
+    throw new Error("We couldn't load the product catalog. Please check your connection and try again.");
+  }
 };
 
 export const getProductById = async (id: string): Promise<Product | null> => {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      console.log(`[Atelier DB] Fetching product ${id} from Supabase...`);
-      const { data, error } = await supabaseTimeout(supabase.from('products').select('*').eq('id', id).single());
-      if (!error && data) return data as Product;
-      if (error) console.warn("[Atelier DB] Supabase product error:", error.message);
-    } catch (e: any) {
-      console.warn(`[Atelier DB] Supabase getProductById failed or timed out for ${id}:`, e.message || e);
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    return getLocalProducts().find(p => p.id === id) || null;
   }
-  return getLocalProducts().find(p => p.id === id) || null;
+
+  try {
+    console.log(`[Atelier DB] Fetching product ${id} from Supabase...`);
+    const { data, error } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('products').select('*').eq('id', id).single())
+    );
+    if (error) {
+      // PGRST116 = "no rows returned" — a legitimate answer (the product
+      // genuinely doesn't exist), not a connection problem.
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+    return data as Product;
+  } catch (e: any) {
+    console.warn(`[Atelier DB] Supabase getProductById failed or timed out for ${id}:`, e.message || e);
+    // Fall back to a cached full catalog if we have one (avoids a false
+    // "not found" for a product we already know exists), otherwise this is
+    // a real connection failure the caller needs to know about — not a 404.
+    if (productsCache) {
+      const cached = productsCache.data.find(p => p.id === id);
+      if (cached) return cached;
+    }
+    throw new Error("We couldn't load this product right now. Please check your connection and try again.");
+  }
 };
 
 // Products with the same style code (different colours of the same physical

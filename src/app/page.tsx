@@ -489,6 +489,7 @@ function StorefrontContent() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState(categoryParam);
   const [searchTerm, setSearchTerm] = useState(searchParam);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchParam);
@@ -516,19 +517,34 @@ function StorefrontContent() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  const loadProducts = useCallback(() => {
+    setIsLoading(true);
+    setLoadError(null);
+    getProducts()
+      .then(res => {
+        setProducts(res);
+        setIsLoading(false);
+      })
+      .catch((e: Error) => {
+        setLoadError(e.message || 'Failed to load products.');
+        setIsLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
-    getProducts().then(res => {
-      setProducts(res);
-      setIsLoading(false);
-    });
+    loadProducts();
 
     // Live-refresh the storefront the moment an admin adds/edits/removes a
     // product in another tab — no polling, just a push over Supabase Realtime.
+    // A failed refresh here just keeps whatever's already on screen; it
+    // shouldn't wipe a working catalog because one background update failed.
     const unsubscribe = subscribeToProductChanges(() => {
-      getProducts().then(setProducts);
+      getProducts().then(setProducts).catch(e => {
+        console.warn('[Storefront] Live product refresh failed:', e.message || e);
+      });
     });
     return unsubscribe;
-  }, []);
+  }, [loadProducts]);
 
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
     e.preventDefault();
@@ -778,6 +794,18 @@ function StorefrontContent() {
           {isLoading ? (
             <div className="flex justify-center items-center py-32">
               <div className="w-8 h-8 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : loadError ? (
+            <div className="max-w-[500px] mx-auto px-6 py-24 text-center">
+              <span className="material-symbols-outlined text-[48px] text-gray-300 mb-4">wifi_off</span>
+              <h2 className="text-[16px] font-bold text-gray-900 uppercase tracking-wide mb-2">Couldn&apos;t Load the Collection</h2>
+              <p className="text-[13px] text-gray-500 mb-6">{loadError}</p>
+              <button
+                onClick={loadProducts}
+                className="bg-black text-white px-8 py-3 text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[#C5A059] transition-colors"
+              >
+                Try Again
+              </button>
             </div>
           ) : products.length === 0 ? (
             <div className="max-w-[700px] mx-auto px-6 py-24 text-center border border-dashed border-[#C5A059]/25 bg-gray-50/50 rounded-sm my-10">

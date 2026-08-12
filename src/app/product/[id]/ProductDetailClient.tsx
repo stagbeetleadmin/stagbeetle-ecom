@@ -66,7 +66,12 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
 
   useEffect(() => {
     const unsubscribe = subscribeToProductChanges(() => {
-      getProductById(initialProduct.id).then(fresh => { if (fresh) setProduct(fresh); });
+      // A failed live refresh just keeps showing the product as last loaded —
+      // it shouldn't surface an error over a page the shopper is already
+      // viewing successfully.
+      getProductById(initialProduct.id)
+        .then(fresh => { if (fresh) setProduct(fresh); })
+        .catch(e => console.warn('[ProductDetail] Live refresh failed:', e.message || e));
     });
     return unsubscribe;
   }, [initialProduct.id]);
