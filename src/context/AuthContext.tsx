@@ -126,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }) => {
     // Check admin status immediately before any async network calls to avoid stale state delays
     const isAdminEmail = supabaseUser.email?.toLowerCase() === 'stagbeetlebilling@gmail.com';
+    console.log(`[Auth] resolveAndSetProfile: resolving ${supabaseUser.email || supabaseUser.id} (isAdminEmail=${isAdminEmail})`);
 
     // The step-up check (admin only, a Supabase Auth MFA call) and the
     // profile fetch (everyone, a Postgres read) are independent — running
@@ -138,6 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isAdminEmail && supabase) {
       if (stepUp.requiresStepUp) {
+        console.log(`[Auth] resolveAndSetProfile: admin email but MFA step-up required (${stepUp.factors.length} factor(s) available) — NOT granting admin yet`);
         setIsAdminState(false);
         setMfaPending(true);
         setMfaFactors(stepUp.factors);
@@ -145,6 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('stag_beetle_admin_session');
         }
       } else {
+        console.log('[Auth] resolveAndSetProfile: admin email, aal2 confirmed — granting admin');
         setIsAdminState(true);
         setMfaPending(false);
         setMfaFactors([]);
@@ -189,7 +192,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const bootstrap = async () => {
+      console.log('[Auth] bootstrap: starting (mount/refresh)');
       setLoading(true);
+      // Declared outside the try block so the `finally` below (and the
+      // fallback logic further down) can still read what this run learned,
+      // even if something earlier throws.
+      let haveUser = false;
+      let supabaseConfirmedNoSession = false;
       try {
         // ── Detect OAuth error query parameters and fall back ──────────────────
         if (typeof window !== 'undefined') {
@@ -247,41 +256,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // ── Supabase path ──────────────────────────────────────────────────────
+        // haveUser / supabaseConfirmedNoSession (declared above, outside the
+        // try) track what THIS bootstrap run actually learned, so the
+        // fallback below can tell "Supabase confirmed there's no session"
+        // apart from "we don't actually know because the call timed out".
+        // Collapsing those two cases used to wipe a perfectly valid cached
+        // session (and could leave isAdmin=true with no user at all — a
+        // broken, contradictory state) just because one request was slow.
         if (supabase) {
           try {
+            console.log('[Auth] bootstrap: checking Supabase session...');
             const { data: { session } } = await withOneRetry(() => supabaseTimeout(supabase!.auth.getSession()));
             if (session?.user && mounted) {
+              console.log('[Auth] bootstrap: session found for', session.user.email || session.user.id);
               await resolveAndSetProfile(session.user);
+              haveUser = true;
+            } else {
+              console.log('[Auth] bootstrap: Supabase confirmed no active session');
+              supabaseConfirmedNoSession = true;
             }
-          } catch (e) {
-            console.warn('Supabase session bootstrap failed or timed out:', e);
+          } catch (e: any) {
+            console.warn('[Auth] bootstrap: session check failed or timed out — status unknown, falling back to cached state:', e.message || e);
           }
         }
 
-        // ── localStorage fallback (email/phone login or no Supabase) ──────────
-        if (typeof window !== 'undefined') {
-          const storedUser = localStorage.getItem('stag_beetle_user');
-          if (storedUser && mounted) {
-            try {
-              const parsed = JSON.parse(storedUser) as UserProfile;
-              if (supabase) {
+        // ── localStorage fallback (email/phone login, or Supabase's answer
+        // above was inconclusive) ──────────────────────────────────────────
+        if (typeof window !== 'undefined' && mounted) {
+          if (!haveUser) {
+            const storedUser = localStorage.getItem('stag_beetle_user');
+            if (storedUser) {
+              try {
+                const parsed = JSON.parse(storedUser) as UserProfile;
                 const isEmailPhoneSession = parsed.id?.startsWith('usr_');
-                if (isEmailPhoneSession) {
+                if (!supabase || isEmailPhoneSession) {
                   setUser(prev => prev ?? parsed);
-                } else {
+                  haveUser = true;
+                } else if (supabaseConfirmedNoSession) {
+                  // Supabase actively confirmed there's no session — this
+                  // cached copy is genuinely stale.
+                  console.log('[Auth] bootstrap: dropping stale cached profile (Supabase confirmed logged out)');
                   localStorage.removeItem('stag_beetle_user');
+                } else {
+                  // Couldn't reach Supabase to confirm either way — keep
+                  // showing the last known session optimistically rather
+                  // than silently logging someone out over a network blip.
+                  // Every real read/write is still independently authorized
+                  // server-side, so this can't grant anything the actual
+                  // session doesn't already allow.
+                  console.log('[Auth] bootstrap: session check was inconclusive — keeping cached profile optimistically');
+                  setUser(prev => prev ?? parsed);
+                  haveUser = true;
                 }
-              } else {
-                setUser(prev => prev ?? parsed);
-              }
-            } catch { /* ignore */ }
+              } catch { /* ignore */ }
+            }
           }
-          if (localStorage.getItem('stag_beetle_admin_session') === 'true' && mounted) {
-            setIsAdminState(true);
+
+          // Only ever treat isAdmin as true alongside an actual signed-in
+          // user. isAdmin=true with user=null is exactly the "stuck,
+          // half-logged-in admin" state a timed-out refresh could produce
+          // before this fix — looks logged in in the UI, but there's no
+          // session behind it, and logout has nothing coherent to clear.
+          if (localStorage.getItem('stag_beetle_admin_session') === 'true') {
+            if (haveUser) {
+              console.log('[Auth] bootstrap: restoring isAdmin=true alongside resolved user');
+              setIsAdminState(true);
+            } else {
+              console.warn('[Auth] bootstrap: found admin flag with no resolved user — discarding it instead of entering a broken half-logged-in state');
+              localStorage.removeItem('stag_beetle_admin_session');
+            }
           }
         }
       } finally {
         if (mounted) {
+          // Reads the locally-tracked flags from this run, not the `user`/
+          // `isAdmin` state — this effect only runs once per mount, so
+          // those would be stale closures over their initial (null/false)
+          // values and would always print the same thing regardless of
+          // what bootstrap actually resolved.
+          console.log(`[Auth] bootstrap: finished — haveUser=${haveUser} supabaseConfirmedNoSession=${supabaseConfirmedNoSession}`);
           setLoading(false);
         }
       }
@@ -294,6 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           if (!mounted) return;
+          console.log(`[Auth] onAuthStateChange: ${event} (session user: ${session?.user?.email || session?.user?.id || 'none'})`);
 
           if (event === 'SIGNED_IN' && session?.user) {
             const profile = await resolveAndSetProfile(session.user);
@@ -322,6 +376,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               } catch {}
             }
 
+            console.log(`[Auth] onAuthStateChange: SIGNED_OUT — isRealSupabaseUser=${isRealSupabaseUser} (false usually means logout() already cleared local state; true means an external sign-out — e.g. a token revoked from another device/tab — is what triggered this)`);
             if (isRealSupabaseUser) {
               setUser(null);
               setIsAdminState(false);
@@ -333,6 +388,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           if (event === 'TOKEN_REFRESHED' && session?.user) {
+            console.log('[Auth] onAuthStateChange: TOKEN_REFRESHED — silently re-resolving profile for', session.user.email || session.user.id);
             // Silently refresh profile in background
             resolveAndSetProfile(session.user);
           }
@@ -550,9 +606,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
+    console.log('[Auth] logout() called — clearing local session immediately');
+    // Clear local state FIRST, unconditionally. The remote sign-out below
+    // used to run first with no timeout — if Supabase's auth endpoint was
+    // slow/unreachable, this function would hang before ever reaching the
+    // lines that actually log the user out, so "Log out" silently did
+    // nothing. Local state should never be gated on a possibly-hanging
+    // network call; the remote call below is now best-effort cleanup only.
     setUser(null);
     setIsAdminState(false);
     setMfaPending(false);
@@ -560,6 +620,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.removeItem('stag_beetle_user');
       localStorage.removeItem('stag_beetle_admin_session');
+    }
+
+    if (supabase) {
+      try {
+        await withOneRetry(() => supabaseTimeout(supabase!.auth.signOut()));
+        console.log('[Auth] logout() — remote sign-out confirmed');
+      } catch (e: any) {
+        console.warn('[Auth] logout() — remote sign-out failed or timed out (local session was already cleared):', e.message || e);
+      }
     }
   };
 

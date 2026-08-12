@@ -455,6 +455,15 @@ const setLocalCoupons = (coupons: Coupon[]) => {
 let productsCache: { data: Product[]; expiresAt: number } | null = null;
 const PRODUCTS_CACHE_TTL_MS = 60_000;
 
+// Tracks a fetch that's already in flight. Without this, several callers
+// landing before the first one finishes (CartContext's suggestions effect
+// alone fires 2-3x on a single page load, on every page, for every
+// visitor — see AGENTS notes) each see productsCache as empty and each
+// kick off their own independent Supabase query, turning one page load
+// into a burst of duplicate network calls. Concurrent callers now share
+// this one promise instead of racing separate requests.
+let productsFetchInFlight: Promise<Product[]> | null = null;
+
 const invalidateProductsCache = () => { productsCache = null; };
 
 // =========================================================================
@@ -595,26 +604,44 @@ export const getProducts = async (): Promise<Product[]> => {
     return getLocalProducts();
   }
 
-  try {
-    console.log("[Atelier DB] Fetching products from Supabase...");
-    const { data, error } = await withOneRetry(() =>
-      supabaseTimeout(supabase.from('products').select('*'))
-    );
-    if (error) throw error;
-    console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
-    productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
-    return productsCache.data;
-  } catch (e: any) {
-    console.warn("[Atelier DB] Supabase products failed or timed out:", e.message || e);
-    // A real catalog was loaded before (even if its TTL has since expired) —
-    // showing that stale-but-real data beats swapping in unrelated demo
-    // products whose images live on the very host that just failed.
-    if (productsCache) {
-      console.warn("[Atelier DB] Serving last known-good product list while the connection recovers.");
-      return productsCache.data;
-    }
-    throw new Error("We couldn't load the product catalog. Please check your connection and try again.");
+  // A fetch is already on the wire (e.g. CartContext's suggestions effect and
+  // this page's own product list both asked within the same tick) — share
+  // that one request instead of firing another identical query.
+  if (productsFetchInFlight) {
+    console.log("[Atelier DB] Fetch already in flight — reusing it instead of firing a duplicate request.");
+    return productsFetchInFlight;
   }
+
+  const fetchPromise = (async (): Promise<Product[]> => {
+    try {
+      console.log("[Atelier DB] Fetching products from Supabase...");
+      const { data, error } = await withOneRetry(() =>
+        supabaseTimeout(supabase.from('products').select('*'))
+      );
+      if (error) throw error;
+      console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
+      productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
+      return productsCache.data;
+    } catch (e: any) {
+      console.warn("[Atelier DB] Supabase products failed or timed out:", e.message || e);
+      // A real catalog was loaded before (even if its TTL has since expired) —
+      // showing that stale-but-real data beats swapping in unrelated demo
+      // products whose images live on the very host that just failed.
+      if (productsCache) {
+        console.warn("[Atelier DB] Serving last known-good product list while the connection recovers.");
+        return productsCache.data;
+      }
+      throw new Error("We couldn't load the product catalog. Please check your connection and try again.");
+    } finally {
+      // Cleared whether this succeeded or failed, so the *next* call (after
+      // this one has actually settled) is free to try again rather than
+      // being stuck replaying a stale result.
+      productsFetchInFlight = null;
+    }
+  })();
+
+  productsFetchInFlight = fetchPromise;
+  return fetchPromise;
 };
 
 export const getProductById = async (id: string): Promise<Product | null> => {
