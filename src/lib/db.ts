@@ -1519,34 +1519,90 @@ export const applyInboundInventorySync = async (
 // COUPONS OPERATIONS
 // =========================================================================
 
-// In-memory only (not persisted like products) — coupons are admin-only,
-// low-traffic, and change often enough that a stale session-scoped cache is
-// the right tradeoff: enough to survive one timeout, not stale for long.
+// Coupons are admin-only and change often enough that every call after the
+// first still goes live (no TTL short-circuit) — a write should be visible
+// on the very next fetch. What WAS missing is any resilience for the first
+// call of a cold session: on a hard refresh this used to always block on a
+// live query with nothing to fall back on, which is exactly the kind of call
+// that gets caught in the refresh-time network/CPU pileup (see AGENTS notes
+// on getProducts). Same fix as products: persist the last known-good list to
+// localStorage and paint it instantly on that first call, refreshing for
+// real in the background — every call after that still goes live as before.
 let couponsCache: Coupon[] | null = null;
+let couponsFetchInFlight: Promise<Coupon[]> | null = null;
+let couponsHasAttemptedFreshFetch = false;
+const COUPONS_LOCALSTORAGE_KEY = 'stag_beetle_coupons_cache';
+
+const readPersistedCoupons = (): Coupon[] | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(COUPONS_LOCALSTORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: Coupon[] };
+    return Array.isArray(parsed.data) ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistCoupons = (data: Coupon[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(COUPONS_LOCALSTORAGE_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  } catch {
+    // Storage full/unavailable — non-critical, just skip persisting.
+  }
+};
+
+const fetchAndCacheCoupons = (): Promise<Coupon[]> => {
+  if (couponsFetchInFlight) return couponsFetchInFlight;
+
+  couponsHasAttemptedFreshFetch = true;
+  const fetchPromise = (async (): Promise<Coupon[]> => {
+    try {
+      console.log("[Atelier DB] Fetching coupons from Supabase...");
+      const { data, error } = await withOneRetry(() => supabaseTimeout(supabase!.from('coupons').select('*')));
+      if (error) throw error;
+      console.log("[Atelier DB] Successfully loaded coupons from Supabase.");
+      couponsCache = data as Coupon[];
+      persistCoupons(couponsCache);
+      return couponsCache;
+    } catch (e: any) {
+      console.warn("[Atelier DB] Supabase coupons failed or timed out:", e.message || e);
+      // Real coupons loaded earlier this session beat showing fake/empty ones —
+      // an admin seeing "no coupons" here could genuinely believe there are
+      // none, when it's really just a timeout.
+      if (couponsCache) {
+        console.warn("[Atelier DB] Serving last known-good coupon list while the connection recovers.");
+        return couponsCache;
+      }
+      throw new Error("We couldn't load coupons right now. Please check your connection and try again.");
+    } finally {
+      couponsFetchInFlight = null;
+    }
+  })();
+
+  couponsFetchInFlight = fetchPromise;
+  return fetchPromise;
+};
 
 export const getCoupons = async (): Promise<Coupon[]> => {
   if (!isSupabaseConfigured || !supabase) {
     console.log("[Atelier DB] Supabase not configured, returning local mock coupons.");
     return getLocalCoupons();
   }
-  try {
-    console.log("[Atelier DB] Fetching coupons from Supabase...");
-    const { data, error } = await withOneRetry(() => supabaseTimeout(supabase.from('coupons').select('*')));
-    if (error) throw error;
-    console.log("[Atelier DB] Successfully loaded coupons from Supabase.");
-    couponsCache = data as Coupon[];
-    return couponsCache;
-  } catch (e: any) {
-    console.warn("[Atelier DB] Supabase coupons failed or timed out:", e.message || e);
-    // Real coupons loaded earlier this session beat showing fake/empty ones —
-    // an admin seeing "no coupons" here could genuinely believe there are
-    // none, when it's really just a timeout.
-    if (couponsCache) {
-      console.warn("[Atelier DB] Serving last known-good coupon list while the connection recovers.");
-      return couponsCache;
+
+  if (!couponsCache && !couponsHasAttemptedFreshFetch) {
+    const persisted = readPersistedCoupons();
+    if (persisted) {
+      console.log(`[Atelier DB] Painting coupons instantly from persisted cache (count: ${persisted.length}) while refreshing in the background.`);
+      couponsCache = persisted;
+      fetchAndCacheCoupons().catch(() => {}); // background refresh; errors already logged inside
+      return persisted;
     }
-    throw new Error("We couldn't load coupons right now. Please check your connection and try again.");
   }
+
+  return fetchAndCacheCoupons();
 };
 
 export const createCoupon = async (coupon: Coupon): Promise<Coupon> => {
@@ -1616,8 +1672,67 @@ export const validateCoupon = async (code: string, orderValue: number): Promise<
 
 // Same reasoning as couponsCache above — real (if slightly stale) orders
 // beat an admin looking at an empty/fake order list and concluding the
-// store has no orders, when it's really just a timed-out request.
+// store has no orders, when it's really just a timed-out request. And, same
+// fix as coupons: persist the last known-good list so the first call of a
+// cold session (a hard refresh) can paint instantly instead of blocking on a
+// live query during the refresh-time network/CPU pileup; every call after
+// that still goes live.
 let ordersCache: Order[] | null = null;
+let ordersFetchInFlight: Promise<Order[]> | null = null;
+let ordersHasAttemptedFreshFetch = false;
+const ORDERS_LOCALSTORAGE_KEY = 'stag_beetle_orders_cache';
+
+const readPersistedOrders = (): Order[] | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ORDERS_LOCALSTORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: Order[] };
+    return Array.isArray(parsed.data) ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistOrders = (data: Order[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ORDERS_LOCALSTORAGE_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  } catch {
+    // Storage full/unavailable — non-critical, just skip persisting.
+  }
+};
+
+const fetchAndCacheOrders = (): Promise<Order[]> => {
+  if (ordersFetchInFlight) return ordersFetchInFlight;
+
+  ordersHasAttemptedFreshFetch = true;
+  const fetchPromise = (async (): Promise<Order[]> => {
+    try {
+      console.log("[Atelier DB] Fetching orders from Supabase...");
+      const { data, error } = await withOneRetry(() =>
+        supabaseTimeout(supabase!.from('orders').select('*').order('created_at', { ascending: false }))
+      );
+      if (error) throw error;
+      console.log(`[Atelier DB] Successfully loaded ${data.length} orders from Supabase.`);
+      ordersCache = data as Order[];
+      persistOrders(ordersCache);
+      return ordersCache;
+    } catch (e: any) {
+      console.warn("Supabase failed fetching orders or timed out:", e.message || e);
+      if (ordersCache) {
+        console.warn("[Atelier DB] Serving last known-good orders list while the connection recovers.");
+        return ordersCache;
+      }
+      throw new Error("We couldn't load orders right now. Please check your connection and try again.");
+    } finally {
+      ordersFetchInFlight = null;
+    }
+  })();
+
+  ordersFetchInFlight = fetchPromise;
+  return fetchPromise;
+};
 
 export const getOrders = async (): Promise<Order[]> => {
   if (!isSupabaseConfigured || !supabase) {
@@ -1635,23 +1750,18 @@ export const getOrders = async (): Promise<Order[]> => {
     }
     return [];
   }
-  try {
-    console.log("[Atelier DB] Fetching orders from Supabase...");
-    const { data, error } = await withOneRetry(() =>
-      supabaseTimeout(supabase.from('orders').select('*').order('created_at', { ascending: false }))
-    );
-    if (error) throw error;
-    console.log(`[Atelier DB] Successfully loaded ${data.length} orders from Supabase.`);
-    ordersCache = data as Order[];
-    return ordersCache;
-  } catch (e: any) {
-    console.warn("Supabase failed fetching orders or timed out:", e.message || e);
-    if (ordersCache) {
-      console.warn("[Atelier DB] Serving last known-good orders list while the connection recovers.");
-      return ordersCache;
+
+  if (!ordersCache && !ordersHasAttemptedFreshFetch) {
+    const persisted = readPersistedOrders();
+    if (persisted) {
+      console.log(`[Atelier DB] Painting orders instantly from persisted cache (count: ${persisted.length}) while refreshing in the background.`);
+      ordersCache = persisted;
+      fetchAndCacheOrders().catch(() => {}); // background refresh; errors already logged inside
+      return persisted;
     }
-    throw new Error("We couldn't load orders right now. Please check your connection and try again.");
   }
+
+  return fetchAndCacheOrders();
 };
 
 // =========================================================================

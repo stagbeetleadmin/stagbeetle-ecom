@@ -333,22 +333,32 @@ function AdminDashboardContent() {
   const [feedbackMsg, setFeedbackMsg] = useState({ type: '', text: '' });
 
   // Load Data
+  // These five are independent of each other, so they're fired together
+  // instead of awaited one-by-one — sequentially, a single slow/timed-out
+  // call (e.g. coupons on a cold refresh) used to delay every call after it
+  // by its own full timeout, stacking up to a minute-plus of wait. In
+  // parallel, the total wait is the slowest one, not the sum of all of them.
+  // Promise.allSettled (not Promise.all) so one genuine failure — no cache to
+  // fall back on at all — doesn't wipe out the others that did succeed.
   const loadData = async () => {
     setLoading(true);
-    try {
-      const allProducts = await getProducts();
-      setProducts(allProducts);
-      const allCoupons = await getCoupons();
-      setCoupons(allCoupons);
-      const allOrders = await getOrders();
-      setOrders(allOrders);
-      const stockSummary = await getInventorySummaryForProducts();
-      setInventorySummary(stockSummary);
-      const currentPlusSizes = await getPlusSizesConfig();
-      setPlusSizes(currentPlusSizes);
-    } catch (e) {
-      console.error(e);
-    }
+    const [productsResult, couponsResult, ordersResult, inventoryResult, plusSizesResult] = await Promise.allSettled([
+      getProducts(),
+      getCoupons(),
+      getOrders(),
+      getInventorySummaryForProducts(),
+      getPlusSizesConfig(),
+    ]);
+    if (productsResult.status === 'fulfilled') setProducts(productsResult.value);
+    else console.error('[Admin] Failed to load products:', productsResult.reason);
+    if (couponsResult.status === 'fulfilled') setCoupons(couponsResult.value);
+    else console.error('[Admin] Failed to load coupons:', couponsResult.reason);
+    if (ordersResult.status === 'fulfilled') setOrders(ordersResult.value);
+    else console.error('[Admin] Failed to load orders:', ordersResult.reason);
+    if (inventoryResult.status === 'fulfilled') setInventorySummary(inventoryResult.value);
+    else console.error('[Admin] Failed to load inventory summary:', inventoryResult.reason);
+    if (plusSizesResult.status === 'fulfilled') setPlusSizes(plusSizesResult.value);
+    else console.error('[Admin] Failed to load plus-size config:', plusSizesResult.reason);
     setLoading(false);
   };
 
