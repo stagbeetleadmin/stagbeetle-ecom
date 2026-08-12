@@ -464,7 +464,17 @@ const PRODUCTS_CACHE_TTL_MS = 60_000;
 // this one promise instead of racing separate requests.
 let productsFetchInFlight: Promise<Product[]> | null = null;
 
-const invalidateProductsCache = () => { productsCache = null; };
+// Per-product cache, keyed by id, for getProductById — the garment/product
+// detail page (a server component) awaits this before rendering anything, and
+// until now it had zero caching: every single page view/navigation paid for a
+// full Supabase round trip (plus an 8s timeout + one retry on a slow/dropped
+// connection), even when the full catalog was already cached a moment
+// earlier. Same TTL/invalidation story as productsCache above. On Vercel this
+// also survives across requests within a warm Fluid Compute instance, not
+// just within one visitor's tab.
+const productByIdCache = new Map<string, { data: Product; expiresAt: number }>();
+
+const invalidateProductsCache = () => { productsCache = null; productByIdCache.clear(); };
 
 // Persisted across page reloads — unlike productsCache above (in-memory,
 // reset on every hard refresh), this survives one. Read once per session,
@@ -633,6 +643,15 @@ export const subscribeToPlusSizesChanges = (onChange: () => void): (() => void) 
   return () => { plusSizesChangeListeners.delete(onChange); };
 };
 
+// Whether this tab has ever completed (attempted) a real Supabase fetch this
+// session. Deliberately separate from productsCache: that gets nulled out by
+// every write (add/update/delete/bulk), not just on a fresh page load, so
+// `!productsCache` alone can't tell "first load ever" apart from "cache was
+// just invalidated by my own write a moment ago". Only the former should get
+// the instant-paint-from-localStorage treatment below — otherwise saving a
+// product and immediately re-listing it serves back the pre-save snapshot.
+let hasAttemptedFreshFetch = false;
+
 // The actual network fetch, with in-flight de-duplication. Split out so it
 // can be awaited directly (normal path) or fired-and-forgotten in the
 // background (after an instant persisted-cache paint, below) while sharing
@@ -643,6 +662,7 @@ const fetchAndCacheProducts = (): Promise<Product[]> => {
     return productsFetchInFlight;
   }
 
+  hasAttemptedFreshFetch = true;
   const fetchPromise = (async (): Promise<Product[]> => {
     try {
       console.log("[Atelier DB] Fetching products from Supabase...");
@@ -688,14 +708,18 @@ export const getProducts = async (): Promise<Product[]> => {
     return getLocalProducts();
   }
 
-  // First call this session — nothing in memory yet. If a previous visit
-  // left a catalog persisted in localStorage, paint it instantly (for every
-  // caller in the next few seconds — see PRODUCTS_PERSISTED_GRACE_MS) and
-  // kick off a real fetch in the background to confirm/replace it. A hard
-  // refresh no longer means a spinner for however long Supabase takes (or
-  // times out) to respond — it means showing what was there a moment ago
-  // while quietly checking for changes.
-  if (!productsCache) {
+  // First call this session — nothing in memory yet and no real fetch has
+  // been attempted. If a previous visit left a catalog persisted in
+  // localStorage, paint it instantly (for every caller in the next few
+  // seconds — see PRODUCTS_PERSISTED_GRACE_MS) and kick off a real fetch in
+  // the background to confirm/replace it. A hard refresh no longer means a
+  // spinner for however long Supabase takes (or times out) to respond — it
+  // means showing what was there a moment ago while quietly checking for
+  // changes. Gated on hasAttemptedFreshFetch (not just !productsCache) so
+  // this only ever applies to that genuine first load — a write later in the
+  // same session invalidates productsCache too, but must never fall back to
+  // this now-stale snapshot; it needs the real, current data.
+  if (!productsCache && !hasAttemptedFreshFetch) {
     const persisted = readPersistedProductsCache();
     if (persisted) {
       console.log(`[Atelier DB] Painting instantly from persisted cache (count: ${persisted.length}) while refreshing in the background.`);
@@ -709,6 +733,20 @@ export const getProducts = async (): Promise<Product[]> => {
 };
 
 export const getProductById = async (id: string): Promise<Product | null> => {
+  // Already have the full catalog fresh in memory (e.g. this same page load
+  // fetched it a moment ago, or a warm serverless instance served an earlier
+  // request) — reuse it instead of paying for a second Supabase round trip
+  // for a single row of the same table.
+  if (productsCache && productsCache.expiresAt > Date.now()) {
+    const cached = productsCache.data.find(p => p.id === id);
+    if (cached) return cached;
+  }
+
+  const cachedById = productByIdCache.get(id);
+  if (cachedById && cachedById.expiresAt > Date.now()) {
+    return cachedById.data;
+  }
+
   if (!isSupabaseConfigured || !supabase) {
     return getLocalProducts().find(p => p.id === id) || null;
   }
@@ -724,16 +762,18 @@ export const getProductById = async (id: string): Promise<Product | null> => {
       if (error.code === 'PGRST116') return null;
       throw error;
     }
+    productByIdCache.set(id, { data: data as Product, expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS });
     return data as Product;
   } catch (e: any) {
     console.warn(`[Atelier DB] Supabase getProductById failed or timed out for ${id}:`, e.message || e);
-    // Fall back to a cached full catalog if we have one (avoids a false
-    // "not found" for a product we already know exists), otherwise this is
-    // a real connection failure the caller needs to know about — not a 404.
+    // Fall back to whatever cached data we have (avoids a false "not found"
+    // for a product we already know exists), otherwise this is a real
+    // connection failure the caller needs to know about — not a 404.
     if (productsCache) {
       const cached = productsCache.data.find(p => p.id === id);
       if (cached) return cached;
     }
+    if (cachedById) return cachedById.data; // stale-but-real beats erroring, same policy as elsewhere in this file
     throw new Error("We couldn't load this product right now. Please check your connection and try again.");
   }
 };
@@ -1067,25 +1107,44 @@ const toInventoryRecord = (variant: { id: string; sku: string; size: string; gal
   last_synced_at: inv?.last_synced_at ?? null,
 });
 
+// In-flight de-dup keyed by product id — the product detail page's mount
+// effect and its live-stock realtime subscription can both call this within
+// the same tick (plus React StrictMode's double-invoke in dev), which used to
+// mean two independent variants+inventory round trips for the same product.
+// Deliberately not a TTL cache: stock needs to stay live-accurate, so nothing
+// here serves data older than the request that's actually in flight.
+const inventoryFetchInFlight = new Map<string, Promise<InventoryRecord[]>>();
+
 export const getInventoryForProduct = async (productId: string): Promise<InventoryRecord[]> => {
   if (!isSupabaseConfigured || !supabase) return [];
-  try {
-    const { data: variants, error: vErr } = await supabaseTimeout(
-      supabase.from('product_variants').select('id,sku,size,galla_sku').eq('product_id', productId)
-    );
-    if (vErr || !variants || variants.length === 0) return [];
 
-    const variantIds = variants.map((v: any) => v.id);
-    const { data: invRows } = await supabaseTimeout(
-      supabase.from('inventory').select('*').in('variant_id', variantIds)
-    );
-    const invByVariant = new Map((invRows || []).map((r: any) => [r.variant_id, r]));
+  const existing = inventoryFetchInFlight.get(productId);
+  if (existing) return existing;
 
-    return variants.map((v: any) => toInventoryRecord(v, invByVariant.get(v.id) as any));
-  } catch (e: any) {
-    console.warn('[Atelier DB] getInventoryForProduct failed:', e.message || e);
-    return [];
-  }
+  const fetchPromise = (async (): Promise<InventoryRecord[]> => {
+    try {
+      const { data: variants, error: vErr } = await supabaseTimeout(
+        supabase.from('product_variants').select('id,sku,size,galla_sku').eq('product_id', productId)
+      );
+      if (vErr || !variants || variants.length === 0) return [];
+
+      const variantIds = variants.map((v: any) => v.id);
+      const { data: invRows } = await supabaseTimeout(
+        supabase.from('inventory').select('*').in('variant_id', variantIds)
+      );
+      const invByVariant = new Map((invRows || []).map((r: any) => [r.variant_id, r]));
+
+      return variants.map((v: any) => toInventoryRecord(v, invByVariant.get(v.id) as any));
+    } catch (e: any) {
+      console.warn('[Atelier DB] getInventoryForProduct failed:', e.message || e);
+      return [];
+    } finally {
+      inventoryFetchInFlight.delete(productId);
+    }
+  })();
+
+  inventoryFetchInFlight.set(productId, fetchPromise);
+  return fetchPromise;
 };
 
 export interface ProductStockSummary {
