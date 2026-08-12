@@ -466,6 +466,41 @@ let productsFetchInFlight: Promise<Product[]> | null = null;
 
 const invalidateProductsCache = () => { productsCache = null; };
 
+// Persisted across page reloads — unlike productsCache above (in-memory,
+// reset on every hard refresh), this survives one. Read once per session,
+// on the very first getProducts() call, so a refresh can paint the last
+// known catalog instantly instead of showing a spinner for however long a
+// fresh Supabase round trip takes (or times out).
+const PRODUCTS_LOCALSTORAGE_KEY = 'stag_beetle_products_cache';
+// Deliberately short — just long enough to cover the burst of near-
+// simultaneous callers a fresh page load produces (CartContext's
+// suggestions effect + this page's own product list, all within one tick),
+// so every one of them paints the same persisted snapshot immediately. Not
+// a source of truth for freshness; the real fetch kicked off alongside it
+// supersedes this the moment it lands.
+const PRODUCTS_PERSISTED_GRACE_MS = 3_000;
+
+const readPersistedProductsCache = (): Product[] | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PRODUCTS_LOCALSTORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: Product[] };
+    return Array.isArray(parsed.data) ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistProductsCache = (data: Product[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PRODUCTS_LOCALSTORAGE_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  } catch {
+    // Storage full/unavailable (private browsing, quota, etc.) — non-critical, just skip persisting.
+  }
+};
+
 // =========================================================================
 // REALTIME PRODUCT CHANGE NOTIFICATIONS
 // Uses Supabase Realtime's Broadcast channel — already part of
@@ -598,21 +633,11 @@ export const subscribeToPlusSizesChanges = (onChange: () => void): (() => void) 
   return () => { plusSizesChangeListeners.delete(onChange); };
 };
 
-export const getProducts = async (): Promise<Product[]> => {
-  if (productsCache && productsCache.expiresAt > Date.now()) {
-    return productsCache.data;
-  }
-
-  // Not configured at all (no env vars, e.g. local dev without Supabase) —
-  // the local/demo catalog is the intended experience, not a failure.
-  if (!isSupabaseConfigured || !supabase) {
-    console.log("[Atelier DB] Supabase not configured, returning local mock products.");
-    return getLocalProducts();
-  }
-
-  // A fetch is already on the wire (e.g. CartContext's suggestions effect and
-  // this page's own product list both asked within the same tick) — share
-  // that one request instead of firing another identical query.
+// The actual network fetch, with in-flight de-duplication. Split out so it
+// can be awaited directly (normal path) or fired-and-forgotten in the
+// background (after an instant persisted-cache paint, below) while sharing
+// identical caching/dedup/error-handling logic either way.
+const fetchAndCacheProducts = (): Promise<Product[]> => {
   if (productsFetchInFlight) {
     console.log("[Atelier DB] Fetch already in flight — reusing it instead of firing a duplicate request.");
     return productsFetchInFlight;
@@ -622,11 +647,12 @@ export const getProducts = async (): Promise<Product[]> => {
     try {
       console.log("[Atelier DB] Fetching products from Supabase...");
       const { data, error } = await withOneRetry(() =>
-        supabaseTimeout(supabase.from('products').select('*'))
+        supabaseTimeout(supabase!.from('products').select('*'))
       );
       if (error) throw error;
       console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
       productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
+      persistProductsCache(productsCache.data);
       return productsCache.data;
     } catch (e: any) {
       console.warn("[Atelier DB] Supabase products failed or timed out:", e.message || e);
@@ -648,6 +674,38 @@ export const getProducts = async (): Promise<Product[]> => {
 
   productsFetchInFlight = fetchPromise;
   return fetchPromise;
+};
+
+export const getProducts = async (): Promise<Product[]> => {
+  if (productsCache && productsCache.expiresAt > Date.now()) {
+    return productsCache.data;
+  }
+
+  // Not configured at all (no env vars, e.g. local dev without Supabase) —
+  // the local/demo catalog is the intended experience, not a failure.
+  if (!isSupabaseConfigured || !supabase) {
+    console.log("[Atelier DB] Supabase not configured, returning local mock products.");
+    return getLocalProducts();
+  }
+
+  // First call this session — nothing in memory yet. If a previous visit
+  // left a catalog persisted in localStorage, paint it instantly (for every
+  // caller in the next few seconds — see PRODUCTS_PERSISTED_GRACE_MS) and
+  // kick off a real fetch in the background to confirm/replace it. A hard
+  // refresh no longer means a spinner for however long Supabase takes (or
+  // times out) to respond — it means showing what was there a moment ago
+  // while quietly checking for changes.
+  if (!productsCache) {
+    const persisted = readPersistedProductsCache();
+    if (persisted) {
+      console.log(`[Atelier DB] Painting instantly from persisted cache (count: ${persisted.length}) while refreshing in the background.`);
+      productsCache = { data: persisted, expiresAt: Date.now() + PRODUCTS_PERSISTED_GRACE_MS };
+      fetchAndCacheProducts().catch(() => {}); // background refresh; errors already logged inside
+      return persisted;
+    }
+  }
+
+  return fetchAndCacheProducts();
 };
 
 export const getProductById = async (id: string): Promise<Product | null> => {
