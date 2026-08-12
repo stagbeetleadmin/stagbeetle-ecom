@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges, GARMENT_GROUPS, GARMENT_GROUP_OF } from '@/lib/db';
+import { getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges, GARMENT_GROUPS } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import PriceDisplay from '@/components/PriceDisplay';
 
@@ -464,19 +464,15 @@ const STEALS = [
   },
 ];
 
-// Catalog filter chips: "ALL", then the two garment groups (Tops/Bottoms) so
-// shoppers can browse by broad category, then every individual garment type
-// below that for a narrower pick — same Tops/Bottoms split the admin catalog
-// filters by, kept in sync since both read off GARMENT_GROUPS.
+// Catalog filter chips: "ALL", then every individual garment type — read off
+// GARMENT_GROUPS so the list (including Joggers) stays in sync with the
+// admin catalog's own taxonomy instead of a separately hardcoded array.
 type CatalogFilterTab =
   | { label: string; kind: 'all' }
-  | { label: string; kind: 'group'; value: string }
   | { label: string; kind: 'sub'; value: string };
 
 const CATALOG_FILTER_TABS: CatalogFilterTab[] = [
   { label: 'All', kind: 'all' },
-  { label: 'Tops', kind: 'group', value: 'Tops' },
-  { label: 'Bottoms', kind: 'group', value: 'Bottoms' },
   ...GARMENT_GROUPS.Tops.map(sub => ({ label: sub, kind: 'sub' as const, value: sub })),
   ...GARMENT_GROUPS.Bottoms.map(sub => ({ label: sub, kind: 'sub' as const, value: sub })),
 ];
@@ -489,7 +485,6 @@ function StorefrontContent() {
 
   const categoryParam = searchParams.get('category') || 'all';
   const subcategoryParam = searchParams.get('subcategory') || '';
-  const groupParam = searchParams.get('group') || ''; // 'Tops' | 'Bottoms' | ''
   const searchParam = searchParams.get('search') || '';
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -554,17 +549,12 @@ function StorefrontContent() {
     }
   };
 
-  const handleGroupClick = (group: string) => {
-    router.push(`/?group=${encodeURIComponent(group)}`, { scroll: false });
-  };
-
   const menProducts = products.filter(p => p.category.toLowerCase() === 'men');
 
   // Filter Products based on category, subcategory, and search term
   const filteredProducts = products.filter(p => {
     const matchCat = activeCategory === 'all' || activeCategory === '' || p.category.toLowerCase() === activeCategory.toLowerCase();
     const matchSub = !subcategoryParam || p.subcategory?.toLowerCase() === subcategoryParam.toLowerCase();
-    const matchGroup = !groupParam || GARMENT_GROUP_OF[p.subcategory || ''] === groupParam;
 
     // Multi-word search query checking against multiple product fields (Title, Material, Subcategory, SKU, Description, Colors)
     const matchSearch = !debouncedSearchTerm || (() => {
@@ -580,7 +570,7 @@ function StorefrontContent() {
       });
     })();
 
-    return matchCat && matchSub && matchGroup && matchSearch;
+    return matchCat && matchSub && matchSearch;
   });
 
   // Bare "/" (no query params at all) shows the full marketing homepage (hero
@@ -588,7 +578,7 @@ function StorefrontContent() {
   // including clicking "ALL" to clear a subcategory, which still leaves `category=all`
   // in the URL — keeps the compact shopping grid instead of snapping back to the
   // marketing sections, which previously felt like an unexpected navigation.
-  const isFiltering = searchParams.has('category') || !!subcategoryParam || !!groupParam || !!debouncedSearchTerm;
+  const isFiltering = searchParams.has('category') || !!subcategoryParam || !!debouncedSearchTerm;
 
   // Infinite Scroll Logic
   const ITEMS_PER_PAGE = 8;
@@ -624,7 +614,7 @@ function StorefrontContent() {
 
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
-  }, [activeCategory, subcategoryParam, groupParam, debouncedSearchTerm]);
+  }, [activeCategory, subcategoryParam, debouncedSearchTerm]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -739,28 +729,23 @@ function StorefrontContent() {
         <section className="py-12 px-4 md:px-10 max-w-[1400px] mx-auto border-t border-gray-100">
           <div className="text-center mb-10">
             <h2 className="text-[16px] font-bold text-gray-900 tracking-[0.25em] uppercase">
-              {debouncedSearchTerm ? 'Search Results' : subcategoryParam ? subcategoryParam : groupParam ? groupParam : 'New and Popular'}
+              {debouncedSearchTerm ? 'Search Results' : subcategoryParam ? subcategoryParam : 'New and Popular'}
             </h2>
             <p className="text-[12px] text-gray-400 mt-2">{filteredProducts.length} items available</p>
 
-            {/* Filter Tabs — ALL, then the two garment groups (Tops/Bottoms) for a
-                broad first cut, then every individual garment type for a narrower pick */}
+            {/* Filter Tabs — ALL, then every individual garment type */}
             <div className="flex flex-wrap justify-center gap-2 mt-6">
               {CATALOG_FILTER_TABS.map(tab => {
                 const isActive = tab.kind === 'all'
-                  ? !subcategoryParam && !groupParam
-                  : tab.kind === 'group'
-                    ? groupParam.toLowerCase() === tab.value.toLowerCase()
-                    : subcategoryParam.toLowerCase() === tab.value.toLowerCase();
+                  ? !subcategoryParam
+                  : subcategoryParam.toLowerCase() === tab.value.toLowerCase();
                 return (
                   <button
                     key={tab.label}
-                    onClick={() => tab.kind === 'group' ? handleGroupClick(tab.value) : handleSubcategoryClick(tab.kind === 'all' ? 'all' : tab.value)}
+                    onClick={() => handleSubcategoryClick(tab.kind === 'all' ? 'all' : tab.value)}
                     className={`px-6 py-2.5 text-[11px] font-bold tracking-widest uppercase transition-all border ${isActive
                         ? 'bg-black text-white border-black shadow-sm'
-                        : tab.kind === 'group'
-                          ? 'bg-white text-[#052A42] border-[#C5A059]/50 hover:border-[#C5A059]'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'
                       }`}
                   >
                     {tab.label}

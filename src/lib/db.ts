@@ -1656,49 +1656,58 @@ export const upsertProfile = async (profile: UserProfile): Promise<UserProfile> 
 };
 
 export const uploadGarmentImage = async (file: File, sku?: string, index?: number): Promise<string> => {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const fileExt = file.name.split('.').pop();
-      // Clean SKU for safe filename
-      const cleanSku = sku ? sku.trim().replace(/[^a-zA-Z0-9-_]/g, '_') : '';
-      const fileName = cleanSku 
-        ? `${cleanSku}_image${index || 1}_${Date.now()}.${fileExt}`
-        : `${Math.random().toString(36).substring(2, 11)}_${Date.now()}.${fileExt}`;
-      const filePath = cleanSku
-        ? `products/${cleanSku}/${fileName}`
-        : `products/${fileName}`;
-
-      console.log(`[Atelier Storage] Uploading ${file.name} to Supabase bucket 'garment-images' as ${filePath}...`);
-      const { data, error } = await supabase.storage
-        .from('garment-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        console.warn("[Atelier Storage] Supabase upload failed:", error.message);
-        throw error;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from('garment-images')
-        .getPublicUrl(filePath);
-
-      console.log("[Atelier Storage] Public URL resolved:", urlData.publicUrl);
-      return urlData.publicUrl;
-    } catch (e: any) {
-      console.warn("[Atelier Storage] Supabase upload timed out or failed, using Base64 data URL fallback:", e.message || e);
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    // No Supabase project configured at all (e.g. local dev without env
+    // vars) — base64 is the only option here, always was.
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
-  // Local fallback: convert to Base64
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  const fileExt = file.name.split('.').pop();
+  // Clean SKU for safe filename
+  const cleanSku = sku ? sku.trim().replace(/[^a-zA-Z0-9-_]/g, '_') : '';
+  const fileName = cleanSku
+    ? `${cleanSku}_image${index || 1}_${Date.now()}.${fileExt}`
+    : `${Math.random().toString(36).substring(2, 11)}_${Date.now()}.${fileExt}`;
+  const filePath = cleanSku
+    ? `products/${cleanSku}/${fileName}`
+    : `products/${fileName}`;
+
+  console.log(`[Atelier Storage] Uploading ${file.name} to Supabase bucket 'garment-images' as ${filePath}...`);
+  const { error } = await supabase.storage
+    .from('garment-images')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) {
+    // Surfaced to the caller (handleImageUpload's own catch, which shows it
+    // via triggerFeedback) instead of silently degrading to a base64 blob
+    // embedded in the products row — that used to be a harmless fallback,
+    // but storage writes now require an authenticated admin session, so
+    // swallowing this error would hide exactly the kind of problem (session
+    // expired, wrong account) an admin actually needs to see and fix. A
+    // silent base64 fallback here also bloats the products table and slows
+    // every later page load that reads it — the opposite of "helpful".
+    console.error("[Atelier Storage] Supabase upload failed:", error.message);
+    throw new Error(
+      /row-level security|permission/i.test(error.message)
+        ? 'Permission denied by the server — your admin session may have expired. Try logging out and back in.'
+        : `Image upload failed: ${error.message}`
+    );
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('garment-images')
+    .getPublicUrl(filePath);
+
+  console.log("[Atelier Storage] Public URL resolved:", urlData.publicUrl);
+  return urlData.publicUrl;
 };
 
 /**
