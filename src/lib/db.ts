@@ -2116,18 +2116,59 @@ export const searchMembers = async (query: string): Promise<Member[]> => {
   }
 };
 
-// Admin Members page — most-recently-registered list.
-export const getRecentMembers = async (limit = 50): Promise<Member[]> => {
-  if (!isSupabaseConfigured || !supabase) return [];
+export interface MembersPage {
+  members: Member[];
+  total: number; // total matching rows across every page, not just this one
+}
+
+// Last known-good total member count — same "stale beats broken" reasoning
+// as couponsCache/ordersCache above: a timed-out count query showing "0
+// members" (or the page silently erroring) would be actively misleading on
+// an admin dashboard people are using to judge how the program is growing,
+// far worse than a slightly-stale real number.
+let membersCountCache: number | null = null;
+
+// Admin Members list page — page is 1-indexed. Optional `query` filters by
+// name/email/phone server-side (same fields searchMembers checks) so
+// pagination and search compose instead of being two separate code paths.
+export const getMembersPage = async (page: number, pageSize = 100, query?: string): Promise<MembersPage> => {
+  if (!isSupabaseConfigured || !supabase) return { members: [], total: 0 };
+  const from = Math.max(0, (page - 1) * pageSize);
+  const to = from + pageSize - 1;
   try {
-    const { data, error } = await supabaseTimeout(
-      supabase.from('members').select('*').order('created_at', { ascending: false }).limit(limit)
+    let builder = supabase.from('members').select('*', { count: 'exact' });
+    const q = query?.trim();
+    if (q) builder = builder.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+    const { data, error, count } = await withOneRetry(() =>
+      supabaseTimeout(builder.order('created_at', { ascending: false }).range(from, to))
     );
     if (error) throw error;
-    return data as Member[];
+    if (typeof count === 'number') membersCountCache = count;
+    return { members: (data || []) as Member[], total: count ?? membersCountCache ?? 0 };
   } catch (e: any) {
-    console.warn('[Atelier DB] getRecentMembers failed:', e.message || e);
-    return [];
+    console.warn('[Atelier DB] getMembersPage failed:', e.message || e);
+    // No stale page of *rows* to fall back to (which page was requested
+    // varies), but the last known-good total at least keeps the stat
+    // honest instead of dropping to zero on a mere timeout.
+    return { members: [], total: membersCountCache ?? 0 };
+  }
+};
+
+// Lightweight — just the count, for the hub page's "Total Members" stat
+// where fetching a full page of rows would be wasted work.
+export const getMembersCount = async (): Promise<number> => {
+  if (!isSupabaseConfigured || !supabase) return 0;
+  try {
+    const { count, error } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('members').select('*', { count: 'exact', head: true }))
+    );
+    if (error) throw error;
+    const resolved = count ?? 0;
+    membersCountCache = resolved;
+    return resolved;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getMembersCount failed:', e.message || e);
+    return membersCountCache ?? 0;
   }
 };
 
