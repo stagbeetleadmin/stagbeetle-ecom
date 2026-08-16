@@ -86,7 +86,10 @@ export default function LoginModal() {
           setAuthLoading(false);
           return;
         }
-        await loginWithEmailPhone(name.trim(), email.trim(), phone.trim());
+        const res = await loginWithEmailPhone(name.trim(), email.trim(), phone.trim());
+        if (res.error) {
+          setFormError(res.error);
+        }
       }
     } catch (err: any) {
       setFormError(err.message || 'An unexpected error occurred.');

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserProfile, upsertProfile, supabase, supabaseTimeout, withOneRetry } from '@/lib/db';
+import { UserProfile, upsertProfile, isEmailOrPhoneAlreadyRegistered, supabase, supabaseTimeout, withOneRetry } from '@/lib/db';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoginModalOpen: boolean;
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
-  loginWithEmailPhone: (name: string, email: string, phone: string) => Promise<void>;
+  loginWithEmailPhone: (name: string, email: string, phone: string) => Promise<{ error: string | null }>;
   loginWithEmailPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   registerWithEmailPassword: (name: string, email: string, password: string, phone: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
@@ -426,6 +426,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ── Email + Phone login (no Supabase auth, profile-only) ──────────────────
   const loginWithEmailPhone = async (name: string, email: string, phone: string) => {
+    // A real (password/Google) account already claims this email or phone —
+    // letting this passwordless flow proceed anyway would spin up a second,
+    // completely disconnected identity under the same contact details, with
+    // no way to ever reconcile the two later (their orders, address, etc.
+    // would live in two unrelated places). Point them at signing in properly
+    // instead of silently fragmenting their own account.
+    const alreadyRegistered = await isEmailOrPhoneAlreadyRegistered(email, phone);
+    if (alreadyRegistered) {
+      return { error: 'An account already exists with this email or phone number. Please sign in instead.' };
+    }
+
     const profile: UserProfile = {
       id: `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       name,
@@ -453,6 +464,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (prev) { prev(); return null; }
       return null;
     });
+
+    return { error: null };
   };
 
   // ── Email + Password login (real Supabase Auth) ───────────────────────────

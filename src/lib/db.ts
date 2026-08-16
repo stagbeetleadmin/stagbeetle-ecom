@@ -201,6 +201,7 @@ export interface UserProfile {
   city?: string;
   zip?: string;
   country?: string;
+  updated_at?: string; // set by Supabase; absent for local-only (usr_*) mock profiles
 }
 
 // Initial seed products representing the Stag Beetle brand with Indian luxury touch
@@ -2223,6 +2224,31 @@ export const setMemberDiscountConfig = async (config: MemberDiscountConfig): Pro
 // USER PROFILES OPERATIONS
 // =========================================================================
 
+// Used by the passwordless "quick email + phone" login to check whether
+// either value already belongs to a real (Supabase Auth-backed) account
+// before minting what would otherwise be a completely separate, untraceable
+// local identity under the same contact details. Deliberately returns only
+// a yes/no — never the matched profile itself — so this can't be used to
+// silently sign in as someone else; it can only block the collision and
+// point them at signing in properly instead.
+export const isEmailOrPhoneAlreadyRegistered = async (email: string, phone?: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  const cleanEmail = email.trim();
+  const cleanPhone = phone?.trim();
+  if (!cleanEmail && !cleanPhone) return false;
+  try {
+    let builder = supabase.from('profiles').select('id').limit(1);
+    builder = cleanPhone
+      ? builder.or(`email.ilike.${cleanEmail},phone.eq.${cleanPhone}`)
+      : builder.ilike('email', cleanEmail);
+    const { data, error } = await supabaseTimeout(builder.maybeSingle());
+    if (error) return false; // a lookup failure shouldn't block a legitimate signup
+    return !!data;
+  } catch {
+    return false;
+  }
+};
+
 export const getProfile = async (id: string): Promise<UserProfile | null> => {
   if (isSupabaseConfigured && supabase && !id.startsWith('usr_')) {
     try {
@@ -2280,6 +2306,97 @@ export const upsertProfile = async (profile: UserProfile): Promise<UserProfile> 
     localStorage.setItem('stag_beetle_profiles', JSON.stringify(profiles));
   }
   return profile;
+};
+
+// =========================================================================
+// ADMIN: REGISTERED USERS — everyone with a real Supabase Auth account
+// (email+password signup, or Google OAuth), as opposed to the membership
+// program (a separate, opt-in loyalty list — see the MEMBERSHIP section
+// above) or the passwordless "email + phone" quick-login, which is
+// deliberately local-only and never reaches this table at all (see the
+// `usr_*` id checks throughout this file) — those visitors simply don't
+// have a server-side account for an admin view to show. This section is
+// for the ones that do.
+// =========================================================================
+
+export interface ProfilesPage {
+  profiles: UserProfile[];
+  total: number;
+}
+
+// Same "stale beats broken" reasoning as membersCountCache — a timed-out
+// count showing 0 registered users would be actively misleading, not just
+// unavailable.
+let profilesCountCache: number | null = null;
+
+// Admin-only (RLS: "Admin reads all profiles" policy, added alongside this
+// feature — see the migration). Page is 1-indexed; optional `query` filters
+// server-side by name/email/phone.
+// Internal/house accounts that are technically rows in `profiles` but are
+// not customers — excluded from every admin-facing "registered users" view
+// (list, count, search) so the admin doesn't see their own login, or a
+// leftover test account, mixed in with real customers. Only
+// stagbeetlebilling@gmail.com is actually privileged (see is_admin() in
+// Postgres); admin@stagbeetle.co.in has no special access, it's just an old
+// test signup with an obviously non-customer name/email.
+const NON_CUSTOMER_PROFILE_EMAILS = ['stagbeetlebilling@gmail.com', 'admin@stagbeetle.co.in'];
+
+const excludeNonCustomerProfiles = <T extends { not: (col: string, op: string, val: string) => T }>(builder: T): T =>
+  NON_CUSTOMER_PROFILE_EMAILS.reduce((b, email) => b.not('email', 'ilike', email), builder);
+
+export const getProfilesPage = async (page: number, pageSize = 100, query?: string): Promise<ProfilesPage> => {
+  if (!isSupabaseConfigured || !supabase) return { profiles: [], total: 0 };
+  const from = Math.max(0, (page - 1) * pageSize);
+  const to = from + pageSize - 1;
+  try {
+    let builder = supabase.from('profiles').select('*', { count: 'exact' });
+    builder = excludeNonCustomerProfiles(builder);
+    const q = query?.trim();
+    if (q) builder = builder.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+    const { data, error, count } = await withOneRetry(() =>
+      supabaseTimeout(builder.order('updated_at', { ascending: false }).range(from, to))
+    );
+    if (error) throw error;
+    if (typeof count === 'number') profilesCountCache = count;
+    return { profiles: (data || []) as UserProfile[], total: count ?? profilesCountCache ?? 0 };
+  } catch (e: any) {
+    console.warn('[Atelier DB] getProfilesPage failed:', e.message || e);
+    return { profiles: [], total: profilesCountCache ?? 0 };
+  }
+};
+
+export const getProfilesCount = async (): Promise<number> => {
+  if (!isSupabaseConfigured || !supabase) return 0;
+  try {
+    let builder = supabase.from('profiles').select('*', { count: 'exact', head: true });
+    builder = excludeNonCustomerProfiles(builder);
+    const { count, error } = await withOneRetry(() => supabaseTimeout(builder));
+    if (error) throw error;
+    const resolved = count ?? 0;
+    profilesCountCache = resolved;
+    return resolved;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getProfilesCount failed:', e.message || e);
+    return profilesCountCache ?? 0;
+  }
+};
+
+// Admin-only (RLS: "Admin updates profiles" policy) — lets the Registered
+// Users page fix a customer's phone number (or name) directly, e.g. when
+// they call in with a correction, without them needing to edit it themselves.
+export const adminUpdateProfile = async (id: string, fields: Partial<Pick<UserProfile, 'name' | 'phone'>>): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('profiles').update(fields).eq('id', id);
+    if (error) {
+      console.warn('[Atelier DB] adminUpdateProfile failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] adminUpdateProfile failed:', e.message || e);
+    return false;
+  }
 };
 
 export const uploadGarmentImage = async (file: File, sku?: string, index?: number): Promise<string> => {

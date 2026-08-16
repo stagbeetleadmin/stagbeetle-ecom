@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 
 interface IntegrationStatus {
@@ -68,7 +66,7 @@ function ChecklistItem({ n, title, children }: { n: number; title: string; child
 }
 
 export default function GallaIntegrationPage() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin } = useAuth();
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
 
   useEffect(() => {
@@ -79,34 +77,24 @@ export default function GallaIntegrationPage() {
       .catch(() => setStatus(null));
   }, [isAdmin]);
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  // authLoading is handled by admin/layout.tsx — nothing to do here.
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col min-h-screen bg-surface">
-        <Header />
-        <main className="flex-1 flex items-center justify-center py-24 text-center px-6">
-          <div className="max-w-sm space-y-4">
-            <span className="material-symbols-outlined text-[40px] text-gold-leaf">lock</span>
-            <h1 className="font-display text-[22px] font-semibold text-on-surface">Admin Access Required</h1>
-            <p className="text-[13px] text-on-surface-variant leading-relaxed">
-              This page documents an internal integration and is only visible to signed-in administrators.
-            </p>
-            <Link
-              href="/admin"
-              className="inline-block bg-primary text-white px-6 py-3 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all"
-            >
-              GO TO ADMIN SIGN IN
-            </Link>
-          </div>
-        </main>
-        <Footer />
+      <div className="flex items-center justify-center py-24 text-center px-6">
+        <div className="max-w-sm space-y-4">
+          <span className="material-symbols-outlined text-[40px] text-gold-leaf">lock</span>
+          <h1 className="font-display text-[22px] font-semibold text-on-surface">Admin Access Required</h1>
+          <p className="text-[13px] text-on-surface-variant leading-relaxed">
+            This page documents an internal integration and is only visible to signed-in administrators.
+          </p>
+          <Link
+            href="/admin"
+            className="inline-block bg-primary text-white px-6 py-3 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all"
+          >
+            GO TO ADMIN SIGN IN
+          </Link>
+        </div>
       </div>
     );
   }
@@ -122,13 +110,7 @@ export default function GallaIntegrationPage() {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20">
-      <Header />
-
-      <main className="flex-1 relative py-12 md:py-16 bg-white">
-        <div className="fixed inset-0 marble-overlay z-0"></div>
-
-        <div className="max-w-[860px] mx-auto px-6 md:px-12 relative z-10 space-y-6">
+    <div className="w-full space-y-6">
 
           {/* Page header */}
           <div className="border-b border-on-surface/10 pb-6">
@@ -138,9 +120,6 @@ export default function GallaIntegrationPage() {
               Reference for the stock sync between stagbeetle.co.in and Galla — what&apos;s built and tested, what&apos;s configured on this
               deployment right now, and what&apos;s still needed from Galla&apos;s side. Not linked from anywhere public.
             </p>
-            <Link href="/admin" className="inline-block mt-4 text-[11px] font-label-caps font-semibold text-zinc-500 hover:text-gold-leaf underline uppercase tracking-wider">
-              ← Back to Dashboard
-            </Link>
           </div>
 
           {/* Live status */}
@@ -299,10 +278,6 @@ X-Stagbeetle-Signature: sha256=<hmac>
             </ul>
           </Section>
 
-        </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }

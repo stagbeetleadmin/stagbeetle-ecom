@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import {
   Member, MemberDiscountConfig, MemberDiscountResult,
@@ -30,7 +28,7 @@ const fmtDate = (iso?: string) => {
 };
 
 export default function AdminMembersPage() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin } = useAuth();
 
   // Discount settings
   const [config, setConfig] = useState<MemberDiscountConfig | null>(null);
@@ -150,31 +148,22 @@ export default function AdminMembersPage() {
     }
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  // authLoading is handled by admin/layout.tsx (full-screen spinner, this
+  // page doesn't even mount until it resolves) — nothing to do here.
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col min-h-screen bg-surface">
-        <Header />
-        <main className="flex-1 flex items-center justify-center py-24 text-center px-6">
-          <div className="max-w-sm space-y-4">
-            <span className="material-symbols-outlined text-[40px] text-gold-leaf">lock</span>
-            <h1 className="font-display text-[22px] font-semibold text-on-surface">Admin Access Required</h1>
-            <Link
-              href="/admin"
-              className="inline-block bg-primary text-white px-6 py-3 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all"
-            >
-              GO TO ADMIN SIGN IN
-            </Link>
-          </div>
-        </main>
-        <Footer />
+      <div className="flex items-center justify-center py-24 text-center px-6">
+        <div className="max-w-sm space-y-4">
+          <span className="material-symbols-outlined text-[40px] text-gold-leaf">lock</span>
+          <h1 className="font-display text-[22px] font-semibold text-on-surface">Admin Access Required</h1>
+          <Link
+            href="/admin"
+            className="inline-block bg-primary text-white px-6 py-3 text-[11px] font-label-caps tracking-widest font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all"
+          >
+            GO TO ADMIN SIGN IN
+          </Link>
+        </div>
       </div>
     );
   }
@@ -202,11 +191,7 @@ export default function AdminMembersPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20">
-      <Header />
-      <main className="flex-1 relative py-12 md:py-16 bg-white">
-        <div className="fixed inset-0 marble-overlay z-0"></div>
-        <div className="max-w-[860px] mx-auto px-6 md:px-12 relative z-10 space-y-6">
+    <div className="w-full space-y-6">
 
           <div className="border-b border-on-surface/10 pb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -215,9 +200,6 @@ export default function AdminMembersPage() {
               <p className="text-[13px] text-on-surface-variant mt-2 max-w-2xl leading-relaxed">
                 Manage the discount program, look up whether a customer at the register is a member and eligible right now, and register new members in-store.
               </p>
-              <Link href="/admin" className="inline-block mt-4 text-[11px] font-label-caps font-semibold text-zinc-500 hover:text-gold-leaf underline uppercase tracking-wider">
-                ← Back to Dashboard
-              </Link>
             </div>
             <Link href="/admin/members/list" className="text-right shrink-0 group">
               <span className="font-display text-[32px] font-semibold text-[#052A42] leading-none block group-hover:text-gold-leaf transition-colors">
@@ -436,9 +418,6 @@ export default function AdminMembersPage() {
             <span className="material-symbols-outlined text-[22px] text-zinc-300 group-hover:text-gold-leaf transition-colors shrink-0">arrow_forward</span>
           </Link>
 
-        </div>
-      </main>
-      <Footer />
     </div>
   );
 }

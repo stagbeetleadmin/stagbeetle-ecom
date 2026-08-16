@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
   Product, Coupon, Order, InventoryRecord, ProductStockSummary, SizeChart,
@@ -25,6 +23,17 @@ import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
 import SizeChartEditor from '@/components/admin/SizeChartEditor';
+
+// Page title/subtitle per dashboard tab — mirrors AdminSidebar's own labels
+// and tooltips so the heading actually reflects whichever section is
+// showing, instead of a static "Atelier Dashboard" no matter which tab (or
+// which admin page entirely) you're looking at.
+const TAB_TITLES: Record<'analytics' | 'products' | 'coupons' | 'orders', { title: string; subtitle: string }> = {
+  analytics: { title: 'Atelier Analytics', subtitle: 'Sales, revenue, and best-selling garments at a glance' },
+  products: { title: 'Garment Catalog', subtitle: 'Add, edit, and manage every product in the store' },
+  coupons: { title: 'Discount Coupons', subtitle: 'Create and manage promo codes' },
+  orders: { title: 'Order Registry', subtitle: 'View and update customer orders and shipping status' },
+};
 
 const CATEGORY_OPTIONS = ['Men', 'Accessories'];
 const GARMENT_GROUP_OPTIONS = Object.keys(GARMENT_GROUPS); // ['Tops', 'Bottoms']
@@ -73,7 +82,6 @@ function StockPill({ summary }: { summary?: ProductStockSummary }) {
 }
 
 function AdminDashboardContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
 
@@ -95,19 +103,8 @@ function AdminDashboardContent() {
   const [plusSizes, setPlusSizes] = useState<string[]>(getPlusSizesList());
   const [showPlusSizeSettings, setShowPlusSizeSettings] = useState(false);
 
-  // Sidebar collapse — persisted so the choice sticks across visits. Read via a lazy
-  // initializer (not an effect) so there's no extra render/flash on mount.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return window.localStorage.getItem('admin-sidebar-collapsed') === '1'; } catch { return false; }
-  });
-  const toggleSidebar = () => {
-    setSidebarCollapsed(prev => {
-      const next = !prev;
-      try { window.localStorage.setItem('admin-sidebar-collapsed', next ? '1' : '0'); } catch { /* ignore */ }
-      return next;
-    });
-  };
+  // Sidebar (collapse state and all) now lives in AdminSidebar, rendered by
+  // admin/layout.tsx — nothing to manage here anymore.
 
   // Product catalog search + filters
   const [skuSearch, setSkuSearch] = useState('');
@@ -177,7 +174,7 @@ function AdminDashboardContent() {
   }, []);
 
   const {
-    isAdmin, loading: authLoading, loginWithEmailPassword, logout,
+    isAdmin, loginWithEmailPassword, logout,
   } = useAuth();
 
   // Admin login states
@@ -395,94 +392,81 @@ function AdminDashboardContent() {
     return unsubscribe;
   }, [isAdmin]);
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  // authLoading is handled by admin/layout.tsx (shows a full-screen spinner
+  // and doesn't render this page at all until it resolves) — nothing to do here.
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
-        <Header />
-
-        <main className="flex-1 flex items-center justify-center py-20 relative z-10 bg-white">
-          <div className="fixed inset-0 marble-overlay z-0"></div>
-
-          <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl relative z-10 text-zinc-800">
-            <div className="text-center mb-6">
-              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
-              <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
-              <p className="text-[12px] text-zinc-500 font-body mt-2">
-                Log in with your administrator account.
-              </p>
-            </div>
-
-            <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  required
-                  className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
-                <div className="relative">
-                  <input
-                    type={showAdminPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    required
-                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 pl-3 pr-10 text-[14px] outline-none text-left"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminPassword(o => !o)}
-                    aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
-                    tabIndex={-1}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">
-                      {showAdminPassword ? 'visibility_off' : 'visibility'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {loginError && (
-                <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={loginLoading}
-                className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                {loginLoading && (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
-              </button>
-            </form>
-
-            <div className="text-center mt-6">
-              <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
-                ← Return to Storefront
-              </Link>
-            </div>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-full max-w-md bg-white border border-on-surface/15 rounded-sm p-8 shadow-2xl text-zinc-800">
+          <div className="text-center mb-6">
+            <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
+            <h2 className="font-display text-[26px] font-semibold text-on-surface">Atelier Access Gate</h2>
+            <p className="text-[12px] text-zinc-500 font-body mt-2">
+              Log in with your administrator account.
+            </p>
           </div>
-        </main>
 
-        <Footer />
+          <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">ADMIN EMAIL</label>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                required
+                className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3 text-[14px] outline-none text-left"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-label-caps font-semibold text-zinc-400 uppercase tracking-widest block">PASSWORD</label>
+              <div className="relative">
+                <input
+                  type={showAdminPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  required
+                  className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 pl-3 pr-10 text-[14px] outline-none text-left"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(o => !o)}
+                  aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {showAdminPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {loginError && (
+              <p className="text-[11px] text-red-600 font-medium text-center">{loginError}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full bg-primary text-white py-3 font-label-caps text-label-caps tracking-[0.2em] font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all shadow-md flex items-center justify-center gap-2"
+            >
+              {loginLoading && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              {loginLoading ? 'AUTHORIZING…' : 'SIGN IN TO PORTAL'}
+            </button>
+          </form>
+
+          <div className="text-center mt-6">
+            <Link href="/" className="text-[11px] font-semibold text-zinc-400 hover:text-gold-leaf transition-colors uppercase tracking-wider">
+              ← Return to Storefront
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -765,152 +749,41 @@ function AdminDashboardContent() {
   ], null, 2);
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
-      <Header />
+    <>
+      {/* Page Title & Status */}
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-on-surface/10 pb-6 mb-8 gap-4">
+        <div>
+          <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
+          <h1 className="font-display text-[32px] font-semibold text-on-surface">{TAB_TITLES[activeTab].title}</h1>
+          <p className="text-[12.5px] text-on-surface-variant mt-1">{TAB_TITLES[activeTab].subtitle}</p>
+        </div>
 
-      <main className="flex-1 relative z-10 py-12 md:py-16 bg-white">
-        <div className="fixed inset-0 marble-overlay z-0"></div>
+        {/* Sign out lives in AdminHeader now — this row just confirms live status. */}
+        <div className="flex items-center gap-3">
+          <span className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></span>
+          <span className="text-[12px] font-semibold font-label-caps tracking-widest text-zinc-500">
+            ACTIVE ATELIER DEV ENGINE
+          </span>
+        </div>
+      </div>
 
-        <div className="max-w-container-max mx-auto px-6 md:px-12 relative z-10">
+      {/* Feedback Messages */}
+      {feedbackMsg.text && (
+        <div className={`mb-6 p-4 rounded-sm border text-[13px] font-medium transition-all ${feedbackMsg.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+          {feedbackMsg.text}
+        </div>
+      )}
 
-          {/* Page Title & Status */}
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-on-surface/10 pb-6 mb-8 gap-4">
-            <div>
-              <span className="font-label-caps text-[10px] text-gold-leaf tracking-[0.4em] block mb-1">STAGBEETLE SELLER PORTAL</span>
-              <h1 className="font-display text-[32px] font-semibold text-on-surface">Atelier Dashboard</h1>
-            </div>
+      {/* Sidebar now lives in admin/layout.tsx (AdminSidebar) so it stays
+          visible across navigation to other admin pages — this used to be
+          an inline sibling div right here, which is why it vanished the
+          moment you left this specific page. */}
 
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-3">
-                <span className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></span>
-                <span className="text-[12px] font-semibold font-label-caps tracking-widest text-zinc-500">
-                  ACTIVE ATELIER DEV ENGINE
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  await logout();
-                  window.location.href = '/';
-                }}
-                className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 text-[11px] font-bold tracking-widest uppercase transition-all rounded-sm flex items-center gap-1.5 shadow-sm"
-              >
-                <span className="material-symbols-outlined text-[15px]">logout</span>
-                Sign Out
-              </button>
-            </div>
-          </div>
-
-          {/* Feedback Messages */}
-          {feedbackMsg.text && (
-            <div className={`mb-6 p-4 rounded-sm border text-[13px] font-medium transition-all ${feedbackMsg.type === 'success'
-                ? 'bg-green-50 border-green-200 text-green-800'
-                : 'bg-red-50 border-red-200 text-red-800'
-              }`}>
-              {feedbackMsg.text}
-            </div>
-          )}
-
-          <div className="flex flex-col lg:flex-row gap-8 items-start">
-
-            {/* Sidebar Navigation — sticks in place while the workspace scrolls (like a
-                modern app shell), and collapses to an icon rail on desktop to give the
-                workspace (especially the catalog table) more room; persisted via localStorage. */}
-            <div
-              className={`relative shrink-0 w-full bg-surface-dim/40 border border-on-surface/5 p-4 rounded-sm space-y-1.5 transition-[width] duration-200 lg:sticky lg:top-20 lg:self-start ${sidebarCollapsed ? 'lg:w-[68px] lg:p-2.5' : 'lg:w-64'
-                }`}
-            >
-              {/* Collapse/expand handle — sits on the sidebar's outer edge, not in the nav
-                  list itself, so it reads as a panel control rather than another menu item.
-                  Chevron direction mirrors the classic edge-toggle idiom (VS Code, Gmail, etc). */}
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                className="hidden lg:flex absolute -top-3 -right-3 w-7 h-7 items-center justify-center rounded-full bg-white border border-on-surface/15 shadow-md text-zinc-500 hover:text-primary hover:border-primary/40 transition-all z-10"
-              >
-                <span className="material-symbols-outlined text-[16px]">
-                  {sidebarCollapsed ? 'chevron_right' : 'chevron_left'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push('/admin?tab=analytics')}
-                title={sidebarCollapsed ? 'Atelier Analytics' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'analytics'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">query_stats</span>
-                {!sidebarCollapsed && 'ATELIER ANALYTICS'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push('/admin?tab=products')}
-                title={sidebarCollapsed ? 'Garment Catalog' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'products'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">apparel</span>
-                {!sidebarCollapsed && 'GARMENT CATALOG'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push('/admin?tab=coupons')}
-                title={sidebarCollapsed ? 'Discount Coupons' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'coupons'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">sell</span>
-                {!sidebarCollapsed && 'DISCOUNT COUPONS'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push('/admin?tab=orders')}
-                title={sidebarCollapsed ? 'Order Registry' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'} ${activeTab === 'orders'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-dim hover:text-on-surface'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">receipt_long</span>
-                {!sidebarCollapsed && 'ORDER REGISTRY'}
-              </button>
-
-              <div className="border-t border-on-surface/10 my-2"></div>
-
-              <Link
-                href="/admin/members"
-                title={sidebarCollapsed ? 'Membership & Discounts' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold text-on-surface-variant hover:bg-surface-dim hover:text-on-surface ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'}`}
-              >
-                <span className="material-symbols-outlined text-[18px]">redeem</span>
-                {!sidebarCollapsed && 'MEMBERSHIP & DISCOUNTS'}
-              </Link>
-
-              <Link
-                href="/admin/integration"
-                title={sidebarCollapsed ? 'Galla Integration Docs' : undefined}
-                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold text-on-surface-variant hover:bg-surface-dim hover:text-on-surface ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'}`}
-              >
-                <span className="material-symbols-outlined text-[18px]">sync_alt</span>
-                {!sidebarCollapsed && 'GALLA INTEGRATION DOCS'}
-              </Link>
-            </div>
-
-            {/* Dashboard Workspace */}
-            <div className="min-w-0 flex-1 w-full bg-white border border-on-surface/5 p-6 md:p-8 min-h-[500px]">
+      {/* Dashboard Workspace */}
+      <div className="w-full bg-white border border-on-surface/5 p-6 md:p-8 min-h-[500px]">
 
               {loading ? (
                 <div className="flex justify-center py-24">
@@ -1952,11 +1825,6 @@ function AdminDashboardContent() {
 
             </div>
 
-          </div>
-
-        </div>
-      </main>
-
       {/* ========================================================================= */}
       {/* PRODUCT FORM MODAL (Add/Edit)                                            */}
       {/* ========================================================================= */}
@@ -2365,9 +2233,7 @@ function AdminDashboardContent() {
       {showPreview && (
         <ProductPreviewModal product={buildPreviewProduct()} onClose={() => setShowPreview(false)} />
       )}
-
-      <Footer />
-    </div>
+    </>
   );
 }
 
