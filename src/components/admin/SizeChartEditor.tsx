@@ -22,6 +22,36 @@ interface SizeChartEditorProps {
 // standard columns for this garment type (pre-filled with typical values, so
 // it's a glance-and-adjust rather than type-everything-yourself), or copy a
 // similar product's chart wholesale.
+const CM_PER_INCH = 2.54;
+
+// Only convert cells that are a plain number — a measurement like Chest or
+// Waist. Some columns (e.g. the "Height Range" preset, "5'4"-5'7"") hold
+// free-text, not a length in the chart's unit, and must never get run
+// through the inch/cm math.
+const isPlainNumber = (s: string): boolean => /^\d+(\.\d+)?$/.test(s.trim());
+
+// Converts every numeric cell to the other unit — so switching the toggle
+// recalculates the real equivalent instead of just relabeling the same
+// numbers as if they meant something else. The conversion factor is fixed
+// (1 in = 2.54 cm) and never changes, so there's nothing to re-enter: fill
+// the chart in whichever unit is convenient, and the other unit is always
+// one click away, computed from the same numbers.
+const convertRows = (
+  rows: Record<string, Record<string, string>>,
+  factor: number
+): Record<string, Record<string, string>> => {
+  const converted: Record<string, Record<string, string>> = {};
+  for (const [size, cells] of Object.entries(rows)) {
+    converted[size] = {};
+    for (const [measurement, raw] of Object.entries(cells)) {
+      converted[size][measurement] = isPlainNumber(raw)
+        ? String(Math.round(parseFloat(raw) * factor * 10) / 10)
+        : raw;
+    }
+  }
+  return converted;
+};
+
 export default function SizeChartEditor({ sizes, defaultChart, value, onChange, copyCandidates }: SizeChartEditorProps) {
   const [newMeasurement, setNewMeasurement] = useState('');
   const [showCopyMenu, setShowCopyMenu] = useState(false);
@@ -101,12 +131,21 @@ export default function SizeChartEditor({ sizes, defaultChart, value, onChange, 
   return (
     <div className="border border-zinc-200 rounded-sm overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 border-b border-zinc-200">
-        <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-sm p-0.5">
+        <div
+          className="flex items-center gap-1 bg-white border border-zinc-200 rounded-sm p-0.5"
+          title="Switching units converts the existing measurements automatically — no need to re-enter them."
+        >
           {(['in', 'cm'] as const).map(u => (
             <button
               key={u}
               type="button"
-              onClick={() => onChange({ ...value, unit: u })}
+              onClick={() => {
+                if (u === value.unit) return;
+                // Real conversion, not just a relabel — the numbers actually
+                // change to the equivalent measurement in the new unit.
+                const factor = u === 'cm' ? CM_PER_INCH : 1 / CM_PER_INCH;
+                onChange({ ...value, unit: u, rows: convertRows(value.rows, factor) });
+              }}
               className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-sm transition-colors ${
                 value.unit === u ? 'bg-[#052A42] text-white' : 'text-zinc-500 hover:text-zinc-800'
               }`}

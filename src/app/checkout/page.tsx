@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import { createOrder, Product, validateCoupon, Coupon, checkStockForOrderItems, decrementInventoryForOrder } from '@/lib/db';
+import { createOrder, Product, validateCoupon, Coupon, checkStockForOrderItems, decrementInventoryForOrder, sortSizes, getMemberDiscount, MemberDiscountResult } from '@/lib/db';
 import { notifyGallaOfSale } from '@/lib/galla';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -120,16 +120,35 @@ export default function Checkout() {
   const [couponSuccess, setCouponSuccess] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const getDiscountAmount = () => {
+  // Birthday/anniversary member discount — auto-detected from the email/phone
+  // already typed into the checkout form (or prefilled from a logged-in
+  // account), no code to enter. Debounced so it doesn't fire on every
+  // keystroke while someone's still typing their email.
+  const [memberDiscount, setMemberDiscount] = useState<MemberDiscountResult | null>(null);
+  useEffect(() => {
+    const email = formData.email.trim();
+    const phone = formData.phone.trim();
+    const timer = setTimeout(() => {
+      if (!email && !phone) { setMemberDiscount(null); return; }
+      getMemberDiscount(email, phone).then(setMemberDiscount);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.email, formData.phone]);
+
+  const couponDiscountAmount = (() => {
     if (!appliedCoupon) return 0;
     if (appliedCoupon.discount_type === 'percentage') {
       return Math.round((cartTotal * appliedCoupon.discount_value) / 100);
-    } else {
-      return appliedCoupon.discount_value;
     }
-  };
+    return appliedCoupon.discount_value;
+  })();
+  const memberDiscountAmount = memberDiscount ? Math.round((cartTotal * memberDiscount.discount_percent) / 100) : 0;
 
-  const discountAmount = getDiscountAmount();
+  // Not stacked — whichever discount is worth more to the shopper wins,
+  // so entering a coupon code on top of an already-eligible member
+  // discount can never accidentally double-discount an order.
+  const memberDiscountWins = memberDiscountAmount > couponDiscountAmount;
+  const discountAmount = memberDiscountWins ? memberDiscountAmount : couponDiscountAmount;
   const finalTotal = Math.max(0, cartTotal - discountAmount);
 
   const handleApplyCoupon = async (e?: React.FormEvent) => {
@@ -191,8 +210,14 @@ export default function Checkout() {
         items: orderItems,
         payment_status: 'paid',
         payment_method: 'Razorpay',
-        coupon_applied: appliedCoupon ? appliedCoupon.code : undefined,
-        discount_amount: appliedCoupon ? discountAmount : undefined,
+        // Reuses the existing coupon_applied/discount_amount order fields for
+        // the member discount too (as a descriptive label, not a real coupon
+        // code) rather than adding a dedicated column — whichever discount
+        // actually won is what gets recorded.
+        coupon_applied: memberDiscountWins
+          ? `MEMBER-${memberDiscount!.reason.toUpperCase()}-${memberDiscount!.discount_percent}%`
+          : appliedCoupon ? appliedCoupon.code : undefined,
+        discount_amount: discountAmount > 0 ? discountAmount : undefined,
         shipping_status: 'Scheduled',
         shipping_carrier: 'Delhivery',
         tracking_number: 'DKV' + Math.floor(100000000 + Math.random() * 900000000),
@@ -235,7 +260,7 @@ export default function Checkout() {
       setError('Payment was received but order creation failed. Please contact support with Payment ID: ' + paymentId);
       setRazorpayLoading(false);
     }
-  }, [cart, formData, finalTotal, appliedCoupon, discountAmount, saveAddressToProfile, user, clearCart, router, saveAddress, updateProfile]);
+  }, [cart, formData, finalTotal, appliedCoupon, discountAmount, memberDiscountWins, memberDiscount, saveAddressToProfile, user, clearCart, router, saveAddress, updateProfile]);
 
   // Opens the Razorpay payment popup
   const handleRazorpayPay = useCallback(async () => {
@@ -374,7 +399,7 @@ export default function Checkout() {
   };
 
   const handleAddSuggestion = (product: Product) => {
-    const defaultSize = product.sizes[0] || 'One Size';
+    const defaultSize = sortSizes(product.sizes)[0] || 'One Size';
     const defaultColor = product.colors[0] || 'Default';
     addToCart(product, defaultSize, defaultColor, 1);
   };
@@ -632,6 +657,18 @@ export default function Checkout() {
                   ))}
                 </div>
 
+                {/* Birthday/anniversary member discount — auto-detected, nothing to enter */}
+                {memberDiscount && (
+                  <div className="border-t border-on-surface/10 pt-4">
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-sm p-3">
+                      <span className="text-[16px] leading-none">🎉</span>
+                      <span className="text-[12px] font-semibold text-green-800">
+                        Happy {memberDiscount.reason === 'birthday' ? 'Birthday' : 'Anniversary'}! Your {memberDiscount.discount_percent}% member discount is {memberDiscountWins ? 'applied' : 'available'}.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Promo Code Input Block */}
                 <div className="border-t border-on-surface/10 pt-4 pb-2">
                   {!appliedCoupon ? (
@@ -696,9 +733,13 @@ export default function Checkout() {
                     <span>Subtotal</span>
                     <span>₹{cartTotal}</span>
                   </div>
-                  {appliedCoupon && (
+                  {discountAmount > 0 && (
                     <div className="flex justify-between text-gold-leaf font-semibold">
-                      <span>Discount ({appliedCoupon.code})</span>
+                      <span>
+                        {memberDiscountWins
+                          ? `Member Discount (${memberDiscount!.reason === 'birthday' ? 'Birthday' : 'Anniversary'})`
+                          : `Discount (${appliedCoupon?.code})`}
+                      </span>
                       <span>-₹{discountAmount}</span>
                     </div>
                   )}

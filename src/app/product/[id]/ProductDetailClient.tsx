@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges, getEffectivePrice, isPlusSize, getPlusSizesConfig, subscribeToPlusSizesChanges } from '@/lib/db';
+import { Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges, getEffectivePrice, isPlusSize, getPlusSizesConfig, subscribeToPlusSizesChanges, sortSizes } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -28,7 +28,12 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
   // this exact product while it's open (price, description, images, etc.) —
   // the shopper's own size/color selection below is left untouched by that.
   const [product, setProduct] = useState(initialProduct);
-  const [selectedSize, setSelectedSize] = useState(initialProduct.sizes[0] || 'M');
+  // Sizes render (and default-select) in a canonical order, not whatever
+  // order they were added to the product in — a size added later than the
+  // others (e.g. "S"/"XS" added after M/L/XL already existed) used to just
+  // render at the end of the list here.
+  const sortedSizes = sortSizes(product.sizes);
+  const [selectedSize, setSelectedSize] = useState(sortSizes(initialProduct.sizes)[0] || 'M');
   const [selectedColor, setSelectedColor] = useState(getColorName(initialProduct.colors[0]) || 'Default');
   const [quantity, setQuantity] = useState(1);
   const [addedMessage, setAddedMessage] = useState(false);
@@ -55,7 +60,7 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
         hasAutoSelectedRef.current = true;
         setSelectedSize(current => {
           if (bySize[current]?.quantity_available !== 0) return current;
-          const firstAvailable = initialProduct.sizes.find(s => bySize[s]?.quantity_available !== 0);
+          const firstAvailable = sortSizes(initialProduct.sizes).find(s => bySize[s]?.quantity_available !== 0);
           return firstAvailable || current;
         });
       }
@@ -205,7 +210,7 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                         )}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {product.sizes.map(size => {
+                        {sortedSizes.map(size => {
                           const outOfStock = isSizeOutOfStock(size);
                           const plusSize = isPlusSize(size) && !!product.plus_size_surcharge;
                           return (

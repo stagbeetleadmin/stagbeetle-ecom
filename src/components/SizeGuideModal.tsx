@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from 'react';
-import { SizeChart } from '@/lib/db';
+import { SizeChart, sortSizes } from '@/lib/db';
 
 interface SizeGuideModalProps {
   title: string;
@@ -25,7 +25,11 @@ export default function SizeGuideModal({ title, chart, onClose }: SizeGuideModal
     };
   }, [onClose]);
 
-  const sizes = Object.keys(chart.rows);
+  // Object.keys() on chart.rows follows insertion order for non-numeric
+  // keys (S, M, L, ...) — a size chart row added later than the others
+  // (e.g. S/XS added after M/L/XL already had rows) would otherwise render
+  // at the bottom of this table instead of at the top.
+  const sizes = sortSizes(Object.keys(chart.rows));
 
   return (
     <div

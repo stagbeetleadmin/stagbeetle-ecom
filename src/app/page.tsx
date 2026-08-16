@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges, GARMENT_GROUPS } from '@/lib/db';
+import { getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges, GARMENT_GROUPS, sortSizes } from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import PriceDisplay from '@/components/PriceDisplay';
 
@@ -520,7 +520,7 @@ function StorefrontContent() {
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product, product.sizes[0] || 'M', getColorName(product.colors[0]) || 'Default', 1);
+    addToCart(product, sortSizes(product.sizes)[0] || 'M', getColorName(product.colors[0]) || 'Default', 1);
   };
 
   const handleCategoryClick = (cat: string) => {

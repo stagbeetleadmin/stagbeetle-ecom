@@ -30,10 +30,14 @@ export interface SizeChart {
 
 // Garment grouping used by the admin form so "Garment Type" only ever shows
 // options relevant to what's actually being listed — picking "Bottoms" first
-// means Jeans/Shorts/Track Pant/Joggers, never Shirt. This drives which size
-// scale (S–3XL vs waist inches) and which measurement columns get suggested;
-// it isn't persisted on the product — subcategory (already stored) is enough
-// to derive the group back on edit, via GARMENT_GROUP_OF below.
+// means Jeans/Shorts/Track Pant/Joggers, never Shirt. This drives which
+// measurement columns get suggested for the size chart (chest/shoulder vs
+// waist/inseam — see SIZE_CHART_PRESETS below); it isn't persisted on the
+// product — subcategory (already stored) is enough to derive the group back
+// on edit, via GARMENT_GROUP_OF below. NOT the same axis as which size
+// *scale* (S–3XL vs waist inches) applies — see NUMERIC_SIZED_TYPES below,
+// since e.g. Shorts and Track pant are "Bottoms" for chart-column purposes
+// but still sell on the S–3XL scale, not by waist inch.
 export const GARMENT_GROUPS: Record<string, string[]> = {
   Tops: ['Shirt', 'Tshirt', 'Jacket'],
   Bottoms: ['Jeans', 'Track pant', 'Shorts', 'Joggers'],
@@ -41,6 +45,39 @@ export const GARMENT_GROUPS: Record<string, string[]> = {
 export const GARMENT_GROUP_OF: Record<string, string> = Object.fromEntries(
   Object.entries(GARMENT_GROUPS).flatMap(([group, types]) => types.map(t => [t, group]))
 );
+
+// Canonical size scales — single source of truth for both which sizes are
+// selectable per garment type in the admin form and the order they display
+// in everywhere else (storefront size buttons, size chart rows, admin
+// previews). Only Jeans are actually sized by waist inches; Shorts/Track
+// pant/Joggers are "Bottoms" for measurement-column purposes above but are
+// sold M/L/XL like a top, not by waist inch.
+export const TOP_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+export const BOTTOM_SIZE_OPTIONS = ['28', '30', '32', '34', '36', '38', '40'];
+export const NUMERIC_SIZED_TYPES = ['Jeans'];
+export const getSizeOptionsForType = (subcategory: string): string[] =>
+  NUMERIC_SIZED_TYPES.includes(subcategory) ? BOTTOM_SIZE_OPTIONS : TOP_SIZE_OPTIONS;
+
+const SIZE_DISPLAY_ORDER = [...TOP_SIZE_OPTIONS, ...BOTTOM_SIZE_OPTIONS];
+
+// Sorts a product's sizes into a consistent, sensible display order instead
+// of whatever order they happened to be added/selected in. Sizes used to
+// just render in product.sizes' raw array order — fine when a product was
+// created with all its sizes at once, but a size added later (e.g. "S"/"XS"
+// added months after a product already had M/L/XL) landed at the END of
+// that array, so it rendered after XL everywhere a shopper saw it. Anything
+// outside the known scales (a free-typed custom size) sorts after every
+// recognized size, keeping its own relative order among other custom sizes.
+export const sortSizes = (sizes: string[]): string[] => {
+  return [...sizes].sort((a, b) => {
+    const ai = SIZE_DISPLAY_ORDER.indexOf(a.toUpperCase());
+    const bi = SIZE_DISPLAY_ORDER.indexOf(b.toUpperCase());
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+};
 
 // Suggested measurement columns per group — a starting point admins can add
 // to or trim, not a rigid schema.
@@ -1945,6 +1982,200 @@ export const getSuggestions = async (cartProductIds: string[]): Promise<Product[
   return filtered
     .sort((a, b) => a.price - b.price)
     .slice(0, 3);
+};
+
+// =========================================================================
+// MEMBERSHIP — birthday/anniversary discounts.
+//
+// A member record is deliberately lightweight: name/email/phone/dates,
+// captured either through the public /join page (e.g. an in-store QR code)
+// or typed in by an admin — no password, no website login created. Someone
+// who *also* wants a full account can sign up separately with the same
+// email; the two are independent.
+//
+// Eligibility ("is this email/phone a member currently inside their
+// discount window, and by how much") is answered by the get_member_discount
+// Postgres RPC, never by reading the members table directly — there is no
+// public SELECT policy on it, on purpose (see the migration). That's what
+// lets checkout auto-apply a discount for a guest who's never logged in,
+// without exposing every member's birthday/phone/email to anyone with the
+// anon key (i.e. anyone with dev tools open on the site).
+// =========================================================================
+
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  birthday?: string; // 'YYYY-MM-DD'
+  anniversary?: string; // 'YYYY-MM-DD'
+  source: 'online' | 'in_store_qr' | 'admin';
+  created_at: string;
+}
+
+export interface MemberDiscountConfig {
+  active: boolean;
+  birthday_percent: number;
+  anniversary_percent: number;
+  window_days: number; // how many days before/after the actual date still qualifies
+}
+
+export interface MemberDiscountResult {
+  discount_percent: number;
+  reason: 'birthday' | 'anniversary';
+}
+
+const DEFAULT_MEMBER_DISCOUNT_CONFIG: MemberDiscountConfig = {
+  active: true,
+  birthday_percent: 15,
+  anniversary_percent: 15,
+  window_days: 3,
+};
+
+// Self-registration — the public /join page and the admin "add member"
+// form both call this. No auth required (see the INSERT policy), so this
+// works from an in-store kiosk that scanned a QR code with nobody logged in.
+export const registerMember = async (input: {
+  name: string;
+  email: string;
+  phone?: string;
+  birthday?: string;
+  anniversary?: string;
+  source?: Member['source'];
+}): Promise<{ ok: boolean; alreadyRegistered?: boolean; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false, error: 'Membership signup is not available right now.' };
+  }
+  try {
+    const { error } = await supabase.from('members').insert([{
+      name: input.name.trim(),
+      email: input.email.trim().toLowerCase(),
+      phone: input.phone?.trim() || null,
+      birthday: input.birthday || null,
+      anniversary: input.anniversary || null,
+      source: input.source || 'online',
+    }]);
+    if (error) {
+      // Postgres unique_violation — this email already has a membership
+      // record. Not a failure from the shopper's point of view.
+      if (error.code === '23505') {
+        return { ok: false, alreadyRegistered: true, error: 'This email is already registered as a member.' };
+      }
+      console.warn('[Atelier DB] registerMember failed:', error.message);
+      return { ok: false, error: "We couldn't complete your registration. Please try again." };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    console.warn('[Atelier DB] registerMember failed:', e.message || e);
+    return { ok: false, error: "We couldn't complete your registration. Please try again." };
+  }
+};
+
+// Checkout (guest or logged-in) and the in-store admin lookup both call
+// this — the one place eligibility is actually computed, server-side.
+// Returns null on "not a member" / "not currently eligible" / on any
+// failure — callers should treat every null the same way (no discount),
+// not surface a connection error over someone's checkout.
+export const getMemberDiscount = async (email?: string, phone?: string): Promise<MemberDiscountResult | null> => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const cleanEmail = email?.trim();
+  const cleanPhone = phone?.trim();
+  if (!cleanEmail && !cleanPhone) return null;
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.rpc('get_member_discount', { p_email: cleanEmail || null, p_phone: cleanPhone || null })
+    );
+    if (error || !data || data.length === 0) return null;
+    return data[0] as MemberDiscountResult;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getMemberDiscount failed:', e.message || e);
+    return null;
+  }
+};
+
+// Admin-only (RLS: no public SELECT on members) — the in-store lookup tool
+// and the admin Members page both search this way. Matches on name, email,
+// or phone; small result set, no pagination needed at this scale.
+export const searchMembers = async (query: string): Promise<Member[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const q = query.trim();
+  if (!q) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('members')
+        .select('*')
+        .or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
+        .order('created_at', { ascending: false })
+        .limit(25)
+    );
+    if (error) throw error;
+    return data as Member[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] searchMembers failed:', e.message || e);
+    return [];
+  }
+};
+
+// Admin Members page — most-recently-registered list.
+export const getRecentMembers = async (limit = 50): Promise<Member[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('members').select('*').order('created_at', { ascending: false }).limit(limit)
+    );
+    if (error) throw error;
+    return data as Member[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getRecentMembers failed:', e.message || e);
+    return [];
+  }
+};
+
+export const deleteMember = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('members').delete().eq('id', id);
+    return !error;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteMember failed:', e.message || e);
+    return false;
+  }
+};
+
+// Store-wide discount settings (% for each occasion, how wide the window
+// is, and a kill switch) — admin-editable, reuses the same app_settings
+// key/value table plus_sizes already lives in. No realtime broadcast here
+// unlike products/plus-sizes: nothing needs to react live to this changing
+// mid-session — get_member_discount() reads it fresh on every call anyway,
+// so the only consumer of this getter/setter pair is the admin settings form.
+export const getMemberDiscountConfig = async (): Promise<MemberDiscountConfig> => {
+  if (!isSupabaseConfigured || !supabase) return DEFAULT_MEMBER_DISCOUNT_CONFIG;
+  try {
+    const { data } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('app_settings').select('value').eq('key', 'member_discount_config').maybeSingle())
+    );
+    if (data?.value) return { ...DEFAULT_MEMBER_DISCOUNT_CONFIG, ...(data.value as Partial<MemberDiscountConfig>) };
+  } catch (e: any) {
+    console.warn('[Atelier DB] getMemberDiscountConfig failed, using defaults:', e.message || e);
+  }
+  return DEFAULT_MEMBER_DISCOUNT_CONFIG;
+};
+
+export const setMemberDiscountConfig = async (config: MemberDiscountConfig): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'member_discount_config', value: config, updated_at: new Date().toISOString() }], { onConflict: 'key' });
+    if (error) {
+      console.warn('[Atelier DB] setMemberDiscountConfig failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] setMemberDiscountConfig failed:', e.message || e);
+    return false;
+  }
 };
 
 // =========================================================================

@@ -29,8 +29,23 @@ export default function SizeMultiSelect({ options, selected, onChange, plusSizes
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
+  // Keeps whatever's selected in the same order as `options` (already
+  // passed in the right display order for this context — e.g. S before M
+  // before L) rather than the order things were clicked in. Without this, a
+  // size picked later than the others (e.g. adding "S"/"XS" to a product
+  // that already had M/L/XL selected) would just be appended to the end and
+  // render there everywhere downstream. Anything not in `options` (a
+  // free-typed custom size) keeps its own relative order, after every
+  // recognized one.
+  const reorder = (list: string[]): string[] => {
+    const known = options.filter(o => list.includes(o));
+    const custom = list.filter(s => !options.includes(s));
+    return [...known, ...custom];
+  };
+
   const toggle = (size: string) => {
-    onChange(selected.includes(size) ? selected.filter(s => s !== size) : [...selected, size]);
+    const next = selected.includes(size) ? selected.filter(s => s !== size) : [...selected, size];
+    onChange(reorder(next));
   };
 
   const remove = (size: string) => onChange(selected.filter(s => s !== size));
@@ -39,7 +54,7 @@ export default function SizeMultiSelect({ options, selected, onChange, plusSizes
     const value = customInput.trim().toUpperCase();
     setCustomInput('');
     if (!value || selected.includes(value)) return;
-    onChange([...selected, value]);
+    onChange(reorder([...selected, value]));
   };
 
   // Anything already selected but not in the predefined list (a custom size

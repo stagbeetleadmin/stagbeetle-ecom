@@ -14,7 +14,8 @@ import {
   getSkuBase, getColorHex, getColorName, subscribeToProductChanges,
   getInventorySummaryForProducts, getInventoryForProduct, setInventoryManual, subscribeToInventoryChanges,
   getPlusSizesList, getPlusSizesConfig, setPlusSizesConfig, subscribeToPlusSizesChanges,
-  GARMENT_GROUPS, GARMENT_GROUP_OF, getDefaultSizeChart
+  GARMENT_GROUPS, GARMENT_GROUP_OF, getDefaultSizeChart,
+  TOP_SIZE_OPTIONS, BOTTOM_SIZE_OPTIONS, NUMERIC_SIZED_TYPES, getSizeOptionsForType, sortSizes
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
 import PriceDisplay from '@/components/PriceDisplay';
@@ -29,12 +30,9 @@ const CATEGORY_OPTIONS = ['Men', 'Accessories'];
 const GARMENT_GROUP_OPTIONS = Object.keys(GARMENT_GROUPS); // ['Tops', 'Bottoms']
 const GARMENT_TYPE_OPTIONS = Object.values(GARMENT_GROUPS).flat(); // flat list, for the catalog filter dropdown
 
-// Bottoms are sized by waist measurement, not S/M/L — everything else uses the standard scale.
-const BOTTOM_WEAR_TYPES = GARMENT_GROUPS.Bottoms;
-const TOP_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
-const BOTTOM_SIZE_OPTIONS = ['28', '30', '32', '34', '36', '38', '40'];
-const getSizeOptionsFor = (subcategory: string) =>
-  BOTTOM_WEAR_TYPES.includes(subcategory) ? BOTTOM_SIZE_OPTIONS : TOP_SIZE_OPTIONS;
+// Jeans are sized by waist measurement, not S/M/L — every other garment type
+// (including Shorts/Track pant, "Bottoms" for size-chart-column purposes)
+// uses the standard scale. See NUMERIC_SIZED_TYPES/getSizeOptionsForType in db.ts.
 
 const parseSku = (sku?: string) => {
   if (!sku) return { styleCode: '', colorCode: '' };
@@ -553,7 +551,11 @@ function AdminDashboardContent() {
     const { styleCode: parsedStyle, colorCode: parsedColor } = parseSku(prod.sku);
     setStyleCode(parsedStyle);
     setColorCode(parsedColor);
-    setSelectedSizes(prod.sizes);
+    // Re-sort on load so a product saved back before this fix (sizes stuck
+    // in whatever order they were originally added, e.g. M,L,XL,S,XS) shows
+    // — and re-saves — in the correct order from here on, without the admin
+    // having to manually re-toggle anything.
+    setSelectedSizes(sortSizes(prod.sizes));
     setGarmentGroup(GARMENT_GROUP_OF[prod.subcategory || 'Shirt'] || 'Tops');
     // This product's own chart wins if it has one; otherwise, adopt a
     // sibling colour's chart automatically rather than opening blank.
@@ -887,6 +889,15 @@ function AdminDashboardContent() {
               </button>
 
               <div className="border-t border-on-surface/10 my-2"></div>
+
+              <Link
+                href="/admin/members"
+                title={sidebarCollapsed ? 'Membership & Discounts' : undefined}
+                className={`w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold text-on-surface-variant hover:bg-surface-dim hover:text-on-surface ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'}`}
+              >
+                <span className="material-symbols-outlined text-[18px]">redeem</span>
+                {!sidebarCollapsed && 'MEMBERSHIP & DISCOUNTS'}
+              </Link>
 
               <Link
                 href="/admin/integration"
@@ -2098,12 +2109,12 @@ function AdminDashboardContent() {
                     onChange={(e) => {
                       const nextGroup = e.target.value;
                       const firstType = GARMENT_GROUPS[nextGroup][0];
-                      const wasBottom = BOTTOM_WEAR_TYPES.includes(productForm.subcategory);
-                      const isBottom = BOTTOM_WEAR_TYPES.includes(firstType);
+                      const wasNumericSized = NUMERIC_SIZED_TYPES.includes(productForm.subcategory);
+                      const isNumericSized = NUMERIC_SIZED_TYPES.includes(firstType);
                       setGarmentGroup(nextGroup);
                       setProductForm(prev => ({ ...prev, subcategory: firstType }));
-                      // New group almost always means a new size scale too — start clean.
-                      if (wasBottom !== isBottom) setSelectedSizes([]);
+                      // Switching size scale (S/M/L vs waist-inch) invalidates whatever was selected.
+                      if (wasNumericSized !== isNumericSized) setSelectedSizes([]);
                     }}
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   >
@@ -2122,9 +2133,9 @@ function AdminDashboardContent() {
                       // Switching between the S/M/L scale and the waist-size scale invalidates
                       // whatever was selected under the old scale — clear it rather than silently
                       // saving sizes that no longer make sense for this garment type.
-                      const wasBottom = BOTTOM_WEAR_TYPES.includes(productForm.subcategory);
-                      const isBottom = BOTTOM_WEAR_TYPES.includes(nextSubcategory);
-                      if (wasBottom !== isBottom) setSelectedSizes([]);
+                      const wasNumericSized = NUMERIC_SIZED_TYPES.includes(productForm.subcategory);
+                      const isNumericSized = NUMERIC_SIZED_TYPES.includes(nextSubcategory);
+                      if (wasNumericSized !== isNumericSized) setSelectedSizes([]);
                     }}
                     className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                   >
@@ -2205,10 +2216,10 @@ function AdminDashboardContent() {
                 {/* Sizes — multi-select combobox, plus a free-text field for a one-off custom size */}
                 <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                   <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">
-                    AVAILABLE SIZES {BOTTOM_WEAR_TYPES.includes(productForm.subcategory) && <span className="text-zinc-400 font-normal normal-case">(waist, in inches)</span>}
+                    AVAILABLE SIZES {NUMERIC_SIZED_TYPES.includes(productForm.subcategory) && <span className="text-zinc-400 font-normal normal-case">(waist, in inches)</span>}
                   </label>
                   <SizeMultiSelect
-                    options={getSizeOptionsFor(productForm.subcategory)}
+                    options={getSizeOptionsForType(productForm.subcategory)}
                     selected={selectedSizes}
                     onChange={setSelectedSizes}
                     plusSizes={plusSizes}
