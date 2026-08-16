@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { Member, getMembersPage, deleteMember } from '@/lib/db';
+import { Member, MemberDiscountResult, getMembersPage, deleteMember, getMembersBulkDiscountStatus, redeemMemberDiscount } from '@/lib/db';
 
 const PAGE_SIZE = 100;
 
@@ -30,12 +30,34 @@ export default function AdminMembersListPage() {
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Current-year eligibility/redemption status for whichever members are on
+  // screen right now — one bulk call per page load rather than one round
+  // trip per row. Absent from this map = not currently eligible (neither
+  // birthday month nor anniversary window).
+  const [discountStatus, setDiscountStatus] = useState<Record<string, MemberDiscountResult>>({});
+  const [marking, setMarking] = useState<string | null>(null);
+
   const load = useCallback((targetPage: number, q: string) => {
     getMembersPage(targetPage, PAGE_SIZE, q || undefined).then(res => {
       setMembers(res.members);
       setTotal(res.total);
+      getMembersBulkDiscountStatus(res.members.map(m => m.id)).then(setDiscountStatus);
     }).finally(() => setLoading(false));
   }, []);
+
+  const handleMarkAvailed = async (member: Member) => {
+    const state = discountStatus[member.id];
+    if (!state || state.already_redeemed) return;
+    setMarking(member.id);
+    const ok = await redeemMemberDiscount(member.email, member.phone, state.reason, state.period_year, 'in-store');
+    if (ok) {
+      setDiscountStatus(prev => ({
+        ...prev,
+        [member.id]: { ...state, already_redeemed: true, redeemed_at: new Date().toISOString() },
+      }));
+    }
+    setMarking(null);
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -135,6 +157,7 @@ export default function AdminMembersListPage() {
                       <th className="px-4 py-2.5">ANNIVERSARY</th>
                       <th className="px-4 py-2.5">SOURCE</th>
                       <th className="px-4 py-2.5">JOINED</th>
+                      <th className="px-4 py-2.5">OFFER STATUS (THIS YEAR)</th>
                       <th className="px-4 py-2.5"></th>
                     </tr>
                   </thead>
@@ -147,6 +170,35 @@ export default function AdminMembersListPage() {
                         <td className="px-4 py-2.5 text-on-surface-variant whitespace-nowrap">{fmtDate(m.anniversary)}</td>
                         <td className="px-4 py-2.5 text-on-surface-variant capitalize whitespace-nowrap">{m.source.replace('_', ' ')}</td>
                         <td className="px-4 py-2.5 text-on-surface-variant whitespace-nowrap">{new Date(m.created_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          {(() => {
+                            const state = discountStatus[m.id];
+                            if (!state) return <span className="text-zinc-300">— not this month</span>;
+                            if (state.already_redeemed) {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-zinc-500 bg-zinc-100 border border-zinc-200 rounded-full px-2 py-0.5">
+                                  🎂 Availed {state.redeemed_at ? new Date(state.redeemed_at).toLocaleDateString() : ''}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="text-[10.5px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                                  🎉 Eligible — {state.reason}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkAvailed(m)}
+                                  disabled={marking === m.id}
+                                  className="text-[10.5px] font-bold text-white bg-[#052A42] hover:bg-[#052A42]/90 rounded-sm px-2 py-1 uppercase tracking-wide disabled:opacity-50"
+                                  title="Confirm the discount was given at the register — marks it used for this year"
+                                >
+                                  {marking === m.id ? 'Marking…' : 'Mark as Availed'}
+                                </button>
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="px-4 py-2.5 text-right whitespace-nowrap">
                           <button
                             type="button"

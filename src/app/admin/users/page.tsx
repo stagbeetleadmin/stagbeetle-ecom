@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { UserProfile, getProfilesPage, registerMember, adminUpdateProfile } from '@/lib/db';
+import { UserProfile, getProfilesPage, registerMember, adminUpdateProfile, getMemberContactSet } from '@/lib/db';
 
 const PAGE_SIZE = 100;
 
@@ -24,6 +24,17 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [memberStatus, setMemberStatus] = useState<Record<string, 'saving' | 'done' | 'error'>>({});
 
+  // Cross-referenced against the Members table so a registered user who's
+  // already a member shows that, instead of a "Make Member" button that
+  // implies they aren't one — previously this page had no idea the
+  // membership list existed at all, the two were entirely disconnected.
+  const [memberContacts, setMemberContacts] = useState<{ emails: Set<string>; phones: Set<string> } | null>(null);
+  const isAlreadyMember = (profile: UserProfile) =>
+    !!memberContacts && (
+      memberContacts.emails.has(profile.email.toLowerCase()) ||
+      (!!profile.phone && memberContacts.phones.has(profile.phone))
+    );
+
   // Inline phone editing — click the phone cell, edit, save. Only one row
   // at a time (editingId doubles as "is anything being edited right now").
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,10 +48,19 @@ export default function AdminUsersPage() {
     }).finally(() => setLoading(false));
   }, []);
 
+  const loadMemberContacts = useCallback(() => {
+    getMemberContactSet().then(setMemberContacts);
+  }, []);
+
   useEffect(() => {
     if (!isAdmin) return;
     load(page, activeQuery);
   }, [isAdmin, page, activeQuery, load]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    loadMemberContacts();
+  }, [isAdmin, loadMemberContacts]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +76,21 @@ export default function AdminUsersPage() {
       phone: profile.phone,
       source: 'admin',
     });
-    setMemberStatus(prev => ({ ...prev, [profile.id]: res.ok || res.alreadyRegistered ? 'done' : 'error' }));
+    if (res.ok || res.alreadyRegistered) {
+      setMemberStatus(prev => ({ ...prev, [profile.id]: 'done' }));
+      // Reflect it immediately rather than waiting on a refetch — this is
+      // exactly the same-email-is-the-same-person fact registerMember()
+      // itself already enforces (unique index on members.email).
+      setMemberContacts(prev => {
+        const emails = new Set(prev?.emails ?? []);
+        const phones = new Set(prev?.phones ?? []);
+        emails.add(profile.email.toLowerCase());
+        if (profile.phone) phones.add(profile.phone);
+        return { emails, phones };
+      });
+    } else {
+      setMemberStatus(prev => ({ ...prev, [profile.id]: 'error' }));
+    }
   };
 
   const startEditPhone = (profile: UserProfile) => {
@@ -103,8 +137,11 @@ export default function AdminUsersPage() {
   const renderMemberAction = (profile: UserProfile) => {
     const status = memberStatus[profile.id];
     if (status === 'saving') return <span className="text-[11px] text-zinc-400">Adding…</span>;
-    if (status === 'done') return <span className="text-[11px] font-bold text-green-700">✓ Member</span>;
     if (status === 'error') return <span className="text-[11px] text-red-600">Failed</span>;
+    if (status === 'done' || isAlreadyMember(profile)) {
+      return <span className="text-[11px] font-bold text-green-700">✓ Member</span>;
+    }
+    if (!memberContacts) return <span className="text-[11px] text-zinc-300">…</span>;
     return (
       <button
         type="button"

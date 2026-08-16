@@ -2068,6 +2068,7 @@ export const registerMember = async (input: {
       console.warn('[Atelier DB] registerMember failed:', error.message);
       return { ok: false, error: "We couldn't complete your registration. Please try again." };
     }
+    invalidateMembersCache(); // so this tab's next Members List load is live, not the pre-signup snapshot
     return { ok: true };
   } catch (e: any) {
     console.warn('[Atelier DB] registerMember failed:', e.message || e);
@@ -2137,6 +2138,54 @@ export const redeemMemberDiscount = async (
   }
 };
 
+// Bulk version for the admin Members List table — one call for a whole page
+// of members instead of one round trip per row. Admin-only; returns a map
+// keyed by member id, with an entry only for members who are currently
+// eligible (present in members.length calls, absent = not eligible right now).
+export const getMembersBulkDiscountStatus = async (memberIds: string[]): Promise<Record<string, MemberDiscountResult>> => {
+  if (!isSupabaseConfigured || !supabase || memberIds.length === 0) return {};
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.rpc('get_members_bulk_discount_status', { p_member_ids: memberIds })
+    );
+    if (error || !data) return {};
+    const result: Record<string, MemberDiscountResult> = {};
+    for (const row of data as (MemberDiscountResult & { member_id: string })[]) {
+      const { member_id, ...rest } = row;
+      result[member_id] = rest;
+    }
+    return result;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getMembersBulkDiscountStatus failed:', e.message || e);
+    return {};
+  }
+};
+
+// Admin-only — cross-referenced against Registered Users so that page can
+// show "already a member" instead of a "Make Member" button that implies
+// they aren't one. Without this, the two admin lists (Registered Users and
+// Members) had no way to know about each other at all — a real customer
+// account and a real membership record for the exact same email/phone
+// looked completely unrelated on screen, even though registerMember()
+// itself already treats "same email" as one person (see the unique index
+// on members.email).
+export const getMemberContactSet = async (): Promise<{ emails: Set<string>; phones: Set<string> }> => {
+  const empty = { emails: new Set<string>(), phones: new Set<string>() };
+  if (!isSupabaseConfigured || !supabase) return empty;
+  try {
+    const { data, error } = await supabaseTimeout(supabase.from('members').select('email,phone'));
+    if (error || !data) return empty;
+    const phones: (string | null)[] = data.map((m: { phone: string | null }) => m.phone);
+    return {
+      emails: new Set(data.map((m: { email: string }) => m.email.toLowerCase())),
+      phones: new Set(phones.filter((p): p is string => !!p)),
+    };
+  } catch (e: any) {
+    console.warn('[Atelier DB] getMemberContactSet failed:', e.message || e);
+    return empty;
+  }
+};
+
 // Admin-only (RLS: no public SELECT on members) — the in-store lookup tool
 // and the admin Members page both search this way. Matches on name, email,
 // or phone; small result set, no pagination needed at this scale.
@@ -2172,11 +2221,97 @@ export interface MembersPage {
 // far worse than a slightly-stale real number.
 let membersCountCache: number | null = null;
 
+// Instant-paint cache for the Members List page's default view (page 1, no
+// search) — the same pattern getProducts() uses, and for the same reason:
+// the very first load of a cold session used to always block on a live
+// query with nothing to show meanwhile. Deliberately scoped to only that
+// one case (page 1, no query) rather than every page/search combination —
+// that default view is what nearly everyone actually lands on. A short
+// in-memory TTL also collapses rapid duplicate calls (e.g. mount + a
+// realtime refresh landing in the same tick).
+const MEMBERS_PAGE1_LOCALSTORAGE_KEY = 'stag_beetle_members_page1_cache';
+const MEMBERS_CACHE_TTL_MS = 60_000;
+let membersPage1Cache: { data: MembersPage; expiresAt: number } | null = null;
+let membersHasAttemptedFreshFetch = false;
+
+const readPersistedMembersPage1 = (): MembersPage | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(MEMBERS_PAGE1_LOCALSTORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: MembersPage };
+    return parsed.data && Array.isArray(parsed.data.members) ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistMembersPage1 = (data: MembersPage) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(MEMBERS_PAGE1_LOCALSTORAGE_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  } catch {
+    // Storage full/unavailable — non-critical, just skip persisting.
+  }
+};
+
+// Called on every member write (add/remove) so the very next load — this
+// tab or a fresh one — goes live instead of serving a snapshot from before
+// the change. Doesn't reset membersHasAttemptedFreshFetch: once this
+// session has done one real fetch, every call after a write should also go
+// live, never fall back to the (now provably stale) persisted-disk
+// snapshot — same reasoning as the equivalent products-cache fix.
+const invalidateMembersCache = () => {
+  membersPage1Cache = null;
+  membersCountCache = null;
+};
+
+const fetchAndCacheMembersPage1 = (pageSize: number): Promise<MembersPage> => {
+  membersHasAttemptedFreshFetch = true;
+  return (async (): Promise<MembersPage> => {
+    try {
+      const { data, error, count } = await withOneRetry(() =>
+        supabaseTimeout(
+          supabase!.from('members').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(0, pageSize - 1)
+        )
+      );
+      if (error) throw error;
+      const resolved: MembersPage = { members: (data || []) as Member[], total: count ?? 0 };
+      membersPage1Cache = { data: resolved, expiresAt: Date.now() + MEMBERS_CACHE_TTL_MS };
+      membersCountCache = resolved.total;
+      persistMembersPage1(resolved);
+      return resolved;
+    } catch (e: any) {
+      console.warn('[Atelier DB] getMembersPage failed:', e.message || e);
+      if (membersPage1Cache) return membersPage1Cache.data;
+      return { members: [], total: membersCountCache ?? 0 };
+    }
+  })();
+};
+
 // Admin Members list page — page is 1-indexed. Optional `query` filters by
 // name/email/phone server-side (same fields searchMembers checks) so
 // pagination and search compose instead of being two separate code paths.
 export const getMembersPage = async (page: number, pageSize = 100, query?: string): Promise<MembersPage> => {
   if (!isSupabaseConfigured || !supabase) return { members: [], total: 0 };
+
+  // Only the plain "page 1, no search" view is cached/instant-painted —
+  // any other page or an active search always goes live below.
+  if (page === 1 && !query?.trim()) {
+    if (membersPage1Cache && membersPage1Cache.expiresAt > Date.now()) {
+      return membersPage1Cache.data;
+    }
+    if (!membersHasAttemptedFreshFetch) {
+      const persisted = readPersistedMembersPage1();
+      if (persisted) {
+        membersPage1Cache = { data: persisted, expiresAt: Date.now() + 3_000 };
+        fetchAndCacheMembersPage1(pageSize).catch(() => {}); // background refresh; errors already logged inside
+        return persisted;
+      }
+    }
+    return fetchAndCacheMembersPage1(pageSize);
+  }
+
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
   try {
@@ -2220,7 +2355,9 @@ export const deleteMember = async (id: string): Promise<boolean> => {
   if (!isSupabaseConfigured || !supabase) return false;
   try {
     const { error } = await supabase.from('members').delete().eq('id', id);
-    return !error;
+    if (error) return false;
+    invalidateMembersCache();
+    return true;
   } catch (e: any) {
     console.warn('[Atelier DB] deleteMember failed:', e.message || e);
     return false;
