@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import { createOrder, Product, validateCoupon, Coupon, checkStockForOrderItems, decrementInventoryForOrder, sortSizes, getMemberDiscount, MemberDiscountResult } from '@/lib/db';
+import { createOrder, Product, validateCoupon, Coupon, checkStockForOrderItems, decrementInventoryForOrder, sortSizes, getMemberDiscount, redeemMemberDiscount, MemberDiscountResult } from '@/lib/db';
 import { notifyGallaOfSale } from '@/lib/galla';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -142,7 +142,12 @@ export default function Checkout() {
     }
     return appliedCoupon.discount_value;
   })();
-  const memberDiscountAmount = memberDiscount ? Math.round((cartTotal * memberDiscount.discount_percent) / 100) : 0;
+  // already_redeemed means this member's birthday/anniversary discount for
+  // this year has already been used on a previous order — the banner below
+  // still tells them that, but it must not count toward the actual discount.
+  const memberDiscountAmount = memberDiscount && !memberDiscount.already_redeemed
+    ? Math.round((cartTotal * memberDiscount.discount_percent) / 100)
+    : 0;
 
   // Not stacked — whichever discount is worth more to the shopper wins,
   // so entering a coupon code on top of an already-eligible member
@@ -222,6 +227,22 @@ export default function Checkout() {
         shipping_carrier: 'Delhivery',
         tracking_number: 'DKV' + Math.floor(100000000 + Math.random() * 900000000),
       });
+
+      // Mark the discount actually used, now that the order is real —
+      // never at page-load/eligibility-check time. Best-effort like the
+      // inventory/Galla sync below: payment already cleared, so a failure
+      // here must not block order confirmation. Worst case (this call
+      // fails) the member could reuse the discount once more before anyone
+      // notices — the DB's unique constraint is still there to catch a
+      // second redemption in the same request, this just isn't guaranteed
+      // to run if e.g. the tab closes mid-checkout.
+      if (memberDiscountWins && memberDiscount) {
+        try {
+          await redeemMemberDiscount(formData.email, formData.phone, memberDiscount.reason, memberDiscount.period_year, result.id);
+        } catch (redeemErr) {
+          console.warn('Member discount redemption failed to record (order still confirmed):', redeemErr);
+        }
+      }
 
       // Payment is already captured at this point, so a stock or Galla hiccup
       // here must never block the order confirmation the customer sees —
@@ -660,12 +681,21 @@ export default function Checkout() {
                 {/* Birthday/anniversary member discount — auto-detected, nothing to enter */}
                 {memberDiscount && (
                   <div className="border-t border-on-surface/10 pt-4">
-                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-sm p-3">
-                      <span className="text-[16px] leading-none">🎉</span>
-                      <span className="text-[12px] font-semibold text-green-800">
-                        Happy {memberDiscount.reason === 'birthday' ? 'Birthday' : 'Anniversary'}! Your {memberDiscount.discount_percent}% member discount is {memberDiscountWins ? 'applied' : 'available'}.
-                      </span>
-                    </div>
+                    {memberDiscount.already_redeemed ? (
+                      <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-sm p-3">
+                        <span className="text-[16px] leading-none">🎂</span>
+                        <span className="text-[12px] font-semibold text-zinc-600">
+                          You&apos;ve already used your {memberDiscount.reason} discount for this year — see you next {memberDiscount.reason}!
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-sm p-3">
+                        <span className="text-[16px] leading-none">🎉</span>
+                        <span className="text-[12px] font-semibold text-green-800">
+                          Happy {memberDiscount.reason === 'birthday' ? 'Birthday' : 'Anniversary'}! Your {memberDiscount.discount_percent}% member discount is {memberDiscountWins ? 'applied' : 'available'}.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Header from '@/components/Header';
+import MinimalHeader from '@/components/MinimalHeader';
+import { useAuth } from '@/context/AuthContext';
 import { registerMember } from '@/lib/db';
 
 // Public, no-login signup for the birthday/anniversary discount program.
@@ -33,10 +34,28 @@ function Perk({ icon, title, children }: { icon: string; title: string; children
 function JoinForm() {
   const searchParams = useSearchParams();
   const inStore = searchParams.get('src') === 'store';
+  const { user } = useAuth();
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', birthday: '', anniversary: '' });
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; alreadyRegistered?: boolean; error?: string } | null>(null);
+
+  // Already signed in — prefill name/email/phone from their account so
+  // there's less to retype, just the dates left to add. Only fills fields
+  // still blank, so it can't clobber anything already typed before auth
+  // finished resolving (it bootstraps asynchronously).
+  useEffect(() => {
+    if (!user) return;
+    const id = setTimeout(() => {
+      setForm(prev => ({
+        ...prev,
+        name: prev.name || user.name || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || '',
+      }));
+    }, 0);
+    return () => clearTimeout(id);
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -45,13 +64,13 @@ function JoinForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim()) return;
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) return;
     setSubmitting(true);
     setResult(null);
     const res = await registerMember({
       name: form.name,
       email: form.email,
-      phone: form.phone || undefined,
+      phone: form.phone,
       birthday: form.birthday || undefined,
       anniversary: form.anniversary || undefined,
       source: inStore ? 'in_store_qr' : 'online',
@@ -116,11 +135,12 @@ function JoinForm() {
         </div>
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold tracking-wider text-on-surface-variant block uppercase">
-            Phone Number <span className="text-zinc-400 normal-case font-normal">(optional)</span>
+            Phone Number
           </label>
           <input
             type="tel"
             name="phone"
+            required
             value={form.phone}
             onChange={handleChange}
             className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf rounded-sm py-2.5 px-3 text-[14px] outline-none transition-colors"
@@ -169,7 +189,7 @@ function JoinForm() {
 export default function JoinPage() {
   return (
     <div className="flex flex-col min-h-screen bg-white">
-      <Header />
+      <MinimalHeader />
       <main className="flex-1 flex flex-col lg:grid lg:grid-cols-2">
         {/* Left — brand & perks. Fills the viewport on desktop; a short,
             single-glance pitch on mobile so the form starts right after it. */}

@@ -818,19 +818,17 @@ function StorefrontContent() {
           )}
         </section>
 
-        {/* ── Newsletter / Register ── */}
+        {/* ── Become a Member ── */}
         <section className="bg-gray-50 py-16 px-4 text-center border-t border-gray-100">
           <p className="text-[10px] font-bold tracking-[0.4em] text-[#C5A059] uppercase mb-2">The Inner Circle</p>
-          <h3 className="text-[24px] font-bold text-gray-900 tracking-wide uppercase mb-2">Join the Registry</h3>
-          <p className="text-[13px] text-gray-500 mb-8 max-w-md mx-auto">Get early access to seasonal streetwear releases, limited drops, and member-only pricing.</p>
-          <form className="flex flex-col sm:flex-row gap-0 max-w-md mx-auto border border-gray-300 focus-within:border-black transition-colors bg-white">
-            <input type="email" required placeholder="Your email address"
-              className="flex-1 px-4 py-3.5 text-[13px] outline-none text-gray-800 placeholder:text-gray-400" />
-            <button type="submit"
-              className="bg-black text-white px-8 py-3.5 text-[11px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-colors shrink-0">
-              Subscribe
-            </button>
-          </form>
+          <h3 className="text-[24px] font-bold text-gray-900 tracking-wide uppercase mb-2">Become a Member</h3>
+          <p className="text-[13px] text-gray-500 mb-8 max-w-md mx-auto">A discount on us, every birthday and anniversary — online or in-store. Takes 30 seconds, no password needed.</p>
+          <Link
+            href="/join"
+            className="inline-block bg-black text-white px-10 py-3.5 text-[11px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-colors"
+          >
+            Join the Circle
+          </Link>
         </section>
 
       </main>

@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   Member, MemberDiscountConfig, MemberDiscountResult,
   getMemberDiscountConfig, setMemberDiscountConfig,
-  searchMembers, getMembersCount, registerMember, deleteMember, getMemberDiscount,
+  searchMembers, getMembersCount, registerMember, deleteMember, getMemberDiscount, redeemMemberDiscount,
 } from '@/lib/db';
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
@@ -123,9 +123,26 @@ export default function AdminMembersPage() {
     setEligibility(prev => ({ ...prev, [member.id]: res }));
   };
 
+  // In-store sales go through Galla (the POS), not this site's checkout —
+  // there was previously no trigger anywhere that could record an in-store
+  // redemption at all. This is that trigger: staff confirm the discount was
+  // actually given at the register, and it's marked used for the year right
+  // here, the same DB-enforced-unique redemption ledger checkout writes to.
+  const [markingAvailed, setMarkingAvailed] = useState<string | null>(null);
+  const handleMarkAvailed = async (member: Member) => {
+    const state = eligibility[member.id];
+    if (!state || state === 'checking' || state.already_redeemed) return;
+    setMarkingAvailed(member.id);
+    const ok = await redeemMemberDiscount(member.email, member.phone, state.reason, state.period_year, 'in-store');
+    if (ok) {
+      setEligibility(prev => ({ ...prev, [member.id]: { ...state, already_redeemed: true, redeemed_at: new Date().toISOString() } }));
+    }
+    setMarkingAvailed(null);
+  };
+
   const handleQuickAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.name.trim() || !addForm.email.trim()) return;
+    if (!addForm.name.trim() || !addForm.email.trim() || !addForm.phone.trim()) return;
     setAdding(true);
     setAddMsg('');
     const res = await registerMember({ ...addForm, source: 'admin' });
@@ -183,9 +200,27 @@ export default function AdminMembersPage() {
     }
     if (state === 'checking') return <span className="text-[11px] text-zinc-400">Checking…</span>;
     if (state === null) return <span className="text-[11px] text-zinc-400">Not eligible today</span>;
+    if (state.already_redeemed) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-500 bg-zinc-100 border border-zinc-200 rounded-full px-2 py-0.5">
+          🎂 Availed {state.redeemed_at ? new Date(state.redeemed_at).toLocaleDateString() : ''} — {state.reason}
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-        🎉 {state.discount_percent}% off — {state.reason}
+      <span className="inline-flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+          🎉 {state.discount_percent}% off — {state.reason}
+        </span>
+        <button
+          type="button"
+          onClick={() => handleMarkAvailed(member)}
+          disabled={markingAvailed === member.id}
+          className="text-[10.5px] font-bold text-white bg-[#052A42] hover:bg-[#052A42]/90 rounded-sm px-2 py-1 uppercase tracking-wide disabled:opacity-50"
+          title="Confirm the discount was given at the register — marks it used for this year"
+        >
+          {markingAvailed === member.id ? 'Marking…' : 'Mark as Availed'}
+        </button>
       </span>
     );
   };
@@ -246,7 +281,7 @@ export default function AdminMembersPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">Window (± days)</label>
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">Anniversary Window (± days)</label>
                     <input
                       type="number" min={0} max={30}
                       value={config.window_days}
@@ -256,7 +291,10 @@ export default function AdminMembersPage() {
                   </div>
                 </div>
                 <p className="text-[10.5px] text-zinc-400">
-                  e.g. a window of 3 means the discount is live from 3 days before the date through 3 days after it, not just the exact day.
+                  Birthday discount is live for the member&apos;s entire birthday month (e.g. a June 14th birthday is eligible any day in June) — not
+                  a day-count window. The window above applies to the anniversary discount only: a window of 3 means it&apos;s live from 3 days
+                  before the date through 3 days after it, not just the exact day. Either discount can only be used <strong>once per year</strong> —
+                  redeeming it on an order blocks it from applying again until next year.
                 </p>
                 <div className="flex items-center gap-3">
                   <button
@@ -307,7 +345,10 @@ export default function AdminMembersPage() {
           </Section>
 
           {/* Member lookup */}
-          <Section title="Member Lookup" subtitle="Search by name, email, or phone to check whether a customer at the register is a member, and whether their discount is live right now.">
+          <Section
+            title="Member Lookup"
+            subtitle="Search by name, email, or phone to check whether a customer at the register is a member, and whether their discount is live right now. Once given, click &quot;Mark as Availed&quot; to record it — each member gets one discount per year, and it resets automatically at their next birthday month or anniversary."
+          >
             <form onSubmit={handleSearch} className="flex gap-2">
               <input
                 type="text"
@@ -368,7 +409,7 @@ export default function AdminMembersPage() {
                 className="bg-surface-dim border border-on-surface/15 focus:border-gold-leaf rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
               />
               <input
-                type="tel" placeholder="Phone (optional)"
+                type="tel" required placeholder="Phone"
                 value={addForm.phone}
                 onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
                 className="bg-surface-dim border border-on-surface/15 focus:border-gold-leaf rounded-sm py-2.5 px-3.5 text-[13px] outline-none"

@@ -2024,6 +2024,9 @@ export interface MemberDiscountConfig {
 export interface MemberDiscountResult {
   discount_percent: number;
   reason: 'birthday' | 'anniversary';
+  already_redeemed: boolean; // true = eligible window, but already used this year — don't apply again
+  period_year: number; // which year this redemption counts against; pass straight through to redeemMemberDiscount
+  redeemed_at: string | null; // when it was marked used, if it was — null while already_redeemed is false
 }
 
 const DEFAULT_MEMBER_DISCOUNT_CONFIG: MemberDiscountConfig = {
@@ -2091,6 +2094,46 @@ export const getMemberDiscount = async (email?: string, phone?: string): Promise
   } catch (e: any) {
     console.warn('[Atelier DB] getMemberDiscount failed:', e.message || e);
     return null;
+  }
+};
+
+// Marks this year's birthday/anniversary discount as used — call once an
+// order that actually applied it has been confirmed (checkout), never at
+// checkout-page-load time (that's just getMemberDiscount's eligibility
+// check). `reason` and `periodYear` should be exactly what that eligibility
+// check returned, so the redemption lands against the same year it was
+// evaluated for. Returns false both on a genuine failure and on a
+// double-redemption attempt — the DB's unique constraint is the real
+// enforcement either way, so callers shouldn't need to tell the two apart.
+export const redeemMemberDiscount = async (
+  email: string | undefined,
+  phone: string | undefined,
+  reason: 'birthday' | 'anniversary',
+  periodYear: number,
+  orderId?: string
+): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  const cleanEmail = email?.trim();
+  const cleanPhone = phone?.trim();
+  if (!cleanEmail && !cleanPhone) return false;
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.rpc('redeem_member_discount', {
+        p_email: cleanEmail || null,
+        p_phone: cleanPhone || null,
+        p_reason: reason,
+        p_period_year: periodYear,
+        p_order_id: orderId || null,
+      })
+    );
+    if (error) {
+      console.warn('[Atelier DB] redeemMemberDiscount failed:', error.message);
+      return false;
+    }
+    return !!data;
+  } catch (e: any) {
+    console.warn('[Atelier DB] redeemMemberDiscount failed:', e.message || e);
+    return false;
   }
 };
 
