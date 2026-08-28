@@ -4,6 +4,7 @@ import React from 'react';
 import AdminHeader from '@/components/admin/AdminHeader';
 import AdminFooter from '@/components/admin/AdminFooter';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { AdminTabProvider } from '@/components/admin/AdminTabContext';
 import { useAuth } from '@/context/AuthContext';
 
 // Shared shell for every /admin/* page — this is what makes the sidebar
@@ -29,27 +30,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
-      <AdminHeader />
+    <AdminTabProvider>
+      <div className="flex flex-col min-h-screen bg-surface selection:bg-gold-leaf/20 selection:text-on-surface">
+        <AdminHeader />
 
-      <main className="flex-1 relative z-10 py-12 md:py-16 bg-white">
-        <div className="fixed inset-0 marble-overlay z-0"></div>
+        <main className="flex-1 relative z-10 py-12 md:py-16 bg-white">
+          <div className="fixed inset-0 marble-overlay z-0"></div>
 
-        <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          {isAdmin ? (
-            <div className="flex flex-col lg:flex-row gap-8 items-start">
-              <AdminSidebar />
-              <div className="min-w-0 flex-1 w-full">
-                {children}
+          <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            {isAdmin ? (
+              <div className="flex flex-col lg:flex-row gap-8 items-start">
+                <AdminSidebar />
+                <div className="min-w-0 flex-1 w-full">
+                  {children}
+                </div>
               </div>
-            </div>
-          ) : (
-            children
-          )}
-        </div>
-      </main>
+            ) : (
+              children
+            )}
+          </div>
+        </main>
 
-      <AdminFooter />
-    </div>
+        <AdminFooter />
+      </div>
+    </AdminTabProvider>
   );
 }
