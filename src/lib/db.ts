@@ -416,21 +416,7 @@ const supabaseAnonKey =
 
 const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        // GoTrue's default cross-tab lock (the Web Locks API) serializes every
-        // getSession() / token-refresh call on a single lock name. On a slow
-        // link one in-flight refresh holds that lock for the whole length of
-        // its network call — and because supabaseTimeout() only aborts the
-        // *caller*, never the underlying lock wait, withOneRetry then stacks
-        // further getSession() calls behind the same lock. One slow refresh
-        // becomes a pile-up that freezes auth (and, through AuthContext, admin
-        // gating) for seconds. Run auth work immediately instead: a cross-tab
-        // refresh race is harmless here — last write wins, and every read is
-        // independently re-authorized by RLS regardless.
-        lock: (_name, _acquireTimeout, fn) => fn(),
-      },
-    })
+  ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 // 3.5s: long enough for a genuinely slow-but-working query to finish, short
