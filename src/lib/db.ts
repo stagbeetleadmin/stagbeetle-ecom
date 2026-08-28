@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { PRODUCT_COLORS } from './colors';
 
 // Define TS Interfaces
 export interface Product {
@@ -2676,6 +2677,13 @@ export const getColorHex = (colorName: string): string => {
   }
 
   const name = colorName.split('|')[0].toLowerCase().trim();
+
+  // Centralised catalogue palette (src/lib/colors.ts) is the source of
+  // truth for the colours the store officially supports — check it first
+  // so those names render a consistent swatch even without an inline hex.
+  const palette = PRODUCT_COLORS.find(c => c.name.toLowerCase() === name);
+  if (palette) return palette.hex;
+
   const map: Record<string, string> = {
     'stone grey': '#8E9AAF',
     'stone gray': '#8E9AAF',

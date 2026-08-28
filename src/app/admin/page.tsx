@@ -16,6 +16,13 @@ import {
   TOP_SIZE_OPTIONS, BOTTOM_SIZE_OPTIONS, NUMERIC_SIZED_TYPES, getSizeOptionsForType, sortSizes
 } from '@/lib/db';
 import { compressImage } from '@/utils/image';
+import {
+  detectProductColor,
+  fingerprintBlob,
+  COLOR_DETECTION_FAILURE_MESSAGE,
+  type ColorSuggestion,
+} from '@/utils/colorDetectionClient';
+import { PRODUCT_COLORS, getColorByName } from '@/lib/colors';
 import PriceDisplay from '@/components/PriceDisplay';
 import RichTextEditor from '@/components/RichTextEditor';
 import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
@@ -248,6 +255,75 @@ function AdminDashboardContent() {
   const [colorName, setColorName] = useState('');
   const [colorHex, setColorHexState] = useState('#A0AAB2');
 
+  // --- Automatic (non-AI) colour detection -------------------------------
+  // Suggestion only. It NEVER writes colour/colour-code on its own — the
+  // seller applies it explicitly, and any manual edit takes precedence.
+  const [colorSource, setColorSource] = useState<'manual' | 'automatic' | ''>('');
+  const [colorSuggestion, setColorSuggestion] = useState<ColorSuggestion | null>(null);
+  const [colorDetecting, setColorDetecting] = useState(false);
+  const [colorDetectError, setColorDetectError] = useState<string | null>(null);
+  // Fingerprint of the last analysed image, so unrelated field edits (or a
+  // re-render) don't re-trigger analysis of the same photo.
+  const detectedFingerprintRef = useRef<string | null>(null);
+
+  const resetColorDetection = useCallback(() => {
+    setColorSuggestion(null);
+    setColorDetecting(false);
+    setColorDetectError(null);
+    detectedFingerprintRef.current = null;
+  }, []);
+
+  // Fills the existing colour fields (name + hex + SKU colour code) from a
+  // palette entry. `source` records who chose it — 'manual' can never be
+  // overwritten by a later automatic result.
+  const applyPaletteColor = useCallback(
+    (c: { name: string; code: string; hex: string }, source: 'manual' | 'automatic') => {
+      setColorName(c.name);
+      setColorHexState(c.hex);
+      setColorCode(c.code.toUpperCase()); // feeds the existing STYLE-COLOR SKU effect
+      setColorSource(source);
+    },
+    [],
+  );
+
+  const runColorDetection = useCallback(
+    async (file: Blob, opts: { force?: boolean; silent?: boolean } = {}) => {
+      try {
+        const fingerprint = await fingerprintBlob(file);
+        if (!opts.force && fingerprint === detectedFingerprintRef.current) return;
+        detectedFingerprintRef.current = fingerprint;
+        setColorDetecting(true);
+        setColorDetectError(null);
+        const suggestion = await detectProductColor(file);
+        setColorSuggestion(suggestion);
+      } catch {
+        detectedFingerprintRef.current = null; // allow a retry
+        setColorSuggestion(null);
+        if (!opts.silent) setColorDetectError(COLOR_DETECTION_FAILURE_MESSAGE);
+      } finally {
+        setColorDetecting(false);
+      }
+    },
+    [],
+  );
+
+  // Explicit "Detect Color" button — re-fetches the current primary image
+  // and forces a fresh analysis.
+  const detectColorFromPrimaryImage = useCallback(async () => {
+    const primary = productForm.images[0];
+    if (!primary) return;
+    try {
+      setColorDetecting(true);
+      setColorDetectError(null);
+      const res = await fetch(primary);
+      const blob = await res.blob();
+      await runColorDetection(blob, { force: true });
+    } catch {
+      setColorDetecting(false);
+      setColorDetectError(COLOR_DETECTION_FAILURE_MESSAGE);
+    }
+  }, [productForm.images, runColorDetection]);
+
   useEffect(() => {
     const s = styleCode.trim().toUpperCase();
     const c = colorCode.trim().toUpperCase();
@@ -283,6 +359,10 @@ function AdminDashboardContent() {
         triggerFeedback('success', publicUrl.startsWith('data:')
           ? 'Image processed as base64 fallback (Supabase not connected).'
           : 'Image uploaded to Supabase successfully.');
+        // Primary (slot 0) image changed → suggest a colour from it. Fire
+        // and forget: detection never blocks the upload and never writes
+        // the colour field itself.
+        if (slotIndex === 0) void runColorDetection(compressedFile);
         return publicUrl;
       }
       triggerFeedback('error', 'Image upload failed. Fallback did not resolve.');
@@ -509,6 +589,8 @@ function AdminDashboardContent() {
     setSelectedSizes(['S', 'M', 'L', 'XL']);
     setColorName('');
     setColorHexState('#A0AAB2');
+    setColorSource('');
+    resetColorDetection();
     setGarmentGroup('Tops');
     setShowSizeChart(false);
     setProductForm({
@@ -551,6 +633,10 @@ function AdminDashboardContent() {
     const hexPart = rawColor.split('|')[1] || getColorHex(namePart);
     setColorName(namePart);
     setColorHexState(hexPart);
+    // An existing product's saved colour is authoritative — an automatic
+    // suggestion must not silently replace it.
+    setColorSource('manual');
+    resetColorDetection();
 
     setProductForm({
       title: prod.title,
@@ -2052,13 +2138,44 @@ function AdminDashboardContent() {
 
                 {/* Color Name and Color Hex */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">GARMENT COLOR</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] font-label-caps font-semibold text-on-surface-variant block">GARMENT COLOR</label>
+                    <button
+                      type="button"
+                      onClick={() => void detectColorFromPrimaryImage()}
+                      disabled={!productForm.images[0] || colorDetecting}
+                      className="text-[10px] font-label-caps tracking-wider font-semibold text-primary hover:text-gold-leaf disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                      title={productForm.images[0] ? 'Analyse the main image and suggest a colour' : 'Upload a main image first'}
+                    >
+                      <span className={`material-symbols-outlined text-[14px] ${colorDetecting ? 'animate-spin' : ''}`}>
+                        {colorDetecting ? 'progress_activity' : 'colorize'}
+                      </span>
+                      {colorDetecting ? 'Detecting…' : 'Detect Color'}
+                    </button>
+                  </div>
+
+                  {/* Quick-pick from the centralised palette — a manual choice
+                      that also fills the SKU colour code. */}
+                  <select
+                    value={getColorByName(colorName)?.code || ''}
+                    onChange={(e) => {
+                      const picked = PRODUCT_COLORS.find(c => c.code === e.target.value);
+                      if (picked) applyPaletteColor(picked, 'manual');
+                    }}
+                    className="w-full bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2 px-3.5 text-[12px] outline-none"
+                  >
+                    <option value="">Choose from palette… (or type a custom colour below)</option>
+                    {PRODUCT_COLORS.map(c => (
+                      <option key={c.code} value={c.code}>{c.name} · {c.code}</option>
+                    ))}
+                  </select>
+
                   <div className="flex gap-2">
                     <input
                       type="text"
                       required
                       value={colorName}
-                      onChange={(e) => setColorName(e.target.value)}
+                      onChange={(e) => { setColorName(e.target.value); setColorSource('manual'); }}
                       placeholder="e.g. Sage Mint"
                       className="flex-1 bg-surface-dim border border-on-surface/15 focus:border-gold-leaf focus:ring-0 rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
                     />
@@ -2066,19 +2183,92 @@ function AdminDashboardContent() {
                       <input
                         type="color"
                         value={colorHex}
-                        onChange={(e) => setColorHexState(e.target.value)}
+                        onChange={(e) => { setColorHexState(e.target.value); setColorSource('manual'); }}
                         className="w-7 h-7 border-0 cursor-pointer bg-transparent rounded-sm"
                       />
                       <input
                         type="text"
                         value={colorHex}
-                        onChange={(e) => setColorHexState(e.target.value)}
+                        onChange={(e) => { setColorHexState(e.target.value); setColorSource('manual'); }}
                         placeholder="#A0AAB2"
                         maxLength={7}
                         className="w-16 bg-transparent border-0 text-[11px] font-mono text-zinc-600 outline-none p-0"
                       />
                     </div>
                   </div>
+
+                  {/* Automatic detection — suggestion only, applied on click */}
+                  {colorDetectError && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-3 py-2">
+                      {colorDetectError}
+                    </p>
+                  )}
+
+                  {colorSuggestion && (() => {
+                    const pct = Math.round(colorSuggestion.confidence * 100);
+                    const levelLabel = colorSuggestion.level.charAt(0).toUpperCase() + colorSuggestion.level.slice(1);
+                    const applied =
+                      colorSource === 'automatic' &&
+                      getColorByName(colorName)?.code === colorSuggestion.code;
+                    const levelClass =
+                      colorSuggestion.level === 'high'
+                        ? 'text-emerald-700'
+                        : colorSuggestion.level === 'medium'
+                        ? 'text-amber-700'
+                        : 'text-red-700';
+                    return (
+                      <div className="p-3 bg-[#F9F6F0] border border-[#C5A059]/25 rounded-sm space-y-2">
+                        <p className="font-bold uppercase tracking-wider text-[9px] text-[#C5A059]">
+                          Automatic colour detection
+                        </p>
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className="w-8 h-8 rounded-sm border border-black/10 shrink-0"
+                            style={{ backgroundColor: colorSuggestion.hex }}
+                          />
+                          <div className="min-w-0 text-[12px] leading-tight text-zinc-700">
+                            <div className="font-semibold text-zinc-900">
+                              {colorSuggestion.name} <span className="font-mono text-zinc-500">({colorSuggestion.code})</span>
+                            </div>
+                            <div>
+                              Confidence: <span className={`font-semibold ${levelClass}`}>{pct}% · {levelLabel}</span>
+                            </div>
+                          </div>
+                          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                            {applied ? (
+                              <span className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span> Applied
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => applyPaletteColor(colorSuggestion, 'automatic')}
+                                className="bg-primary text-white px-3 py-1.5 text-[10px] font-label-caps tracking-wider font-semibold hover:bg-gold-leaf hover:text-obsidian-charcoal transition-all rounded-sm"
+                              >
+                                Use Suggestion
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setColorSuggestion(null)}
+                              className="material-symbols-outlined text-[16px] text-zinc-400 hover:text-zinc-600"
+                              title="Dismiss suggestion"
+                            >
+                              close
+                            </button>
+                          </div>
+                        </div>
+                        {colorSuggestion.needsVerification && (
+                          <p className="text-[11px] text-amber-700">
+                            {colorSuggestion.message || 'Please verify the detected color.'}
+                            {colorSuggestion.alternatives.length > 0 && (
+                              <> Also possible: {colorSuggestion.alternatives.map(a => `${a.name} (${Math.round(a.share * 100)}%)`).join(', ')}.</>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Sizes — multi-select combobox, plus a free-text field for a one-off custom size */}
