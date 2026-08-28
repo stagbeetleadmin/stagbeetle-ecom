@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useAdminTab } from '@/components/admin/AdminTabContext';
 import { useAuth } from '@/context/AuthContext';
 import {
   Product, Coupon, Order, InventoryRecord, ProductStockSummary, SizeChart,
@@ -89,17 +89,11 @@ function StockPill({ summary }: { summary?: ProductStockSummary }) {
 }
 
 function AdminDashboardContent() {
-  const searchParams = useSearchParams();
-  const tabParam = searchParams.get('tab');
-
-  // Navigation tabs: 'products' | 'coupons' | 'orders' | 'analytics'
-  const [activeTab, setActiveTab] = useState<'products' | 'coupons' | 'orders' | 'analytics'>('analytics');
-
-  useEffect(() => {
-    if (tabParam && ['products', 'coupons', 'orders', 'analytics'].includes(tabParam)) {
-      setActiveTab(tabParam as any);
-    }
-  }, [tabParam]);
+  // Which dashboard view is showing — shared client state with the sidebar
+  // (AdminTabContext), NOT driven by the URL/router. /admin is statically
+  // prerendered, so a query-only router.push() to it was a silent no-op and
+  // tab clicks looked frozen. The context syncs the URL via history.replaceState.
+  const { activeTab } = useAdminTab();
 
   // Database States
   const [products, setProducts] = useState<Product[]>([]);

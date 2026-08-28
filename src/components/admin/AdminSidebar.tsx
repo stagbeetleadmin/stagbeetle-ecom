@@ -2,9 +2,9 @@
 
 import React, { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useAdminTab, type DashboardTab } from '@/components/admin/AdminTabContext';
 
-type DashboardTab = 'analytics' | 'products' | 'coupons' | 'orders';
 const DASHBOARD_TABS: { tab: DashboardTab; label: string; icon: string; tooltip: string }[] = [
   { tab: 'analytics', label: 'ATELIER ANALYTICS', icon: 'query_stats', tooltip: 'Sales, revenue, and best-selling garments at a glance' },
   { tab: 'products', label: 'GARMENT CATALOG', icon: 'apparel', tooltip: 'Add, edit, and manage every product in the store' },
@@ -34,7 +34,7 @@ const PAGE_LINKS = [
 function AdminSidebarInner() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { activeTab, setActiveTab } = useAdminTab();
 
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -49,10 +49,6 @@ function AdminSidebarInner() {
   };
 
   const isDashboardHome = pathname === '/admin';
-  const tabParam = searchParams.get('tab');
-  const activeTab: DashboardTab = isDashboardHome && tabParam && DASHBOARD_TABS.some(t => t.tab === tabParam)
-    ? (tabParam as DashboardTab)
-    : 'analytics';
 
   const itemClass = (active: boolean) =>
     `w-full flex items-center gap-3 rounded-sm text-[12px] font-label-caps tracking-wider transition-all font-semibold ${
@@ -84,7 +80,15 @@ function AdminSidebarInner() {
         <button
           key={tab}
           type="button"
-          onClick={() => router.push(`/admin?tab=${tab}`)}
+          onClick={() => {
+            // Tab switch is pure client state (see AdminTabContext). Only when
+            // we're on a *different* /admin route do we actually navigate back
+            // to the dashboard; setActiveTab handles the URL sync otherwise.
+            setActiveTab(tab);
+            if (pathname !== '/admin') {
+              router.push(tab === 'analytics' ? '/admin' : `/admin?tab=${tab}`);
+            }
+          }}
           title={collapsed ? `${label} — ${tooltip}` : tooltip}
           className={itemClass(isDashboardHome && activeTab === tab)}
         >
