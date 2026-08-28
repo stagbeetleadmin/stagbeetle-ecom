@@ -83,6 +83,15 @@ async function fetchProfile(id: string): Promise<ProfileFetchResult> {
   }
 }
 
+// Several triggers can ask to resolve the same user's profile within one tick
+// of a page load — bootstrap's getSession() path, onAuthStateChange's
+// SIGNED_IN, and the TOKEN_REFRESHED that often lands right behind it — and
+// each one used to run its own `profiles` select (with a retry) plus a
+// possible upsertProfile. Collapse concurrent calls for the same id onto one
+// shared promise; the map self-clears once it settles so a genuine later
+// refresh still re-resolves.
+const profileResolveInFlight = new Map<string, Promise<UserProfile>>();
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdminState] = useState(false);
@@ -91,12 +100,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [onSuccessCallback, setOnSuccessCallback] = useState<(() => void) | null>(null);
 
   // ── Resolve and persist a profile for a logged-in Supabase user ────────────
-  const resolveAndSetProfile = useCallback(async (supabaseUser: {
+  const resolveAndSetProfile = useCallback((supabaseUser: {
     id: string;
     email?: string | null;
     phone?: string | null;
     user_metadata?: Record<string, string>;
-  }) => {
+  }): Promise<UserProfile> => {
+    const inFlight = profileResolveInFlight.get(supabaseUser.id);
+    if (inFlight) {
+      console.log(`[Auth] resolveAndSetProfile: already resolving ${supabaseUser.email || supabaseUser.id} — reusing the in-flight result`);
+      return inFlight;
+    }
+    const run = (async (): Promise<UserProfile> => {
     // Admin access is just this one check — any successful login to this
     // email is granted admin immediately, no step-up.
     const isAdminEmail = supabaseUser.email?.toLowerCase() === 'stagbeetlebilling@gmail.com';
@@ -163,6 +178,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUser(profile);
     return profile;
+    })();
+    profileResolveInFlight.set(supabaseUser.id, run);
+    run.finally(() => profileResolveInFlight.delete(supabaseUser.id)).catch(() => {});
+    return run;
   }, []);
 
   // ── Bootstrap: check existing session on mount ─────────────────────────────

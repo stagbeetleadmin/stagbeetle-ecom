@@ -338,6 +338,51 @@ function ProductCard({
   );
 }
 
+// ─── Numbered pagination ─────────────────────────────────────────────────────
+function Pagination({ page, totalPages, onChange }: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  // 1 … (page-1) [page] (page+1) … last  — collapse the runs in between.
+  const items: (number | 'gap')[] = [1];
+  if (page > 3) items.push('gap');
+  for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) items.push(p);
+  if (page < totalPages - 2) items.push('gap');
+  items.push(totalPages);
+
+  const arrowCls =
+    'px-3 h-9 border border-gray-200 text-[11px] font-bold tracking-widest uppercase text-gray-700 ' +
+    'hover:border-gray-900 disabled:opacity-30 disabled:hover:border-gray-200 transition-colors';
+
+  return (
+    <nav className="flex items-center justify-center gap-1.5 mt-14 flex-wrap" aria-label="Catalog pages">
+      <button onClick={() => onChange(page - 1)} disabled={page === 1} className={arrowCls}>Prev</button>
+      {items.map((it, i) =>
+        it === 'gap' ? (
+          <span key={`gap-${i}`} className="px-2 text-gray-400 text-[12px] select-none">…</span>
+        ) : (
+          <button
+            key={it}
+            onClick={() => onChange(it)}
+            aria-current={it === page ? 'page' : undefined}
+            className={`min-w-9 h-9 px-2 text-[12px] font-bold border transition-colors ${
+              it === page
+                ? 'bg-black text-white border-black'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'
+            }`}
+          >
+            {it}
+          </button>
+        )
+      )}
+      <button onClick={() => onChange(page + 1)} disabled={page === totalPages} className={arrowCls}>Next</button>
+    </nav>
+  );
+}
+
 // ─── Horizontal Product Carousel ─────────────────────────────────────────────
 function ProductCarousel({ title, products, onQuickAdd }: {
   title: string;
@@ -567,13 +612,7 @@ function StorefrontContent() {
   // marketing sections, which previously felt like an unexpected navigation.
   const isFiltering = searchParams.has('category') || !!subcategoryParam || !!debouncedSearchTerm;
 
-  // Infinite Scroll Logic
-  const ITEMS_PER_PAGE = 8;
-  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-
-  // Reset pagination count on search or filter change
-  // Group products by base SKU initials
+  // Group colour variants of one cut (shared base SKU) into a single card.
   const groupedProducts = React.useMemo(() => {
     const groups: Record<string, Product[]> = {};
     
@@ -599,32 +638,36 @@ function StorefrontContent() {
     });
   }, [filteredProducts]);
 
+  // ─── Numbered pagination ───────────────────────────────────────────────
+  // The full catalog is already in memory (getProducts() is cached, and
+  // re-fetched on any add/edit/delete via subscribeToProductChanges below),
+  // so paging is a pure client-side slice: it keeps the grid to PER_PAGE
+  // cards and cuts render/DOM cost on a large catalog with zero extra
+  // network calls. Search + filters still run over the whole list.
+  const PER_PAGE = 20;
+  const [page, setPage] = useState(1);
+  const gridTopRef = useRef<HTMLDivElement>(null);
+  const totalPages = Math.max(1, Math.ceil(groupedProducts.length / PER_PAGE));
+  // `page` can briefly point past the end after the list shrinks (a delete, or
+  // an admin edit that arrived over realtime) — clamp at read time so no extra
+  // effect is needed just to correct the state.
+  const currentPage = Math.min(page, totalPages);
+
+  // Back to page 1 whenever the result set changes under us — a filter/search
+  // switch (same reset the old infinite-scroll count did).
   useEffect(() => {
-    setVisibleCount(ITEMS_PER_PAGE);
+    setPage(1);
   }, [activeCategory, subcategoryParam, debouncedSearchTerm]);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, groupedProducts.length));
-      }
-    }, { threshold: 0.1 });
-
-    const currentSentinel = sentinelRef.current;
-    if (currentSentinel) {
-      observer.observe(currentSentinel);
-    }
-
-    return () => {
-      if (currentSentinel) {
-        observer.unobserve(currentSentinel);
-      }
-    };
-  }, [groupedProducts.length]);
+  const goToPage = useCallback((p: number) => {
+    setPage(Math.min(Math.max(1, p), totalPages));
+    gridTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [totalPages]);
 
   const displayedGroups = React.useMemo(() => {
-    return groupedProducts.slice(0, visibleCount);
-  }, [groupedProducts, visibleCount]);
+    const start = (currentPage - 1) * PER_PAGE;
+    return groupedProducts.slice(start, start + PER_PAGE);
+  }, [groupedProducts, currentPage]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white">
@@ -718,7 +761,9 @@ function StorefrontContent() {
             <h2 className="text-[16px] font-bold text-gray-900 tracking-[0.25em] uppercase">
               {debouncedSearchTerm ? 'Search Results' : subcategoryParam ? subcategoryParam : 'New and Popular'}
             </h2>
-            <p className="text-[12px] text-gray-400 mt-2">{filteredProducts.length} items available</p>
+            <p className="text-[12px] text-gray-400 mt-2">
+              {filteredProducts.length} items available{totalPages > 1 ? ` · page ${currentPage} of ${totalPages}` : ''}
+            </p>
 
             {/* Filter Tabs — ALL, then every individual garment type */}
             <div className="flex flex-wrap justify-center gap-2 mt-6">
@@ -760,6 +805,9 @@ function StorefrontContent() {
               )}
             </div>
           </div>
+
+          {/* Anchor for "scroll to top of grid" on page change */}
+          <div ref={gridTopRef} className="scroll-mt-28" />
 
           {/* Product Grid */}
           {isLoading ? (
@@ -810,11 +858,9 @@ function StorefrontContent() {
             </div>
           )}
 
-          {/* Infinite Scroll Sentinel */}
-          {visibleCount < groupedProducts.length && (
-            <div ref={sentinelRef} className="h-16 w-full flex items-center justify-center mt-12">
-              <div className="w-8 h-8 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
-            </div>
+          {/* Numbered pagination */}
+          {!isLoading && !loadError && (
+            <Pagination page={currentPage} totalPages={totalPages} onChange={goToPage} />
           )}
         </section>
 

@@ -417,11 +417,10 @@ function AdminDashboardContent() {
   // fall back on at all — doesn't wipe out the others that did succeed.
   const loadData = async () => {
     setLoading(true);
-    const [productsResult, couponsResult, ordersResult, inventoryResult, plusSizesResult] = await Promise.allSettled([
+    const [productsResult, couponsResult, ordersResult, plusSizesResult] = await Promise.allSettled([
       getProducts(),
       getCoupons(),
       getOrders(),
-      getInventorySummaryForProducts(),
       getPlusSizesConfig(),
     ]);
     if (productsResult.status === 'fulfilled') setProducts(productsResult.value);
@@ -430,11 +429,19 @@ function AdminDashboardContent() {
     else console.error('[Admin] Failed to load coupons:', couponsResult.reason);
     if (ordersResult.status === 'fulfilled') setOrders(ordersResult.value);
     else console.error('[Admin] Failed to load orders:', ordersResult.reason);
-    if (inventoryResult.status === 'fulfilled') setInventorySummary(inventoryResult.value);
-    else console.error('[Admin] Failed to load inventory summary:', inventoryResult.reason);
     if (plusSizesResult.status === 'fulfilled') setPlusSizes(plusSizesResult.value);
     else console.error('[Admin] Failed to load plus-size config:', plusSizesResult.reason);
     setLoading(false);
+
+    // Stock summary is the slowest read in the admin — two chained queries,
+    // each retried once — and it feeds only the one Stock column. Leaving it
+    // in the blocking batch above made the entire grid sit behind a spinner
+    // for its ~10s+ worst case. Fetch it after the grid is already
+    // interactive; the column fills in when it lands (StockPill renders fine
+    // with an undefined summary in the meantime).
+    getInventorySummaryForProducts()
+      .then(setInventorySummary)
+      .catch(e => console.error('[Admin] Failed to load inventory summary:', e?.message || e));
   };
 
   useEffect(() => {
@@ -687,14 +694,22 @@ function AdminDashboardContent() {
 
     try {
       if (editingProduct) {
-        await updateProduct(editingProduct.id, productPayload);
+        const updated = await updateProduct(editingProduct.id, productPayload);
+        if (updated) setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+        else loadData(); // unexpected: no saved row came back — resync the hard way
         triggerFeedback('success', `Product "${productForm.title}" updated successfully!`);
       } else {
-        await addProduct(productPayload);
+        const created = await addProduct(productPayload);
+        setProducts(prev => [...prev, created]);
         triggerFeedback('success', `Product "${productForm.title}" added to catalog!`);
       }
       setShowProductModal(false);
-      loadData();
+      // updateProduct/addProduct return the authoritative row and keep the
+      // catalog caches warm, so the grid is already correct — no need to
+      // re-run the whole five-call loadData() (which used to flash the
+      // full-page spinner and refetch coupons/orders/stock too). Just nudge
+      // the stock summary, since a save may have created new variants.
+      getInventorySummaryForProducts().then(setInventorySummary).catch(() => {});
     } catch (err) {
       triggerFeedback('error', 'Failed to save product details.');
     }
