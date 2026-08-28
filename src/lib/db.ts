@@ -418,9 +418,12 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// 8s (not 4s): a genuinely slow-but-working connection should still get a
-// chance to finish rather than being treated the same as a dead connection.
-export const supabaseTimeout = (promise: any, ms = 8000): Promise<any> => {
+// 3.5s: long enough for a genuinely slow-but-working query to finish, short
+// enough that a dead/hung connection surfaces fast instead of freezing the
+// UI. This used to be 8s, which — combined with withOneRetry below — meant a
+// single stalled call could block a spinner for ~16s. Callers that need a
+// longer budget (uploads, bulk writes) pass an explicit `ms`.
+export const supabaseTimeout = (promise: any, ms = 3500): Promise<any> => {
   return Promise.race([
     Promise.resolve(promise),
     new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), ms))
@@ -436,7 +439,7 @@ export const withOneRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
   try {
     return await fn();
   } catch (e) {
-    await new Promise(res => setTimeout(res, 600));
+    await new Promise(res => setTimeout(res, 300));
     return fn();
   }
 };
@@ -704,9 +707,12 @@ const fetchAndCacheProducts = (): Promise<Product[]> => {
   const fetchPromise = (async (): Promise<Product[]> => {
     try {
       console.log("[Atelier DB] Fetching products from Supabase...");
-      const { data, error } = await withOneRetry(() =>
-        supabaseTimeout(supabase!.from('products').select('*'))
-      );
+      // No withOneRetry here: this is the storefront's first-paint read, the
+      // single hottest path in the app. A retry on top of the timeout just
+      // doubles worst-case wait (spinner up to ~16s before). One attempt,
+      // bounded by supabaseTimeout; the persisted-cache paint + 60s TTL +
+      // realtime nudge already cover a transient miss.
+      const { data, error } = await supabaseTimeout(supabase!.from('products').select('*'));
       if (error) throw error;
       console.log(`[Atelier DB] Successfully loaded products from Supabase (count: ${data.length}).`);
       productsCache = { data: data as Product[], expiresAt: Date.now() + PRODUCTS_CACHE_TTL_MS };
@@ -791,8 +797,12 @@ export const getProductById = async (id: string): Promise<Product | null> => {
 
   try {
     console.log(`[Atelier DB] Fetching product ${id} from Supabase...`);
-    const { data, error } = await withOneRetry(() =>
-      supabaseTimeout(supabase.from('products').select('*').eq('id', id).single())
+    // Single attempt (no withOneRetry): the product detail page's server
+    // render awaits this before returning any HTML, so a doubled timeout
+    // budget here directly becomes TTFB. The per-id + full-catalog caches
+    // above absorb transient misses on the next hit.
+    const { data, error } = await supabaseTimeout(
+      supabase.from('products').select('*').eq('id', id).single()
     );
     if (error) {
       // PGRST116 = "no rows returned" — a legitimate answer (the product
