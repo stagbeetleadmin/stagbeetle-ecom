@@ -416,7 +416,21 @@ const supabaseAnonKey =
 
 const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // GoTrue's default cross-tab lock (the Web Locks API) serializes every
+        // getSession() / token-refresh call on a single lock name. On a slow
+        // link one in-flight refresh holds that lock for the whole length of
+        // its network call — and because supabaseTimeout() only aborts the
+        // *caller*, never the underlying lock wait, withOneRetry then stacks
+        // further getSession() calls behind the same lock. One slow refresh
+        // becomes a pile-up that freezes auth (and, through AuthContext, admin
+        // gating) for seconds. Run auth work immediately instead: a cross-tab
+        // refresh race is harmless here — last write wins, and every read is
+        // independently re-authorized by RLS regardless.
+        lock: (_name, _acquireTimeout, fn) => fn(),
+      },
+    })
   : null;
 
 // 3.5s: long enough for a genuinely slow-but-working query to finish, short
@@ -551,6 +565,34 @@ const persistProductsCache = (data: Product[]) => {
   } catch {
     // Storage full/unavailable (private browsing, quota, etc.) — non-critical, just skip persisting.
   }
+};
+
+// Keep the catalog caches warm across a write instead of nuking them. After a
+// successful add/update we already hold the authoritative saved row, so fold it
+// straight into the in-memory list + per-id caches (and the persisted snapshot)
+// rather than forcing the very next getProducts() — which the admin fires the
+// instant a save returns — into a full cross-region refetch. A no-op on the
+// list cache when it isn't populated yet (nothing to fold into); the next fetch
+// builds it fresh.
+const foldProductIntoCache = (p: Product) => {
+  const expiresAt = Date.now() + PRODUCTS_CACHE_TTL_MS;
+  if (productsCache) {
+    const i = productsCache.data.findIndex(x => x.id === p.id);
+    productsCache.data = i >= 0
+      ? productsCache.data.map(x => (x.id === p.id ? p : x))
+      : [...productsCache.data, p];
+    productsCache.expiresAt = expiresAt;
+    persistProductsCache(productsCache.data);
+  }
+  productByIdCache.set(p.id, { data: p, expiresAt });
+};
+
+const dropProductFromCache = (id: string) => {
+  if (productsCache) {
+    productsCache.data = productsCache.data.filter(x => x.id !== id);
+    persistProductsCache(productsCache.data);
+  }
+  productByIdCache.delete(id);
 };
 
 // =========================================================================
@@ -858,8 +900,6 @@ async function syncSizeChartAcrossStyle(sku: string | undefined, chart: SizeChar
 }
 
 export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product> => {
-  invalidateProductsCache();
-  broadcastProductsChanged();
   const newProduct: Product = {
     ...product,
     id: `prod_${Math.random().toString(36).substr(2, 9)}`,
@@ -871,7 +911,12 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
       const { data, error } = await supabase.from('products').insert([newProduct]).select().single();
       if (!error && data) {
         await ensureVariantsForProduct(data.id, data.sku, data.sizes || []);
+        // syncSizeChartAcrossStyle invalidates the cache itself only when it
+        // actually rewrites sibling rows — let it, then fold our own saved row
+        // back in so the admin's immediate re-list stays a cache hit.
         await syncSizeChartAcrossStyle(data.sku, data.size_chart, data.id);
+        foldProductIntoCache(data as Product);
+        broadcastProductsChanged(); // after the write commits, so other tabs refetch real data
         return data as Product;
       }
     } catch (e) {
@@ -879,14 +924,14 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
     }
   }
 
+  invalidateProductsCache();
+  broadcastProductsChanged();
   const products = getLocalProducts();
   products.push(newProduct);
   setLocalProducts(products);
   return newProduct;
 };
 export const updateProduct = async (id: string, updatedFields: Partial<Product>): Promise<Product | null> => {
-  invalidateProductsCache();
-  broadcastProductsChanged();
   let finalFields = { ...updatedFields };
 
   if (isSupabaseConfigured && supabase) {
@@ -964,6 +1009,8 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
       if (!error && data) {
         await ensureVariantsForProduct(data.id, data.sku, data.sizes || []);
         await syncSizeChartAcrossStyle(data.sku, data.size_chart, data.id);
+        foldProductIntoCache(data as Product);
+        broadcastProductsChanged(); // after the write commits, so other tabs refetch real data
         return data as Product;
       }
       if (error) console.warn("Supabase updateProduct returned error:", error.message);
@@ -972,10 +1019,12 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
     }
   }
 
+  invalidateProductsCache();
+  broadcastProductsChanged();
   const products = getLocalProducts();
   const index = products.findIndex(p => p.id === id);
   if (index === -1) return null;
-  
+
   const updatedProduct = { ...products[index], ...finalFields };
   products[index] = updatedProduct;
   setLocalProducts(products);
@@ -983,8 +1032,6 @@ export const updateProduct = async (id: string, updatedFields: Partial<Product>)
 };
 
 export const deleteProduct = async (id: string): Promise<boolean> => {
-  invalidateProductsCache();
-  broadcastProductsChanged();
   let imagesToDelete: string[] = [];
 
   // 1. Fetch product first to find images to delete
@@ -1039,16 +1086,22 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
   if (isSupabaseConfigured && supabase) {
     try {
       const { error } = await supabase.from('products').delete().eq('id', id);
-      if (!error) return true;
+      if (!error) {
+        dropProductFromCache(id);
+        broadcastProductsChanged(); // after the write commits, so other tabs refetch real data
+        return true;
+      }
     } catch (e) {
       console.warn(`Supabase deleteProduct failed for id ${id}, falling back to mock:`, e);
     }
   }
 
+  invalidateProductsCache();
+  broadcastProductsChanged();
   const products = getLocalProducts();
   const filtered = products.filter(p => p.id !== id);
   if (products.length === filtered.length) return false;
-  
+
   setLocalProducts(filtered);
   return true;
 };
