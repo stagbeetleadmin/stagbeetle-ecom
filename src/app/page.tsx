@@ -277,16 +277,17 @@ function ProductCard({
         <h3 className="text-[13px] font-semibold text-gray-900 leading-snug truncate pr-2">{activeProduct.title}</h3>
         <PriceDisplay price={activeProduct.price} mrp={activeProduct.mrp} size="sm" className="mt-0.5" />
         <p className="text-[11px] text-gray-400 mt-0.5 truncate">{activeProduct.material}</p>
-        
-        {/* Color dots */}
+
+        {/* Color swatches — square with slightly rounded corners, sized like a
+            checkbox so they're easy to see and tap on mobile, not bare dots. */}
         {allProductsInGroup.length > 1 ? (
           <div className="flex flex-col gap-1.5 mt-2">
-            <div className="flex flex-wrap gap-1.5 items-center">
+            <div className="flex flex-wrap gap-2 items-center">
               {allProductsInGroup.map((p) => {
                 const color = p.colors[0] || 'Default';
                 const colorHex = getColorHex(color);
                 const isActive = activeProduct.id === p.id;
-                
+
                 return (
                   <button
                     key={p.id}
@@ -299,13 +300,13 @@ function ProductCard({
                     onMouseEnter={() => {
                       setActiveProduct(p);
                     }}
-                    className={`w-3.5 h-3.5 rounded-full border transition-all flex items-center justify-center ${
+                    className={`w-5 h-5 rounded-[4px] border transition-all flex items-center justify-center ${
                       isActive ? 'border-[#C5A059] scale-110 shadow-sm ring-1 ring-[#C5A059]' : 'border-gray-200 hover:scale-105'
                     }`}
                     style={{ backgroundColor: colorHex }}
                   >
                     {colorHex.toLowerCase() === '#ffffff' && (
-                      <span className="w-1 h-1 rounded-full bg-gray-200" />
+                      <span className="w-1.5 h-1.5 rounded-[2px] bg-gray-200" />
                     )}
                   </button>
                 );
@@ -317,15 +318,15 @@ function ProductCard({
           </div>
         ) : (
           initialProduct.colors && initialProduct.colors.length > 0 && (
-            <div className="flex gap-1 mt-2">
+            <div className="flex gap-2 mt-2 items-center">
               {initialProduct.colors.slice(0, 3).map((c, i) => {
                 const colorHex = getColorHex(c);
                 return (
-                  <span 
-                    key={i} 
-                    className="w-3 h-3 rounded-full border border-gray-200" 
-                    style={{ backgroundColor: colorHex }} 
-                    title={getColorName(c)} 
+                  <span
+                    key={i}
+                    className="w-5 h-5 rounded-[4px] border border-gray-200"
+                    style={{ backgroundColor: colorHex }}
+                    title={getColorName(c)}
                   />
                 );
               })}
