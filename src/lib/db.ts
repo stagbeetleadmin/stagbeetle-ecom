@@ -2342,12 +2342,19 @@ const fetchAndCacheMembersPage1 = (pageSize: number): Promise<MembersPage> => {
 // Admin Members list page — page is 1-indexed. Optional `query` filters by
 // name/email/phone server-side (same fields searchMembers checks) so
 // pagination and search compose instead of being two separate code paths.
-export const getMembersPage = async (page: number, pageSize = 100, query?: string): Promise<MembersPage> => {
+// Optional `month` (1-12) filters to members whose birthday OR anniversary
+// falls in that calendar month, via the generated birthday_month/
+// anniversary_month columns (20260903000000_add_member_month_columns.sql) —
+// a member with neither date set simply never matches, no special-casing
+// needed. Composes with `query`: PostgREST ANDs separate .or() calls
+// together, so "search AND month" is exactly what results.
+export const getMembersPage = async (page: number, pageSize = 100, query?: string, month?: number): Promise<MembersPage> => {
   if (!isSupabaseConfigured || !supabase) return { members: [], total: 0 };
 
-  // Only the plain "page 1, no search" view is cached/instant-painted —
-  // any other page or an active search always goes live below.
-  if (page === 1 && !query?.trim()) {
+  // Only the plain "page 1, no search, no month filter" view is
+  // cached/instant-painted — any other page, an active search, or an
+  // active month filter always goes live below.
+  if (page === 1 && !query?.trim() && !month) {
     if (membersPage1Cache && membersPage1Cache.expiresAt > Date.now()) {
       return membersPage1Cache.data;
     }
@@ -2368,12 +2375,13 @@ export const getMembersPage = async (page: number, pageSize = 100, query?: strin
     let builder = supabase.from('members').select('*', { count: 'exact' });
     const q = query?.trim();
     if (q) builder = builder.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+    if (month) builder = builder.or(`birthday_month.eq.${month},anniversary_month.eq.${month}`);
     const { data, error, count } = await withOneRetry(() =>
       supabaseTimeout(builder.order('created_at', { ascending: false }).range(from, to))
     );
     if (error) throw error;
-    if (typeof count === 'number') membersCountCache = count;
-    return { members: (data || []) as Member[], total: count ?? membersCountCache ?? 0 };
+    if (typeof count === 'number' && !month) membersCountCache = count; // a month-filtered count isn't the store-wide total, don't let it clobber that cache
+    return { members: (data || []) as Member[], total: count ?? 0 };
   } catch (e: any) {
     console.warn('[Atelier DB] getMembersPage failed:', e.message || e);
     // No stale page of *rows* to fall back to (which page was requested

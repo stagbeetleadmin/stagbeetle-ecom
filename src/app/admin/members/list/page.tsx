@@ -7,6 +7,11 @@ import { Member, MemberDiscountResult, getMembersPage, deleteMember, getMembersB
 
 const PAGE_SIZE = 100;
 
+const MONTH_OPTIONS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 const fmtDate = (iso?: string) => {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
@@ -26,6 +31,11 @@ export default function AdminMembersListPage() {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
+  // 0 = "All Months". Filters to members whose birthday OR anniversary falls
+  // in the selected month (src/lib/db.ts getMembersPage `month` param, via
+  // the generated birthday_month/anniversary_month columns) — composes with
+  // the search box above rather than replacing it.
+  const [monthFilter, setMonthFilter] = useState(0);
   const [members, setMembers] = useState<Member[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,8 +47,8 @@ export default function AdminMembersListPage() {
   const [discountStatus, setDiscountStatus] = useState<Record<string, MemberDiscountResult>>({});
   const [marking, setMarking] = useState<string | null>(null);
 
-  const load = useCallback((targetPage: number, q: string) => {
-    getMembersPage(targetPage, PAGE_SIZE, q || undefined).then(res => {
+  const load = useCallback((targetPage: number, q: string, month: number) => {
+    getMembersPage(targetPage, PAGE_SIZE, q || undefined, month || undefined).then(res => {
       setMembers(res.members);
       setTotal(res.total);
       getMembersBulkDiscountStatus(res.members.map(m => m.id)).then(setDiscountStatus);
@@ -61,13 +71,20 @@ export default function AdminMembersListPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    load(page, activeQuery);
-  }, [isAdmin, page, activeQuery, load]);
+    load(page, activeQuery, monthFilter);
+  }, [isAdmin, page, activeQuery, monthFilter, load]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
     setActiveQuery(query.trim());
+  };
+
+  // Dynamic, no page reload — same pattern as the search box: change state,
+  // reset to page 1, the effect above re-fetches. "All Months" is value "0".
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPage(1);
+    setMonthFilter(Number(e.target.value));
   };
 
   const handleDelete = async (member: Member) => {
@@ -116,36 +133,54 @@ export default function AdminMembersListPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSearch} className="flex gap-2">
+          <form onSubmit={handleSearch} className="flex flex-wrap gap-2">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Filter by name, email, or phone…"
-              className="flex-1 bg-surface-dim border border-on-surface/15 focus:border-gold-leaf rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+              className="flex-1 min-w-[200px] bg-surface-dim border border-on-surface/15 focus:border-gold-leaf rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
             />
+            <select
+              value={monthFilter}
+              onChange={handleMonthChange}
+              aria-label="Filter by birthday or anniversary month"
+              className="bg-surface-dim border border-on-surface/15 focus:border-gold-leaf rounded-sm py-2.5 px-3.5 text-[13px] outline-none"
+            >
+              <option value={0}>All Months</option>
+              {MONTH_OPTIONS.map((name, i) => (
+                <option key={name} value={i + 1}>{name}</option>
+              ))}
+            </select>
             <button
               type="submit"
               className="bg-[#052A42] text-white text-[11px] font-bold px-4 py-2.5 rounded-sm hover:bg-[#052A42]/90 transition-colors"
             >
               Filter
             </button>
-            {activeQuery && (
+            {(activeQuery || monthFilter > 0) && (
               <button
                 type="button"
-                onClick={() => { setQuery(''); setActiveQuery(''); setPage(1); }}
+                onClick={() => { setQuery(''); setActiveQuery(''); setMonthFilter(0); setPage(1); }}
                 className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-800 px-2"
               >
                 Clear
               </button>
             )}
           </form>
+          {monthFilter > 0 && (
+            <p className="text-[11.5px] text-on-surface-variant -mt-3">
+              Showing members with a birthday or anniversary in <strong className="text-on-surface">{MONTH_OPTIONS[monthFilter - 1]}</strong>.
+            </p>
+          )}
 
           <div className="border border-on-surface/5 bg-white rounded-sm overflow-hidden">
             {loading ? (
               <p className="text-[12px] text-zinc-400 p-6">Loading…</p>
             ) : members.length === 0 ? (
-              <p className="text-[12px] text-zinc-400 p-6">{activeQuery ? 'No members match that search.' : 'No members yet.'}</p>
+              <p className="text-[12px] text-zinc-400 p-6">
+                {activeQuery || monthFilter > 0 ? 'No members match that filter.' : 'No members yet.'}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-[12px]">
