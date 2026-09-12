@@ -14,6 +14,7 @@ const LoginModal = dynamic(() => import('./LoginModal'), {
   ssr: false,
 });
 import { useAuth } from '@/context/AuthContext';
+import { getSaleSnapshot, getSaleSnapshotSync, subscribeToSaleChanges, isSaleLive, SaleSnapshot } from '@/lib/db';
 
 function HeaderInner() {
   const { cartCount } = useCart();
@@ -32,6 +33,18 @@ function HeaderInner() {
 
   const activeCategory = searchParams.get('category') || '';
   const activeSubcategory = searchParams.get('subcategory') || '';
+
+  // "Sale" only ever appears in nav while a sale is actually live — loaded
+  // once here and kept in sync live (another tab/admin toggling the sale
+  // updates this immediately, no refresh needed) via the same
+  // subscribeToSaleChanges pattern the storefront grid uses for pricing.
+  const [saleSnapshot, setSaleSnapshot] = useState<SaleSnapshot>(getSaleSnapshotSync());
+  useEffect(() => {
+    getSaleSnapshot().then(setSaleSnapshot);
+    return subscribeToSaleChanges(() => { getSaleSnapshot().then(setSaleSnapshot); });
+  }, []);
+  const saleActive = isSaleLive(saleSnapshot.config);
+  const isSaleNavActive = activeCategory === 'sale';
 
   // Determine active sections
   const isStorySection = ['/about', '/stores', '/care', '/shipping', '/returns'].includes(pathname);
@@ -174,6 +187,18 @@ function HeaderInner() {
                   >
                     Men
                   </Link>
+                  {saleActive && (
+                    <Link
+                      href="/?category=sale"
+                      className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
+                        isSaleNavActive
+                          ? 'text-[#E4443D] border-[#E4443D] font-bold'
+                          : 'text-[#E4443D] border-transparent hover:border-[#E4443D] font-bold'
+                      }`}
+                    >
+                      Sale
+                    </Link>
+                  )}
                   <Link
                     href="/about"
                     className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
@@ -348,6 +373,19 @@ function HeaderInner() {
                   >
                     Men
                   </Link>
+                  {saleActive && (
+                    <Link
+                      href="/?category=sale"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`text-[13px] tracking-[0.12em] uppercase transition-colors pl-2 border-l-2 ${
+                        isSaleNavActive
+                          ? 'text-[#E4443D] border-[#E4443D] font-bold'
+                          : 'text-[#E4443D] border-transparent font-bold'
+                      }`}
+                    >
+                      Sale
+                    </Link>
+                  )}
                   <Link
                     href="/about"
                     onClick={() => setIsMobileMenuOpen(false)}

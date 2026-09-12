@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges, getEffectivePrice, isPlusSize, getPlusSizesConfig, subscribeToPlusSizesChanges, sortSizes } from '@/lib/db';
+import {
+  Product, InventoryRecord, getColorHex, getColorName, getProductById, subscribeToProductChanges, getInventoryForProduct, subscribeToInventoryChanges,
+  getEffectivePrice, isPlusSize, getPlusSizesConfig, subscribeToPlusSizesChanges, sortSizes,
+  getSaleSnapshot, getSaleSnapshotSync, subscribeToSaleChanges, getSalePriceInfo, getProductDiscount, applySaleDiscount, SaleSnapshot,
+} from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header';
@@ -91,6 +95,16 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
     return unsubscribe;
   }, []);
 
+  // Sale/discount snapshot — same synchronous-cache-plus-live-refresh shape
+  // as the plus-size config just above, kept in real state (rather than a
+  // bare force-rerender counter) since getSalePriceInfo/getProductDiscount
+  // below need the actual snapshot value, not just a re-render nudge.
+  const [saleSnapshot, setSaleSnapshot] = useState<SaleSnapshot>(getSaleSnapshotSync());
+  useEffect(() => {
+    getSaleSnapshot().then(setSaleSnapshot);
+    return subscribeToSaleChanges(() => { getSaleSnapshot().then(setSaleSnapshot); });
+  }, []);
+
   // Live "someone else just bought the last one" updates
   useEffect(() => {
     const unsubscribe = subscribeToInventoryChanges(refreshStock);
@@ -145,7 +159,15 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                   {product.title}
                 </h1>
                 <div className="flex items-center gap-4">
-                  <PriceDisplay price={getEffectivePrice(product, selectedSize)} mrp={product.mrp} size="lg" />
+                  <PriceDisplay
+                    price={getEffectivePrice(product, selectedSize)}
+                    mrp={product.mrp}
+                    salePrice={(() => {
+                      const info = getSalePriceInfo(product, selectedSize, saleSnapshot);
+                      return info.hasSale ? info.salePrice : undefined;
+                    })()}
+                    size="lg"
+                  />
                   {product.rating && (
                     <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-sm">
                       <span className="material-symbols-outlined text-[13px] text-amber-500 fill-1">star</span>
@@ -396,7 +418,15 @@ export default function ProductDetailClient({ product: initialProduct, initialSu
                   <div className="p-3">
                     <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-0.5">{item.category}</p>
                     <h4 className="text-[13px] font-semibold text-gray-900 leading-snug mb-1">{item.title}</h4>
-                    <PriceDisplay price={item.price} mrp={item.mrp} size="sm" />
+                    <PriceDisplay
+                      price={item.price}
+                      mrp={item.mrp}
+                      salePrice={(() => {
+                        const info = applySaleDiscount(item.price, getProductDiscount(item, saleSnapshot));
+                        return info.hasSale ? info.salePrice : undefined;
+                      })()}
+                      size="sm"
+                    />
                   </div>
                 </Link>
               ))}

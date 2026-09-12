@@ -1318,11 +1318,20 @@ export const ensureVariantsForProduct = async (productId: string, sku: string | 
   if (cleanSizes.length === 0) return;
 
   try {
-    const rows = cleanSizes.map(size => ({
-      product_id: productId,
-      sku: `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`,
-      size,
-    }));
+    const rows = cleanSizes.map(size => {
+      const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+      return {
+        product_id: productId,
+        sku: variantSku,
+        size,
+        // Confirmed 2026-09-12: Galla's POS is loaded with our own SKU
+        // format directly (e.g. EURO-BLK-M) — no separate numeric mapping.
+        // Default galla_sku to the variant's own sku so new products are
+        // sync-ready immediately; still editable per-variant from the
+        // product's stock panel for the rare case Galla's code differs.
+        galla_sku: variantSku,
+      };
+    });
     await supabase.from('product_variants').upsert(rows, { onConflict: 'product_id,size', ignoreDuplicates: true });
   } catch (e: any) {
     console.warn(`[Atelier DB] ensureVariantsForProduct failed for ${sku}:`, e.message || e);
@@ -2456,6 +2465,384 @@ export const setMemberDiscountConfig = async (config: MemberDiscountConfig): Pro
     console.warn('[Atelier DB] setMemberDiscountConfig failed:', e.message || e);
     return false;
   }
+};
+
+// =========================================================================
+// SALE / DISCOUNTS
+//
+// Global sale window (sale_config, reusing app_settings like plus_sizes /
+// member_discount_config above) plus two editable lists — category-wide
+// and product-specific discounts (see 20260903010000_add_sale_management.sql).
+// Same realtime-synced module cache shape as the product catalog and
+// plus-size config further up this file: getSaleSnapshot() populates it,
+// subscribeToSaleChanges() reacts to another tab/admin changing it, and the
+// pricing helpers at the bottom read the cache synchronously so every
+// storefront price display can call one function instead of re-deriving
+// sale math independently.
+// =========================================================================
+
+export interface SaleConfig {
+  active: boolean;
+  start_at: string | null; // ISO timestamp — sale goes live at this instant
+  end_at: string | null; // ISO timestamp — sale ends at this instant
+}
+
+export interface CategoryDiscount {
+  id: string;
+  category: string;
+  subcategory?: string | null; // null = applies to the whole category
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  active: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductDiscount {
+  id: string;
+  product_id: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  active: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SaleSnapshot {
+  config: SaleConfig;
+  categoryDiscounts: CategoryDiscount[];
+  productDiscounts: ProductDiscount[];
+}
+
+const DEFAULT_SALE_CONFIG: SaleConfig = { active: false, start_at: null, end_at: null };
+const EMPTY_SALE_SNAPSHOT: SaleSnapshot = { config: DEFAULT_SALE_CONFIG, categoryDiscounts: [], productDiscounts: [] };
+
+export const getSaleConfig = async (): Promise<SaleConfig> => {
+  if (!isSupabaseConfigured || !supabase) return DEFAULT_SALE_CONFIG;
+  try {
+    const { data } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('app_settings').select('value').eq('key', 'sale_config').maybeSingle())
+    );
+    if (data?.value) return { ...DEFAULT_SALE_CONFIG, ...(data.value as Partial<SaleConfig>) };
+  } catch (e: any) {
+    console.warn('[Atelier DB] getSaleConfig failed, using defaults:', e.message || e);
+  }
+  return DEFAULT_SALE_CONFIG;
+};
+
+export const setSaleConfig = async (config: SaleConfig): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'sale_config', value: config, updated_at: new Date().toISOString() }], { onConflict: 'key' });
+    if (error) {
+      console.warn('[Atelier DB] setSaleConfig failed:', error.message);
+      return false;
+    }
+    broadcastSaleChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] setSaleConfig failed:', e.message || e);
+    return false;
+  }
+};
+
+export const getCategoryDiscounts = async (): Promise<CategoryDiscount[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('category_discounts').select('*').order('created_at', { ascending: false })
+    );
+    if (error) throw error;
+    return (data || []) as CategoryDiscount[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getCategoryDiscounts failed:', e.message || e);
+    return [];
+  }
+};
+
+export const getProductDiscounts = async (): Promise<ProductDiscount[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('product_discounts').select('*').order('created_at', { ascending: false })
+    );
+    if (error) throw error;
+    return (data || []) as ProductDiscount[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getProductDiscounts failed:', e.message || e);
+    return [];
+  }
+};
+
+export interface DiscountFormInput {
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  active: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+}
+
+// Admin Sale Management page — Add/Edit compose into one call: pass `id` to
+// update an existing row, omit it to insert a new one. The unique index on
+// (category, subcategory) means a duplicate insert fails with a Postgres
+// unique_violation (23505), which is translated into a friendly message
+// rather than a raw DB error, so the admin form knows to edit the existing
+// row instead of creating a conflicting one.
+export const saveCategoryDiscount = async (
+  input: DiscountFormInput & { category: string; subcategory?: string | null },
+  id?: string
+): Promise<{ ok: boolean; data?: CategoryDiscount; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: 'Not available right now.' };
+  try {
+    const payload = { ...input, subcategory: input.subcategory || null, updated_at: new Date().toISOString() };
+    const { data, error } = id
+      ? await supabase.from('category_discounts').update(payload).eq('id', id).select().single()
+      : await supabase.from('category_discounts').insert([payload]).select().single();
+    if (error) {
+      if (error.code === '23505') {
+        return { ok: false, error: 'A discount for that category/subcategory already exists — edit it below instead of adding a new one.' };
+      }
+      throw error;
+    }
+    broadcastSaleChanged();
+    return { ok: true, data: data as CategoryDiscount };
+  } catch (e: any) {
+    console.warn('[Atelier DB] saveCategoryDiscount failed:', e.message || e);
+    return { ok: false, error: "Couldn't save — please try again." };
+  }
+};
+
+export const deleteCategoryDiscount = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('category_discounts').delete().eq('id', id);
+    if (error) throw error;
+    broadcastSaleChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteCategoryDiscount failed:', e.message || e);
+    return false;
+  }
+};
+
+// Same Add/Edit-in-one-call shape as saveCategoryDiscount — `product_discounts`
+// has a UNIQUE(product_id) constraint, so a duplicate insert (a second
+// discount for the same product) hits 23505 and gets the same friendly
+// "edit instead" treatment.
+export const saveProductDiscount = async (
+  input: DiscountFormInput & { product_id: string },
+  id?: string
+): Promise<{ ok: boolean; data?: ProductDiscount; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: 'Not available right now.' };
+  try {
+    const payload = { ...input, updated_at: new Date().toISOString() };
+    const { data, error } = id
+      ? await supabase.from('product_discounts').update(payload).eq('id', id).select().single()
+      : await supabase.from('product_discounts').insert([payload]).select().single();
+    if (error) {
+      if (error.code === '23505') {
+        return { ok: false, error: 'This product already has a discount configured — edit it below instead of adding a new one.' };
+      }
+      throw error;
+    }
+    broadcastSaleChanged();
+    return { ok: true, data: data as ProductDiscount };
+  } catch (e: any) {
+    console.warn('[Atelier DB] saveProductDiscount failed:', e.message || e);
+    return { ok: false, error: "Couldn't save — please try again." };
+  }
+};
+
+export const deleteProductDiscount = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('product_discounts').delete().eq('id', id);
+    if (error) throw error;
+    broadcastSaleChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteProductDiscount failed:', e.message || e);
+    return false;
+  }
+};
+
+// ── Realtime snapshot cache — config + both discount lists loaded together,
+// since a price display needs all three to resolve one product's price. ──
+const SALE_CHANNEL_NAME = 'sale-config-changed';
+const SALE_CHANGED_EVENT = 'sale-changed';
+let saleChannel: RealtimeChannel | null = null;
+const saleChangeListeners = new Set<() => void>();
+
+let saleSnapshotCache: SaleSnapshot = EMPTY_SALE_SNAPSHOT;
+let saleSnapshotFetchInFlight: Promise<SaleSnapshot> | null = null;
+
+const fetchSaleSnapshot = async (): Promise<SaleSnapshot> => {
+  if (!isSupabaseConfigured || !supabase) return EMPTY_SALE_SNAPSHOT;
+  try {
+    const [config, categoryDiscounts, productDiscounts] = await Promise.all([
+      getSaleConfig(),
+      getCategoryDiscounts(),
+      getProductDiscounts(),
+    ]);
+    saleSnapshotCache = { config, categoryDiscounts, productDiscounts };
+  } catch (e: any) {
+    console.warn('[Atelier DB] fetchSaleSnapshot failed, keeping last known snapshot:', e.message || e);
+  }
+  return saleSnapshotCache;
+};
+
+// Loads (or reloads) the sale snapshot the pricing helpers below read
+// synchronously. Call once on mount anywhere prices or sale UI render —
+// mirrors getPlusSizesConfig() above. In-flight calls are de-duplicated.
+export const getSaleSnapshot = (): Promise<SaleSnapshot> => {
+  if (saleSnapshotFetchInFlight) return saleSnapshotFetchInFlight;
+  const promise = fetchSaleSnapshot().finally(() => {
+    if (saleSnapshotFetchInFlight === promise) saleSnapshotFetchInFlight = null;
+  });
+  saleSnapshotFetchInFlight = promise;
+  return promise;
+};
+
+// Synchronous read of whatever getSaleSnapshot() last loaded — safe to call
+// before that resolves (returns the all-inactive default snapshot), the
+// same "start safe, upgrade once real data lands" shape as plusSizesSet.
+export const getSaleSnapshotSync = (): SaleSnapshot => saleSnapshotCache;
+
+const ensureSaleChannel = (): RealtimeChannel | null => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  if (!saleChannel) {
+    saleChannel = supabase
+      .channel(SALE_CHANNEL_NAME)
+      .on('broadcast', { event: SALE_CHANGED_EVENT }, () => {
+        fetchSaleSnapshot().then(() => {
+          saleChangeListeners.forEach(fn => fn());
+        });
+      })
+      .subscribe();
+  }
+  return saleChannel;
+};
+
+const broadcastSaleChanged = () => {
+  const channel = ensureSaleChannel();
+  channel?.send({ type: 'broadcast', event: SALE_CHANGED_EVENT, payload: {} }).catch(() => {});
+};
+
+// Subscribe to live sale/discount changes (another tab or admin edited the
+// sale config, or added/removed a discount). Returns an unsubscribe function.
+export const subscribeToSaleChanges = (onChange: () => void): (() => void) => {
+  if (!isSupabaseConfigured || !supabase) return () => {};
+  ensureSaleChannel();
+  saleChangeListeners.add(onChange);
+  return () => { saleChangeListeners.delete(onChange); };
+};
+
+// Whether the store-wide sale window is currently live — the on/off switch
+// plus the configured start/end instant, if any. Every other sale check
+// (getProductDiscount) is gated behind this.
+export const isSaleLive = (config: SaleConfig, now: Date = new Date()): boolean => {
+  if (!config.active) return false;
+  if (config.start_at && now < new Date(config.start_at)) return false;
+  if (config.end_at && now > new Date(config.end_at)) return false;
+  return true;
+};
+
+const isDiscountRowLive = (row: { active: boolean; start_at?: string | null; end_at?: string | null }, now: Date): boolean => {
+  if (!row.active) return false;
+  if (row.start_at && now < new Date(row.start_at)) return false;
+  if (row.end_at && now > new Date(row.end_at)) return false;
+  return true;
+};
+
+// Resolves which single discount (if any) applies to a product right now.
+// Precedence — product-specific always wins over category-level: lets an
+// admin override a broad category sale for one product (e.g. everything in
+// Shirts is 20% off, but this one Premium Black Shirt is 30% off instead).
+// Falls back to the most specific matching category discount (exact
+// category+subcategory, then the whole-category row), and returns null
+// when nothing applies — including whenever the global sale window itself
+// isn't live, so every caller gets "no sale" for free during edge cases
+// #1-#3 (disabled / not started / expired) without checking isSaleLive
+// separately.
+export const getProductDiscount = (
+  product: Pick<Product, 'id' | 'category' | 'subcategory'>,
+  snapshot: SaleSnapshot,
+  now: Date = new Date()
+): CategoryDiscount | ProductDiscount | null => {
+  if (!isSaleLive(snapshot.config, now)) return null;
+
+  const productDiscount = snapshot.productDiscounts.find(d => d.product_id === product.id);
+  if (productDiscount && isDiscountRowLive(productDiscount, now)) return productDiscount;
+
+  const category = product.category?.toLowerCase();
+  const subcategory = product.subcategory?.toLowerCase();
+  const exactMatch = snapshot.categoryDiscounts.find(
+    d => d.category.toLowerCase() === category && !!d.subcategory && d.subcategory.toLowerCase() === subcategory
+  );
+  if (exactMatch && isDiscountRowLive(exactMatch, now)) return exactMatch;
+
+  const wholeCategoryMatch = snapshot.categoryDiscounts.find(
+    d => d.category.toLowerCase() === category && !d.subcategory
+  );
+  if (wholeCategoryMatch && isDiscountRowLive(wholeCategoryMatch, now)) return wholeCategoryMatch;
+
+  return null;
+};
+
+export interface SalePriceInfo {
+  original: number; // the amount the discount was applied to
+  salePrice: number; // equal to `original` whenever hasSale is false
+  discountPercent: number; // rounded, for display badges — 0 when hasSale is false
+  hasSale: boolean;
+}
+
+// Applies one resolved discount (or none) to a plain amount — the actual
+// arithmetic, kept separate from getSalePriceInfo below so a caller that
+// doesn't have a specific size in hand yet (the listing grid shows one
+// price per product card, not per size) can still price a product
+// correctly without going through getEffectivePrice.
+export const applySaleDiscount = (
+  original: number,
+  discount: CategoryDiscount | ProductDiscount | null
+): SalePriceInfo => {
+  if (!discount || discount.discount_value <= 0) {
+    return { original, salePrice: original, discountPercent: 0, hasSale: false };
+  }
+  const rawSalePrice = discount.discount_type === 'percentage'
+    ? original * (1 - discount.discount_value / 100)
+    : original - discount.discount_value;
+  const salePrice = Math.round(Math.min(original, Math.max(0, rawSalePrice)));
+  if (salePrice >= original) {
+    // A fixed-amount discount that doesn't actually beat the price (or a
+    // 0-value discount that slipped through) shouldn't render as a "sale".
+    return { original, salePrice: original, discountPercent: 0, hasSale: false };
+  }
+  const discountPercent = Math.round(((original - salePrice) / original) * 100);
+  return { original, salePrice, discountPercent, hasSale: true };
+};
+
+// The one place sale price math happens for a specific size — every
+// storefront surface that has a size in hand (product detail, cart,
+// checkout) should call this rather than re-deriving discount math
+// independently, so it can't drift between them (same reasoning
+// PriceDisplay's own comment gives for centralizing the MRP-vs-price
+// discount badge). `original` includes the plus-size surcharge via
+// getEffectivePrice, same as every other size-aware price in the app.
+export const getSalePriceInfo = (
+  product: Pick<Product, 'id' | 'category' | 'subcategory' | 'price' | 'plus_size_surcharge'>,
+  size: string,
+  snapshot: SaleSnapshot,
+  now: Date = new Date()
+): SalePriceInfo => {
+  const original = getEffectivePrice(product, size);
+  const discount = getProductDiscount(product, snapshot, now);
+  return applySaleDiscount(original, discount);
 };
 
 // =========================================================================

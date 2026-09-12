@@ -5,17 +5,29 @@ import { supabase } from './db';
 //
 // Real contract, confirmed by Galla 2026-08-11:
 //   POST https://retail.galla.app/mystorev2/api/v2/webhooks/orders
-//   Headers: Content-Type, store-code, Authorization: Bearer <key>, loc_code
+//   Headers: Content-Type, store-code, Authorization: Bearer <key>, loc-code
 //   Body: { event: "order.created", external_order_id, line_items: [{sku, qty}] }
 // One request per ORDER (all its line items together), not one per SKU.
-// Currently pointed at Galla's DEMO account — see .env.local for the values
-// to swap once production store/location codes and API key are confirmed.
 //
-// Galla identifies stock by their own numeric product code (e.g. "10056"),
-// not our STYLE-COLOUR-SIZE sku (e.g. "SATN-CRM-M") — the two don't match.
-// Every item here must carry galla_sku (set per-variant by an admin, see
-// setGallaSkuForVariant in db.ts); anything missing it is skipped and
-// logged rather than sent with a sku Galla's catalog won't recognize.
+// loc-code is a HYPHEN, not an underscore, despite every cURL example Galla
+// has sent us (including their 2026-09-08 email) literally writing it as
+// `loc_code`. Sending it that way gets a 422 "loc_code header is required"
+// even though the header is present — their server just doesn't recognize
+// the underscore form. Confirmed live 2026-09-12 against their demo account
+// (202 {"status":"queued"} with the hyphen; consistent 422 with underscore).
+//
+// Currently pointed at Galla's DEMO account — see .env.local for the values
+// to swap once production store/location codes are confirmed.
+//
+// Confirmed 2026-09-12 (per the store owner, via Galla): their POS is loaded
+// with our own STYLE-COLOUR-SIZE sku directly (e.g. "EURO-BLK-M") — "10056"
+// in Galla's sample cURL was just an arbitrary example value, not evidence
+// of a separate numeric catalog. galla_sku is backfilled to equal sku for
+// every existing variant, and ensureVariantsForProduct in db.ts defaults it
+// the same way for new ones — kept as its own column (rather than sending
+// sku directly) only so an admin can override it per-variant from the
+// product's stock panel (setGallaSkuForVariant) if a specific item's Galla
+// code ever needs to differ. Still skipped-and-logged if somehow null.
 //
 // What this does: after an online order is confirmed, tell Galla what sold
 // so a store clerk doesn't sell the same physical unit again. Fire-and-
@@ -59,7 +71,7 @@ const callGalla = async (payload: ReturnType<typeof buildGallaOrderPayload>): Pr
           'Content-Type': 'application/json',
           'store-code': storeCode,
           'Authorization': `Bearer ${apiKey}`,
-          'loc_code': locCode,
+          'loc-code': locCode,
         },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(8000),

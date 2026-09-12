@@ -15,6 +15,7 @@ const DASHBOARD_TABS: { tab: DashboardTab; label: string; icon: string; tooltip:
 const PAGE_LINKS = [
   { href: '/admin/users', label: 'REGISTERED USERS', icon: 'group', tooltip: 'Everyone with a real website account — search, edit contact details' },
   { href: '/admin/members', label: 'MEMBERSHIP & DISCOUNTS', icon: 'redeem', tooltip: 'Birthday/anniversary discount program — settings, lookup, and sign-ups' },
+  { href: '/admin/sales', label: 'SALE MANAGEMENT', icon: 'sell', tooltip: 'Store-wide sale window, category discounts, and product-specific discounts' },
   { href: '/admin/integration', label: 'GALLA INTEGRATION DOCS', icon: 'sync_alt', tooltip: 'Reference for the in-store POS inventory sync' },
 ];
 

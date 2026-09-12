@@ -1,0 +1,12 @@
+-- Confirmed 2026-09-12 (per the store owner, via Galla): their POS is
+-- loaded with our own STYLE-COLOUR-SIZE sku directly (e.g. "EURO-BLK-M") —
+-- the "10056"-style numeric code in Galla's sample cURL was just an
+-- arbitrary example value, not evidence of a separate numeric catalog we'd
+-- need to map against (see src/lib/galla.ts). Backfill every existing
+-- variant's galla_sku to equal its own sku; ensureVariantsForProduct in
+-- db.ts does the same for variants created from here on, so this is a
+-- one-time catch-up for rows that already existed. Guarded by IS NULL, so
+-- safe to re-run and a no-op anywhere it's already applied (e.g. if this
+-- was already patched directly against the live DB before this migration
+-- was pushed).
+UPDATE public.product_variants SET galla_sku = sku WHERE galla_sku IS NULL;

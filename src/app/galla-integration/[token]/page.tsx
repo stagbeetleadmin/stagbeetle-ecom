@@ -134,10 +134,10 @@ export default async function GallaIntegrationGuidePage({ params }: { params: Pr
           </div>
           <div className="border border-zinc-200 rounded-sm p-4 bg-white">
             <div className="flex items-center gap-2 font-mono text-[12px] font-bold mb-2">
-              <span className="bg-amber-50 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-sm">BLOCKED</span>
+              <span className="bg-green-50 text-green-700 text-[10px] px-1.5 py-0.5 rounded-sm">WORKING</span>
               <span>/webhooks/orders</span>
             </div>
-            <p className="text-[12.5px] text-zinc-500 leading-relaxed">We call you — after an online sale. Contract confirmed, blocked on a loc_code 422 — see below.</p>
+            <p className="text-[12.5px] text-zinc-500 leading-relaxed">We call you — after an online sale. Contract confirmed, verified live against your demo account — see below. Production credentials still needed.</p>
           </div>
         </div>
 
@@ -323,13 +323,13 @@ X-Stagbeetle-Signature: sha256=<hmac of empty string>
         </Section>
 
         {/* Outbound: order sync to Galla — confirmed contract */}
-        <Section id="outbound" eyebrow="Confirmed 2026-08-11" title="Outbound: order sync (us calling you)" subtitle="The other direction — after an online sale, we POST to your orders webhook. Contract confirmed against your demo account.">
+        <Section id="outbound" eyebrow="Confirmed 2026-08-11 · Verified 2026-09-12" title="Outbound: order sync (us calling you)" subtitle="The other direction — after an online sale, we POST to your orders webhook. Contract confirmed and verified working against your demo account.">
           <p className="text-[13px] font-bold font-mono text-[#0D1B2A]">POST /mystorev2/api/v2/webhooks/orders</p>
           <CodeBlock>{`POST https://retail.galla.app/mystorev2/api/v2/webhooks/orders
 Content-Type: application/json
 store-code: <your store code>
 Authorization: Bearer <API key>
-loc_code: <location code>
+loc-code: <location code>
 
 {
   "event": "order.created",
@@ -343,20 +343,19 @@ loc_code: <location code>
             not one call per SKU. <code className="font-mono bg-zinc-100 px-1 rounded-sm">external_order_id</code> is our order number, stable and unique per order.
           </p>
 
-          <div className="bg-red-50 border border-red-200 rounded-sm p-4 text-[12.5px] text-red-900 leading-relaxed">
-            <strong className="text-red-700">Currently blocked:</strong> tested live against your demo credentials (store-code <code className="font-mono bg-white/60 px-1 rounded-sm">2h337h00ch</code>,
-            loc_code <code className="font-mono bg-white/60 px-1 rounded-sm">KRT88</code>) using your exact documented request — every attempt gets back{' '}
-            <code className="font-mono bg-white/60 px-1 rounded-sm">422 {'{"error":"loc_code header is required"}'}</code> even though the header is present.
-            Verified this isn&apos;t on our end: same result whether <code className="font-mono bg-white/60 px-1 rounded-sm">loc_code</code> is sent as a header,
-            a query param, or a body field. The 422 (not a 401) confirms auth and routing succeed — this looks like{' '}
-            <code className="font-mono bg-white/60 px-1 rounded-sm">KRT88</code> isn&apos;t recognized as a valid location for this store-code/API key on your side.
-            Need this resolved before we can confirm the full flow.
+          <div className="bg-green-50 border border-green-200 rounded-sm p-4 text-[12.5px] text-green-900 leading-relaxed">
+            <strong className="text-green-700">Resolved 2026-09-12:</strong> the earlier 422 was on our end after all — every cURL example
+            you&apos;ve sent (including your 2026-09-08 email) writes the header as <code className="font-mono bg-white/60 px-1 rounded-sm">loc_code</code> (underscore),
+            but your server only accepts it as <code className="font-mono bg-white/60 px-1 rounded-sm">loc-code</code> (hyphen). Switching to the hyphen against
+            your demo credentials (store-code <code className="font-mono bg-white/60 px-1 rounded-sm">2h337h00ch</code>, loc-code{' '}
+            <code className="font-mono bg-white/60 px-1 rounded-sm">KRT88</code>) returns <code className="font-mono bg-white/60 px-1 rounded-sm">202 {'{"status":"queued"}'}</code>.
+            Worth fixing in your own docs/examples so the next integrator doesn&apos;t hit the same thing.
           </div>
 
-          <p className="text-[13px] text-zinc-600 leading-relaxed">Still open, once the above is resolved:</p>
+          <p className="text-[13px] text-zinc-600 leading-relaxed">Still open:</p>
           <div>
-            <ChecklistItem n={1} title="Production credentials">Store code, location code, and API key for the live account — everything above is your demo account.</ChecklistItem>
-            <ChecklistItem n={2} title="Which loc_code for online orders?">We have 3 physical stores plus the online channel — should online sales report against one specific store, or a dedicated &quot;online&quot; location code?</ChecklistItem>
+            <ChecklistItem n={1} title="Production credentials">Store code, location code, and API key for the live account — everything above is still your demo account.</ChecklistItem>
+            <ChecklistItem n={2} title="Which loc-code for online orders?">We have 3 physical stores plus the online channel — should online sales report against one specific store, or a dedicated &quot;online&quot; location code?</ChecklistItem>
             <ChecklistItem n={3} title="Response contract on failure">What should we expect back for a rejected SKU (unknown SKU, insufficient stock, etc.) so we can log it usefully on our side?</ChecklistItem>
             <ChecklistItem n={4} title="Do you dedupe on your end?">We retry a failed call up to 3 times with the same external_order_id — does a duplicate delivery double-count on your side?</ChecklistItem>
           </div>
