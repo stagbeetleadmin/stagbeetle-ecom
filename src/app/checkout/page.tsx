@@ -195,7 +195,8 @@ export default function Checkout() {
   };
 
   // Called after Razorpay confirms a successful payment — creates the DB order
-  const finalizeOrder = useCallback(async (paymentId: string) => {
+  const finalizeOrder = useCallback(async (payment: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+    const paymentId = payment.razorpay_payment_id;
     try {
       const orderItems = cart.map(item => ({
         product_id: item.product_id,
@@ -264,6 +265,22 @@ export default function Checkout() {
       } catch (invErr) {
         console.warn('Post-payment inventory sync failed (order still confirmed):', invErr);
       }
+
+      // WhatsApp order confirmation — best-effort like the sync above: the
+      // order is already real, so a failed/skipped message must never block
+      // the redirect. The server re-verifies the payment before sending, and
+      // keepalive lets the request finish even as we navigate to /success.
+      fetch('/api/notifications/order-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          ...payment,
+          orderId: result.id,
+          customerName: formData.name,
+          imageUrl: orderItems[0]?.image,
+        }),
+      }).catch(notifyErr => console.warn('Order confirmation WhatsApp failed (order still confirmed):', notifyErr));
 
       if (user) {
         if (saveAddressToProfile) {
@@ -373,7 +390,7 @@ export default function Checkout() {
           }
 
           // Step 4: Create order in DB and redirect
-          await finalizeOrder(response.razorpay_payment_id);
+          await finalizeOrder(response);
         },
         modal: {
           ondismiss: () => {

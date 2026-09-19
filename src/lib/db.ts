@@ -2846,6 +2846,172 @@ export const getSalePriceInfo = (
 };
 
 // =========================================================================
+// FESTIVAL STOREFRONT DECORATION (festivals table, see 20260915000000_
+// add_festivals_and_notifications.sql) — admin-configured seasonal
+// campaigns (Ganesh Chaturthi, Diwali, ...) that decorate the storefront
+// via src/components/FestivalBanner.tsx and optionally link a coupon to
+// drive sales during the window. Public read (same as category/product
+// discounts) since the banner is computed client-side on every visit.
+// =========================================================================
+
+export interface Festival {
+  id: string;
+  name: string;
+  emoji: string | null;
+  message: string;
+  theme_color: string | null;
+  coupon_code: string | null;
+  mode: 'auto' | 'manual';
+  manual_active: boolean;
+  enabled: boolean;
+  start_at: string | null;
+  end_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FestivalFormInput {
+  name: string;
+  emoji: string | null;
+  message: string;
+  theme_color: string | null;
+  coupon_code: string | null;
+  mode: 'auto' | 'manual';
+  manual_active: boolean;
+  enabled: boolean;
+  start_at: string | null;
+  end_at: string | null;
+}
+
+export const getFestivals = async (): Promise<Festival[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('festivals').select('*').order('created_at', { ascending: false })
+    );
+    if (error) throw error;
+    return (data || []) as Festival[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getFestivals failed:', e.message || e);
+    return [];
+  }
+};
+
+// Add/Edit-in-one-call, same shape as saveCategoryDiscount — pass `id` to
+// update an existing row, omit it to insert a new one.
+export const saveFestival = async (
+  input: FestivalFormInput,
+  id?: string
+): Promise<{ ok: boolean; data?: Festival; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: 'Not available right now.' };
+  try {
+    const payload = { ...input, updated_at: new Date().toISOString() };
+    const { data, error } = id
+      ? await supabase.from('festivals').update(payload).eq('id', id).select().single()
+      : await supabase.from('festivals').insert([payload]).select().single();
+    if (error) throw error;
+    return { ok: true, data: data as Festival };
+  } catch (e: any) {
+    console.warn('[Atelier DB] saveFestival failed:', e.message || e);
+    return { ok: false, error: "Couldn't save — please try again." };
+  }
+};
+
+export const deleteFestival = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('festivals').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteFestival failed:', e.message || e);
+    return false;
+  }
+};
+
+// Whether a festival should be decorating the storefront right now.
+// `enabled` is a hard override (same idea as SaleConfig.active) — off means
+// off regardless of mode/dates. Manual mode ignores dates entirely, so an
+// admin can flip a festival on/off on the spot without touching its window.
+export const isFestivalLive = (festival: Festival, now: Date = new Date()): boolean => {
+  if (!festival.enabled) return false;
+  if (festival.mode === 'manual') return festival.manual_active;
+  if (festival.start_at && now < new Date(festival.start_at)) return false;
+  if (festival.end_at && now > new Date(festival.end_at)) return false;
+  return !!(festival.start_at || festival.end_at); // auto mode with no window at all never auto-activates
+};
+
+// The single festival to actually show, if any — first live one by most
+// recently updated. Only one banner shows at a time even if an admin
+// accidentally leaves two overlapping windows enabled.
+export const getActiveFestival = (festivals: Festival[], now: Date = new Date()): Festival | null =>
+  festivals.find(f => isFestivalLive(f, now)) || null;
+
+// =========================================================================
+// ADMIN BULK NOTIFICATIONS (notification_campaigns table + src/lib/
+// whatsapp.ts) — send a WhatsApp announcement to every registered user or
+// every birthday/anniversary member (e.g. "we're closed for Diwali",
+// "24-hour flash sale"). The actual send happens server-side in
+// src/app/api/admin/notifications/send/route.ts (needs the WhatsApp API
+// key, which must never reach the browser); these are just the read side
+// for the admin page's history list and audience-size preview.
+// =========================================================================
+
+export interface NotificationCampaign {
+  id: string;
+  title: string;
+  message: string;
+  audience: 'all_users' | 'members';
+  channel: 'whatsapp';
+  template_name: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  status: 'sending' | 'completed' | 'failed';
+  results: { phone: string; name?: string; status: 'sent' | 'failed'; error?: string }[] | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export const getNotificationCampaigns = async (): Promise<NotificationCampaign[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('notification_campaigns').select('*').order('created_at', { ascending: false }).limit(50)
+    );
+    if (error) throw error;
+    return (data || []) as NotificationCampaign[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getNotificationCampaigns failed:', e.message || e);
+    return [];
+  }
+};
+
+// Quick "who would this reach" count for the compose form — same
+// non-customer exclusion as getProfilesCount, and only counts contacts
+// with a phone on file since that's the only channel wired up today.
+export const getAudienceCount = async (audience: 'all_users' | 'members'): Promise<number> => {
+  if (!isSupabaseConfigured || !supabase) return 0;
+  try {
+    if (audience === 'members') {
+      const { count, error } = await supabaseTimeout(
+        supabase.from('members').select('*', { count: 'exact', head: true }).not('phone', 'is', null)
+      );
+      if (error) throw error;
+      return count ?? 0;
+    }
+    let builder = supabase.from('profiles').select('*', { count: 'exact', head: true }).not('phone', 'is', null);
+    for (const email of NON_CUSTOMER_PROFILE_EMAILS) builder = builder.not('email', 'ilike', email);
+    const { count, error } = await supabaseTimeout(builder);
+    if (error) throw error;
+    return count ?? 0;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getAudienceCount failed:', e.message || e);
+    return 0;
+  }
+};
+
+// =========================================================================
 // USER PROFILES OPERATIONS
 // =========================================================================
 
