@@ -1170,6 +1170,10 @@ const broadcastInventoryChanged = () => {
   channel?.send({ type: 'broadcast', event: INVENTORY_CHANGED_EVENT, payload: {} }).catch(() => {});
 };
 
+// Lets checkout announce a completed sale — the deduction itself now runs
+// server-side (/api/orders/finalize), where there's no realtime channel.
+export const notifyInventoryChanged = () => broadcastInventoryChanged();
+
 // Subscribe to live stock changes — e.g. a product page flips a size to "Out
 // of Stock" the moment someone else buys the last one. Returns an unsubscribe function.
 export const subscribeToInventoryChanges = (onChange: () => void): (() => void) => {

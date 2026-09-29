@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import { createOrder, Product, validateCoupon, Coupon, checkStockForOrderItems, decrementInventoryForOrder, sortSizes, getMemberDiscount, redeemMemberDiscount, MemberDiscountResult } from '@/lib/db';
-import { notifyGallaOfSale } from '@/lib/galla';
+import { Product, validateCoupon, Coupon, checkStockForOrderItems, notifyInventoryChanged, sortSizes, getMemberDiscount, redeemMemberDiscount, MemberDiscountResult } from '@/lib/db';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
@@ -208,30 +207,41 @@ export default function Checkout() {
         image: item.image
       }));
 
-      const result = await createOrder({
-        customer_name: formData.name,
-        customer_email: formData.email,
-        shipping_address: `${formData.address}, ${formData.city}, ${formData.zip}, ${formData.country}`,
-        total_price: finalTotal,
-        items: orderItems,
-        payment_status: 'paid',
-        payment_method: 'Razorpay',
-        // Reuses the existing coupon_applied/discount_amount order fields for
-        // the member discount too (as a descriptive label, not a real coupon
-        // code) rather than adding a dedicated column — whichever discount
-        // actually won is what gets recorded.
-        coupon_applied: memberDiscountWins
-          ? `MEMBER-${memberDiscount!.reason.toUpperCase()}-${memberDiscount!.discount_percent}%`
-          : appliedCoupon ? appliedCoupon.code : undefined,
-        discount_amount: discountAmount > 0 ? discountAmount : undefined,
-        shipping_status: 'Scheduled',
-        shipping_carrier: 'Delhivery',
-        tracking_number: 'DKV' + Math.floor(100000000 + Math.random() * 900000000),
+      // Verify payment, record the order, deduct stock and push the sale to
+      // Galla — all server-side (see src/lib/orderPipeline.ts). The order id
+      // is derived from the payment id, so a retried call can't duplicate it.
+      const finalizeRes = await fetch('/api/orders/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payment,
+          order: {
+            customer_name: formData.name,
+            customer_email: formData.email,
+            shipping_address: `${formData.address}, ${formData.city}, ${formData.zip}, ${formData.country}`,
+            total_price: finalTotal,
+            items: orderItems,
+            // Reuses the existing coupon_applied/discount_amount order fields for
+            // the member discount too (as a descriptive label, not a real coupon
+            // code) rather than adding a dedicated column — whichever discount
+            // actually won is what gets recorded.
+            coupon_applied: memberDiscountWins
+              ? `MEMBER-${memberDiscount!.reason.toUpperCase()}-${memberDiscount!.discount_percent}%`
+              : appliedCoupon ? appliedCoupon.code : undefined,
+            discount_amount: discountAmount > 0 ? discountAmount : undefined,
+          },
+        }),
       });
+      const finalizeData = await finalizeRes.json().catch(() => ({}));
+      if (!finalizeRes.ok || !finalizeData.success) {
+        throw new Error(finalizeData.error || 'Order finalization failed');
+      }
+      const result = { id: finalizeData.orderId as string };
+      notifyInventoryChanged(); // live "Out of Stock" flips for other open product pages
 
       // Mark the discount actually used, now that the order is real —
-      // never at page-load/eligibility-check time. Best-effort like the
-      // inventory/Galla sync below: payment already cleared, so a failure
+      // never at page-load/eligibility-check time. Best-effort, since the
+      // payment already cleared, so a failure
       // here must not block order confirmation. Worst case (this call
       // fails) the member could reuse the discount once more before anyone
       // notices — the DB's unique constraint is still there to catch a
@@ -245,28 +255,7 @@ export default function Checkout() {
         }
       }
 
-      // Payment is already captured at this point, so a stock or Galla hiccup
-      // here must never block the order confirmation the customer sees —
-      // both are best-effort, logged, and safe to re-drive later.
-      try {
-        const decremented = await decrementInventoryForOrder(
-          orderItems.map(item => ({ product_id: item.product_id, selected_size: item.selected_size, quantity: item.quantity }))
-        );
-        const gallaItems = decremented
-          .filter((d): d is typeof d & { sku: string } => !!d.sku)
-          .map(d => ({
-            sku: d.sku,
-            galla_sku: d.galla_sku,
-            quantity: orderItems.find(i => i.product_id === d.product_id && i.selected_size === d.selected_size)?.quantity || 1,
-          }));
-        if (gallaItems.length > 0) {
-          notifyGallaOfSale(result.id, gallaItems); // fire-and-logged, not awaited — never delay redirect to /success
-        }
-      } catch (invErr) {
-        console.warn('Post-payment inventory sync failed (order still confirmed):', invErr);
-      }
-
-      // WhatsApp order confirmation — best-effort like the sync above: the
+      // WhatsApp order confirmation — best-effort: the
       // order is already real, so a failed/skipped message must never block
       // the redirect. The server re-verifies the payment before sending, and
       // keepalive lets the request finish even as we navigate to /success.
@@ -370,26 +359,7 @@ export default function Checkout() {
           razorpay_order_id: string;
           razorpay_signature: string;
         }) => {
-          // Step 3: Verify signature server-side
-          const verifyRes = await fetch('/api/razorpay/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            }),
-          });
-
-          const verifyData = await verifyRes.json();
-
-          if (!verifyData.success) {
-            setError('Payment verification failed. Please contact support with Payment ID: ' + response.razorpay_payment_id);
-            setRazorpayLoading(false);
-            return;
-          }
-
-          // Step 4: Create order in DB and redirect
+          // Step 3: verify + record + deduct stock + sync Galla, all server-side
           await finalizeOrder(response);
         },
         modal: {

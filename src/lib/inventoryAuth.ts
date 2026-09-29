@@ -44,7 +44,9 @@ const logAuthFailure = async (request: Request, reason: string, clientIp: string
   try {
     await supabase.from('inventory_sync_log').insert([{
       direction: 'inbound',
-      payload: { reason, ip: clientIp, path: new URL(request.url).pathname, user_agent: request.headers.get('user-agent') },
+      // Header NAMES only (never values) — enough to see whether a caller
+      // sent its key under a header we don't check, without logging secrets.
+      payload: { reason, ip: clientIp, path: new URL(request.url).pathname, user_agent: request.headers.get('user-agent'), header_names: [...request.headers.keys()] },
       status: 'failed',
       error_message: `Rejected: ${reason}`,
     }]);

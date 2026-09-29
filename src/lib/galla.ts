@@ -118,9 +118,18 @@ export const notifyGallaOfSale = async (orderId: string, items: GallaSaleItem[])
     }
   }
 
-  if (mappable.length === 0) return;
+  // GALLA_SKU_ALLOWLIST (comma-separated Galla SKUs) restricts outbound sync
+  // to exactly those items — used while testing against a single dummy item
+  // (e.g. SHIRT-M) so no other product's stock in Galla can be touched.
+  // Unset = every mapped item is sent.
+  const allowlist = process.env.GALLA_SKU_ALLOWLIST?.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  const allowed = allowlist?.length ? mappable.filter(i => allowlist.includes(i.galla_sku.toUpperCase())) : mappable;
+  if (allowed.length < mappable.length) {
+    console.info(`[Galla Sync] Order ${orderId}: skipping non-allowlisted item(s):`, mappable.filter(i => !allowed.includes(i)).map(i => i.galla_sku));
+  }
+  if (allowed.length === 0) return;
 
-  const payload = buildGallaOrderPayload(orderId, mappable);
+  const payload = buildGallaOrderPayload(orderId, allowed);
   const result = await callGalla(payload);
 
   if (supabase) {
@@ -128,7 +137,7 @@ export const notifyGallaOfSale = async (orderId: string, items: GallaSaleItem[])
       await supabase.from('inventory_sync_log').insert([{
         direction: 'outbound',
         external_event_id: `sb-order-${orderId}`,
-        variant_sku: mappable.map(i => i.sku).join(','),
+        variant_sku: allowed.map(i => i.sku).join(','),
         payload,
         status: result.ok ? 'applied' : 'failed',
         error_message: result.error,
