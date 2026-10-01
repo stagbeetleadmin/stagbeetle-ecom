@@ -215,9 +215,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image1_1780089214455.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image2_1780089220272.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image3_1780089227905.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image1_1780089214455.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image2_1780089220272.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image3_1780089227905.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Stone Grey"],
@@ -234,9 +234,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image1_1780089858705.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image2_1780089866007.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image3_1780089872767.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image1_1780089858705.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image2_1780089866007.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image3_1780089872767.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Grey"],
@@ -253,9 +253,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image1_1780088998466.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image2_1780089008188.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image3_1780089013944.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image1_1780088998466.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image2_1780089008188.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image3_1780089013944.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Arctic White"],
@@ -272,9 +272,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image1_1780089339973.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image2_1780089334654.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image3_1780089351905.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image1_1780089339973.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image2_1780089334654.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image3_1780089351905.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Sage Mint"],
@@ -291,9 +291,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image1_1780089518124.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image2_1780089529662.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image3_1780089535441.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image1_1780089518124.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image2_1780089529662.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image3_1780089535441.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Forest Olive"],
@@ -310,9 +310,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image1_1780090271576.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image2_1780090279476.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image3_1780090286859.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image1_1780090271576.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image2_1780090279476.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image3_1780090286859.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Light Blue"],
@@ -329,9 +329,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image1_1780090779850.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image2_1780090791851.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image3_1780090796628.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image1_1780090779850.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image2_1780090791851.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image3_1780090796628.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Purple"],
@@ -348,9 +348,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image1_1780090954862.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image2_1780090961757.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image3_1780090968048.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image1_1780090954862.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image2_1780090961757.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image3_1780090968048.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Blue"],
@@ -367,9 +367,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image1_1780091060064.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image2_1780091065552.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image3_1780091070968.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image1_1780091060064.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image2_1780091065552.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image3_1780091070968.jpg"
     ],
     sizes: ["S", "M", "L", "XL"],
     colors: ["Obsidian Black", "Iridescent Silver", "Beetle Navy"],
@@ -386,9 +386,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image2_1780090084045.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image3_1780090090608.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image2_1780090084045.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image3_1780090090608.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Navy Blue"],

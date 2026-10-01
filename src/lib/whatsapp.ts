@@ -184,7 +184,7 @@ export const ORDER_CONFIRMATION_TEMPLATE = 'order_confirmation';
 // 131053 — the API response never tells you. Anything that doesn't look
 // safe falls back to this known-good product image.
 const FALLBACK_HEADER_IMAGE =
-  'https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg';
+  'https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg';
 
 const pickHeaderImage = (url: string | undefined): string => {
   const u = (url || '').trim();
