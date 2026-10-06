@@ -9,6 +9,7 @@
     "lint": "eslint",
     "migrate": "node src/scripts/migrate.js",
     "sql": "node src/scripts/run-sql.js",
+    "galla:import": "node src/scripts/import-galla-stock.js",
     "test": "node --import ./test/register.mjs --test \"src/**/*.test.ts\""
   },
   "dependencies": {

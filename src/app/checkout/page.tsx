@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import { Product, validateCoupon, Coupon, checkStockForOrderItems, notifyInventoryChanged, sortSizes, getMemberDiscount, redeemMemberDiscount, MemberDiscountResult } from '@/lib/db';
+import { supabase, Product, validateCoupon, Coupon, checkStockForOrderItems, notifyInventoryChanged, sortSizes, getMemberDiscount, redeemMemberDiscount, MemberDiscountResult } from '@/lib/db';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
@@ -210,9 +210,16 @@ export default function Checkout() {
       // Verify payment, record the order, deduct stock and push the sale to
       // Galla — all server-side (see src/lib/orderPipeline.ts). The order id
       // is derived from the payment id, so a retried call can't duplicate it.
+      // Signed-in customers send their session token so the server can file
+      // the order under their account (orders.user_id) — that's what lets it
+      // show in their profile. Guests send none and the order stays unlinked.
+      const { data: { session } } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
       const finalizeRes = await fetch('/api/orders/finalize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           ...payment,
           order: {

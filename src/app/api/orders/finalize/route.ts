@@ -1,4 +1,5 @@
 import { after } from 'next/server';
+import { supabase } from '@/lib/db';
 import {
   PipelineError,
   recordOrderAndDeductStock,
@@ -10,6 +11,21 @@ import {
 // Galla retries (3 attempts, 8s timeout each) run after the response via
 // after(), so they need headroom beyond the request itself.
 export const maxDuration = 60;
+
+// The order's owner comes from the caller's Supabase session token, verified
+// with Supabase — never from the request body, which anyone could fill in.
+// No token, or an invalid one, is a guest checkout: the order still goes
+// through, just not linked to an account.
+const signedInUserId = async (request: Request): Promise<string | null> => {
+  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token || !supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    return error ? null : data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+};
 
 // POST /api/orders/finalize — called by checkout once Razorpay's popup
 // reports success. Verifies the payment, records the order, deducts stock,
@@ -24,7 +40,8 @@ export async function POST(request: Request) {
     const draft = validateDraft(order);
 
     await verifyPayment(proof, draft.total_price);
-    const { orderId, duplicate, sold } = await recordOrderAndDeductStock(proof, draft);
+    const userId = await signedInUserId(request);
+    const { orderId, duplicate, sold } = await recordOrderAndDeductStock(proof, draft, userId);
 
     // The customer gets their confirmation immediately; Galla is notified
     // right after, in the same invocation — seconds, not a batch job.

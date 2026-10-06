@@ -27,7 +27,7 @@ import PriceDisplay from '@/components/PriceDisplay';
 import RichTextEditor from '@/components/RichTextEditor';
 import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
 import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
-import InventoryPanel from '@/components/admin/InventoryPanel';
+import InventoryPanel, { applyStockDrafts, type StockDrafts } from '@/components/admin/InventoryPanel';
 import { variantSkuFor, gallaBarcodeFor } from '@/lib/gallaBarcode';
 import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
 import SizeChartEditor from '@/components/admin/SizeChartEditor';
@@ -247,6 +247,8 @@ function AdminDashboardContent() {
   const [styleCode, setStyleCode] = useState('');
   const [colorCode, setColorCode] = useState('');
   const [selectedSizes, setSelectedSizes] = useState<string[]>(['S', 'M', 'L', 'XL']);
+  // Unsaved per-size stock/barcode edits from InventoryPanel, applied on product save.
+  const [stockDrafts, setStockDrafts] = useState<StockDrafts>({});
   const [colorName, setColorName] = useState('');
   const [colorHex, setColorHexState] = useState('#A0AAB2');
 
@@ -586,6 +588,7 @@ function AdminDashboardContent() {
 
   const openAddProduct = () => {
     setEditingProduct(null);
+    setStockDrafts({});
     setStyleCode('');
     setColorCode('');
     setSelectedSizes(['S', 'M', 'L', 'XL']);
@@ -616,6 +619,7 @@ function AdminDashboardContent() {
 
   const openEditProduct = (prod: Product) => {
     setEditingProduct(prod);
+    setStockDrafts({});
     const { styleCode: parsedStyle, colorCode: parsedColor } = parseSku(prod.sku);
     setStyleCode(parsedStyle);
     setColorCode(parsedColor);
@@ -688,15 +692,32 @@ function AdminDashboardContent() {
     };
 
     try {
+      let savedId: string | undefined;
       if (editingProduct) {
         const updated = await updateProduct(editingProduct.id, productPayload);
         if (updated) setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
         else loadData(); // unexpected: no saved row came back — resync the hard way
-        triggerFeedback('success', `Product "${productForm.title}" updated successfully!`);
+        savedId = editingProduct.id;
       } else {
         const created = await addProduct(productPayload);
         setProducts(prev => [...prev, created]);
-        triggerFeedback('success', `Product "${productForm.title}" added to catalog!`);
+        savedId = created.id;
+      }
+
+      // Stock/barcodes typed into the per-size table but not saved there yet —
+      // for a new garment this is its opening stock. Only sizes still selected.
+      const pendingStock: StockDrafts = {};
+      selectedSizes.forEach(size => { if (stockDrafts[size]) pendingStock[size] = stockDrafts[size]; });
+      const { saved: stockSaved, failed: stockFailed } = productPayload.sku && savedId
+        ? await applyStockDrafts(savedId, productPayload.sku, pendingStock)
+        : { saved: [], failed: [] };
+      setStockDrafts({});
+
+      const verb = editingProduct ? 'updated' : 'added to catalog';
+      if (stockFailed.length) {
+        triggerFeedback('error', `Product "${productForm.title}" ${verb}, but stock for ${stockFailed.join(', ')} didn't save — open it and set it again.`);
+      } else {
+        triggerFeedback('success', `Product "${productForm.title}" ${verb}${stockSaved.length ? ` with stock for ${stockSaved.length} size${stockSaved.length === 1 ? '' : 's'}` : ''}!`);
       }
       setShowProductModal(false);
       // updateProduct/addProduct return the authoritative row and keep the
@@ -2375,19 +2396,20 @@ function AdminDashboardContent() {
                   </div>
                 </div>
 
-                {/* Stock — only meaningful once the garment (and its SKU) actually exists */}
-                {editingProduct && (
-                  <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
-                    <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
-                      STOCK & GALLA BARCODE PER SIZE
-                    </span>
-                    <InventoryPanel
-                      productId={editingProduct.id}
-                      productSku={productForm.sku}
-                      sizes={selectedSizes}
-                    />
-                  </div>
-                )}
+                {/* Stock — a new garment's opening stock is saved with it on publish */}
+                <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
+                  <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
+                    {editingProduct ? 'STOCK & GALLA BARCODE PER SIZE' : 'OPENING STOCK & GALLA BARCODE PER SIZE'}
+                  </span>
+                  <InventoryPanel
+                    key={editingProduct?.id || 'new'}
+                    productId={editingProduct?.id ?? null}
+                    productSku={productForm.sku}
+                    savedProductSku={editingProduct?.sku}
+                    sizes={selectedSizes}
+                    onDraftsChange={setStockDrafts}
+                  />
+                </div>
 
                 {/* Images */}
                 <div className="sm:col-span-2 lg:col-span-3 space-y-2">

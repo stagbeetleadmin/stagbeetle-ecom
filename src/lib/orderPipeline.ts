@@ -130,6 +130,7 @@ export const verifyPayment = async (proof: PaymentProof, expectedTotal: number) 
 export const recordOrderAndDeductStock = async (
   proof: PaymentProof,
   draft: OrderDraft,
+  userId: string | null = null, // verified from the session token — never from the draft
 ): Promise<{ orderId: string; duplicate: boolean; sold: SoldLine[] }> => {
   if (!supabase) throw new PipelineError('Database not configured', 500);
   const orderId = orderIdForPayment(proof.razorpay_payment_id);
@@ -157,6 +158,7 @@ export const recordOrderAndDeductStock = async (
   const { error: insertErr } = await supabase.from('orders').insert([{
     id: orderId,
     created_at: new Date().toISOString(),
+    user_id: userId,
     customer_name: draft.customer_name,
     customer_email: draft.customer_email,
     shipping_address: draft.shipping_address,
