@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { InventoryRecord, getInventoryForProduct, setInventoryManual, setGallaSkuForVariant } from '@/lib/db';
+import { variantSkuFor, gallaBarcodeFor } from '@/lib/gallaBarcode';
 
 interface InventoryPanelProps {
   productId: string;
@@ -85,7 +86,10 @@ export default function InventoryPanel({ productId, productSku, sizes }: Invento
           const isSaving = savingSize === size;
           const isOut = record && record.quantity_available === 0;
           const isLow = record && record.quantity_available > 0 && record.quantity_available <= record.low_stock_threshold;
-          const gallaSkuDraftValue = gallaSkuDrafts[size] ?? (record?.galla_sku || '');
+          const variantSku = record?.sku || variantSkuFor(productSku, size);
+          const autoBarcode = gallaBarcodeFor(variantSku);
+          const savedBarcode = record?.galla_sku || null;
+          const gallaSkuDraftValue = gallaSkuDrafts[size] ?? (savedBarcode || '');
           const isSavingGallaSku = savingGallaSkuSize === size;
 
           return (
@@ -127,13 +131,14 @@ export default function InventoryPanel({ productId, productSku, sizes }: Invento
               </div>
 
               <div className="flex items-center gap-3 pl-[52px]">
-                <span className="text-[9.5px] font-label-caps font-semibold text-zinc-400 uppercase tracking-wider shrink-0">Galla SKU</span>
+                <span className="text-[9.5px] font-label-caps font-semibold text-zinc-400 uppercase tracking-wider shrink-0">Galla Barcode</span>
                 <input
                   type="text"
                   value={gallaSkuDraftValue}
                   onChange={(e) => setGallaSkuDrafts(prev => ({ ...prev, [size]: e.target.value }))}
-                  placeholder="e.g. 10056"
-                  className="w-28 bg-surface-dim border border-on-surface/15 rounded-sm py-1 px-2 text-[11px] font-mono outline-none"
+                  placeholder={autoBarcode}
+                  title={`SKU ${variantSku} — leave blank and save to use ${autoBarcode}`}
+                  className="w-32 bg-surface-dim border border-on-surface/15 rounded-sm py-1 px-2 text-[11px] font-mono outline-none"
                 />
                 <button
                   type="button"
@@ -143,9 +148,15 @@ export default function InventoryPanel({ productId, productSku, sizes }: Invento
                 >
                   {isSavingGallaSku ? 'Saving…' : 'Save'}
                 </button>
-                {!record?.galla_sku && (
-                  <span className="text-[10px] text-amber-600">Not set — this size won&apos;t sync to Galla after a sale</span>
-                )}
+                <span className="text-[10px] text-zinc-400 truncate">
+                  {!record
+                    ? `Will be ${autoBarcode} once the product is saved`
+                    : !savedBarcode
+                      ? <span className="text-amber-600">Not set — this size won&apos;t sync to Galla after a sale</span>
+                      : savedBarcode === autoBarcode
+                        ? `Auto from SKU ${variantSku}`
+                        : <span className="text-amber-600">Custom — differs from SKU {variantSku}</span>}
+                </span>
               </div>
             </div>
           );

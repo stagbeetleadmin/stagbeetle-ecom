@@ -11,11 +11,10 @@ import { supabase } from './db';
 //    logs, browser history, proxies); what gates access is that only
 //    someone holding INVENTORY_SYNC_SECRET can produce a signature we'll
 //    accept. No secret is ever transmitted in the request itself.
-// 2. Bearer token (INVENTORY_SYNC_API_KEY) — a plain `Authorization: Bearer
-//    <key>` header, checked with a constant-time comparison. Matches the
-//    simpler auth style Galla's own outbound webhooks use, so it's the
-//    fallback most integration platforms can actually send without custom
-//    signing code. Weaker than HMAC (the key travels in every request) but
+// 2. API key (INVENTORY_SYNC_API_KEY) — sent as `Authorization: Bearer
+//    <key>` or as an `api-key: <key>` header (what Galla's pushes use),
+//    checked with a constant-time comparison. The fallback most integration
+//    platforms can actually send without custom signing code. Weaker than HMAC (the key travels in every request) but
 //    still requires possessing the secret — far better than an open endpoint.
 // 3. IP allowlist — opt-in via INVENTORY_SYNC_ALLOWED_IPS. Leave it unset
 //    until Galla has a static egress IP to give us; once set, requests from
@@ -44,7 +43,9 @@ const logAuthFailure = async (request: Request, reason: string, clientIp: string
   try {
     await supabase.from('inventory_sync_log').insert([{
       direction: 'inbound',
-      payload: { reason, ip: clientIp, path: new URL(request.url).pathname, user_agent: request.headers.get('user-agent') },
+      // Header NAMES only (never values) — enough to see whether a caller
+      // sent its key under a header we don't check, without logging secrets.
+      payload: { reason, ip: clientIp, path: new URL(request.url).pathname, user_agent: request.headers.get('user-agent'), header_names: [...request.headers.keys()] },
       status: 'failed',
       error_message: `Rejected: ${reason}`,
     }]);
@@ -93,13 +94,16 @@ export const verifyInventoryRequest = async (request: Request, rawBody: string):
     }
   }
 
-  // Layer 2: plain bearer token (Authorization: Bearer <INVENTORY_SYNC_API_KEY>)
+  // Layer 2: plain API key — either `Authorization: Bearer <key>` or an
+  // `api-key: <key>` header. Galla's inventory pushes use the latter
+  // (confirmed from rejected-request header names, 2026-09-29).
   if (apiKey) {
-    const authHeader = request.headers.get('authorization') || '';
-    const providedToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (providedToken) {
-      const provided = Buffer.from(providedToken);
-      const expected = Buffer.from(apiKey);
+    const bearer = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+    const headerKey = (request.headers.get('api-key') || '').trim();
+    const expected = Buffer.from(apiKey);
+    for (const candidate of [bearer, headerKey]) {
+      if (!candidate) continue;
+      const provided = Buffer.from(candidate);
       if (provided.length === expected.length && crypto.timingSafeEqual(provided, expected)) {
         return { ok: true, status: 200 };
       }

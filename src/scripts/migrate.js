@@ -19,7 +19,7 @@ if (!databaseUrl) {
   console.log("\nPlease add your database connection string (DSN) to your \x1b[33m.env.local\x1b[0m file.");
   console.log("You can copy it from your Supabase Dashboard under \x1b[36mProject Settings > Database > Connection string (select URI tab)\x1b[0m.");
   console.log("\nExample entry for \x1b[33m.env.local\x1b[0m:");
-  console.log("\x1b[32mDATABASE_URL=postgresql://postgres:[YOUR-DATABASE-PASSWORD]@db.lpkasszpjklrmwugeupp.supabase.co:5432/postgres\x1b[0m\n");
+  console.log("\x1b[32mDATABASE_URL=postgresql://postgres:[YOUR-DATABASE-PASSWORD]@db.<project-ref>.supabase.co:5432/postgres\x1b[0m\n");
   process.exit(1);
 }
 

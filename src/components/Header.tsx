@@ -14,6 +14,7 @@ const LoginModal = dynamic(() => import('./LoginModal'), {
   ssr: false,
 });
 import { useAuth } from '@/context/AuthContext';
+import { getSaleSnapshot, getSaleSnapshotSync, subscribeToSaleChanges, isSaleLive, SaleSnapshot, Festival, getFestivals, getActiveFestival } from '@/lib/db';
 
 function HeaderInner() {
   const { cartCount } = useCart();
@@ -32,6 +33,29 @@ function HeaderInner() {
 
   const activeCategory = searchParams.get('category') || '';
   const activeSubcategory = searchParams.get('subcategory') || '';
+
+  // "Sale" only ever appears in nav while a sale is actually live — loaded
+  // once here and kept in sync live (another tab/admin toggling the sale
+  // updates this immediately, no refresh needed) via the same
+  // subscribeToSaleChanges pattern the storefront grid uses for pricing.
+  const [saleSnapshot, setSaleSnapshot] = useState<SaleSnapshot>(getSaleSnapshotSync());
+  useEffect(() => {
+    getSaleSnapshot().then(setSaleSnapshot);
+    return subscribeToSaleChanges(() => { getSaleSnapshot().then(setSaleSnapshot); });
+  }, []);
+  const saleActive = isSaleLive(saleSnapshot.config);
+  const isSaleNavActive = activeCategory === 'sale';
+
+  // Festival decoration (see /admin/festivals) — takes over the top
+  // announcement banner slot below when one is live, so the fixed header's
+  // total height never changes and every page's existing scroll/offset math
+  // stays correct. Checked once per page load, not live cross-tab like sale
+  // pricing — a banner swapping a few seconds late carries none of the risk
+  // stale pricing would.
+  const [activeFestival, setActiveFestival] = useState<Festival | null>(null);
+  useEffect(() => {
+    getFestivals().then(list => setActiveFestival(getActiveFestival(list))).catch(() => {});
+  }, []);
 
   // Determine active sections
   const isStorySection = ['/about', '/stores', '/care', '/shipping', '/returns'].includes(pathname);
@@ -111,10 +135,24 @@ function HeaderInner() {
   return (
     <>
       <header className="fixed top-0 left-0 w-full z-[100] flex flex-col">
-        {/* Announcement Banner */}
+        {/* Announcement Banner — swaps to a live festival's decoration when one is configured, same slot/height either way */}
         {!isAdmin && (
-          <div className={`w-full bg-gradient-to-r from-[#C5A059] via-[#F3D9A2] to-[#C5A059] text-[#052A42] text-[10px] font-semibold tracking-[0.2em] text-center transition-all duration-500 overflow-hidden ${isScrolled ? 'h-0 py-0 opacity-0' : 'py-2.5 opacity-100'}`}>
-            FREE SHIPPING ACROSS INDIA &nbsp;·&nbsp; USE CODE <span className="text-[#052A42] font-extrabold underline">WELCOME10</span> FOR 10% OFF
+          <div
+            className={`w-full text-[#052A42] text-[10px] font-semibold tracking-[0.2em] text-center transition-all duration-500 overflow-hidden ${isScrolled ? 'h-0 py-0 opacity-0' : 'py-2.5 opacity-100'} ${activeFestival ? '' : 'bg-gradient-to-r from-[#C5A059] via-[#F3D9A2] to-[#C5A059]'}`}
+            style={activeFestival ? { background: `linear-gradient(90deg, ${activeFestival.theme_color || '#C5A059'}, #ffffff, ${activeFestival.theme_color || '#C5A059'})` } : undefined}
+          >
+            {activeFestival ? (
+              <span>
+                {activeFestival.emoji} {activeFestival.message} {activeFestival.emoji}
+                {activeFestival.coupon_code && (
+                  <>
+                    &nbsp;·&nbsp; USE CODE <span className="font-extrabold underline">{activeFestival.coupon_code}</span>
+                  </>
+                )}
+              </span>
+            ) : (
+              <>FREE SHIPPING ACROSS INDIA &nbsp;·&nbsp; USE CODE <span className="text-[#052A42] font-extrabold underline">WELCOME10</span> FOR 10% OFF</>
+            )}
           </div>
         )}
 
@@ -174,6 +212,18 @@ function HeaderInner() {
                   >
                     Men
                   </Link>
+                  {saleActive && (
+                    <Link
+                      href="/?category=sale"
+                      className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
+                        isSaleNavActive
+                          ? 'text-[#E4443D] border-[#E4443D] font-bold'
+                          : 'text-[#E4443D] border-transparent hover:border-[#E4443D] font-bold'
+                      }`}
+                    >
+                      Sale
+                    </Link>
+                  )}
                   <Link
                     href="/about"
                     className={`text-[12px] tracking-[0.12em] uppercase transition-colors pb-1 border-b-2 ${
@@ -348,6 +398,19 @@ function HeaderInner() {
                   >
                     Men
                   </Link>
+                  {saleActive && (
+                    <Link
+                      href="/?category=sale"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`text-[13px] tracking-[0.12em] uppercase transition-colors pl-2 border-l-2 ${
+                        isSaleNavActive
+                          ? 'text-[#E4443D] border-[#E4443D] font-bold'
+                          : 'text-[#E4443D] border-transparent font-bold'
+                      }`}
+                    >
+                      Sale
+                    </Link>
+                  )}
                   <Link
                     href="/about"
                     onClick={() => setIsMobileMenuOpen(false)}

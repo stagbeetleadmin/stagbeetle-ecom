@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { PRODUCT_COLORS } from './colors';
+import { variantSkuFor, gallaBarcodeFor, isAutoBarcode } from './gallaBarcode';
 
 // Define TS Interfaces
 export interface Product {
@@ -149,7 +150,7 @@ export interface InventoryRecord {
   variant_id: string;
   sku: string;
   size: string;
-  galla_sku: string | null; // Galla's own numeric product code for this size — not our sku; required for outbound order sync to reach the right item
+  galla_sku: string | null; // Galla BARCODE / EAN code for this size (e.g. WINGSF.SXXL) — what outbound order sync sends; see gallaBarcode.ts
   quantity_on_hand: number;
   quantity_reserved: number;
   quantity_available: number; // on_hand - reserved, floored at 0
@@ -166,6 +167,11 @@ export interface OrderItem {
   selected_size: string;
   selected_color: string;
   image: string;
+  // Filled in server-side when the order is recorded (orderPipeline), so the
+  // order keeps exactly which size-variant sold even if the product's codes
+  // change later. Absent on orders placed before 2026-10-06.
+  sku?: string | null; // e.g. WINGS-F.S-XXL
+  galla_barcode?: string | null; // e.g. WINGSF.SXXL
 }
 
 export interface Order {
@@ -215,9 +221,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image1_1780089214455.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image2_1780089220272.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image3_1780089227905.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image1_1780089214455.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image2_1780089220272.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGR/SB-LNSH-SGR_image3_1780089227905.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Stone Grey"],
@@ -234,9 +240,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image1_1780089858705.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image2_1780089866007.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image3_1780089872767.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image1_1780089858705.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image2_1780089866007.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-GRY/SB-LNSH-GRY_image3_1780089872767.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Grey"],
@@ -253,9 +259,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image1_1780088998466.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image2_1780089008188.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image3_1780089013944.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image1_1780088998466.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image2_1780089008188.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-WHT/SB-LNSH-WHT_image3_1780089013944.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Arctic White"],
@@ -272,9 +278,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image1_1780089339973.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image2_1780089334654.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image3_1780089351905.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image1_1780089339973.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image2_1780089334654.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-SGM/SB-LNSH-SGM_image3_1780089351905.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Sage Mint"],
@@ -291,9 +297,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image1_1780089518124.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image2_1780089529662.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image3_1780089535441.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image1_1780089518124.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image2_1780089529662.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-FOL/SB-LNSH-FOL_image3_1780089535441.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Forest Olive"],
@@ -310,9 +316,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image1_1780090271576.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image2_1780090279476.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image3_1780090286859.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image1_1780090271576.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image2_1780090279476.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-LBL/SB-LNSH-LBL_image3_1780090286859.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Light Blue"],
@@ -329,9 +335,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image1_1780090779850.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image2_1780090791851.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image3_1780090796628.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image1_1780090779850.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image2_1780090791851.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRL/SB-LNSH-PRL_image3_1780090796628.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Purple"],
@@ -348,9 +354,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image1_1780090954862.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image2_1780090961757.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image3_1780090968048.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image1_1780090954862.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image2_1780090961757.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLU/SB-LNSH-BLU_image3_1780090968048.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Blue"],
@@ -367,9 +373,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image1_1780091060064.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image2_1780091065552.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image3_1780091070968.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image1_1780091060064.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image2_1780091065552.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-BLK/SB-LNSH-BLK_image3_1780091070968.jpg"
     ],
     sizes: ["S", "M", "L", "XL"],
     colors: ["Obsidian Black", "Iridescent Silver", "Beetle Navy"],
@@ -386,9 +392,9 @@ const SEED_PRODUCTS: Product[] = [
     material: "Premium Cotton Linen Blend Soft-touch breathable weave Lightweight summer fabric",
     description: "The Stagbeetle Essential Linen Shirt is designed for modern minimalism and effortless comfort. Crafted from lightweight breathable linen-blend fabric, it features a tailored fit, half sleeves, clean front placket, and refined detailing suitable for both casual and smart occasions.\n\nBuilt for Indian summers while maintaining a premium structured silhouette.",
     images: [
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image2_1780090084045.jpg",
-      "https://lpkasszpjklrmwugeupp.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image3_1780090090608.jpg"
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image1_1780090073497.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image2_1780090084045.jpg",
+      "https://uzhdhxfcvptgowkuupmz.supabase.co/storage/v1/object/public/garment-images/products/SB-LNSH-PRP/SB-LNSH-PRP_image3_1780090090608.jpg"
     ],
     sizes: ["S", "M", "L", "XL", "XXL"],
     colors: ["Navy Blue"],
@@ -1170,6 +1176,10 @@ const broadcastInventoryChanged = () => {
   channel?.send({ type: 'broadcast', event: INVENTORY_CHANGED_EVENT, payload: {} }).catch(() => {});
 };
 
+// Lets checkout announce a completed sale — the deduction itself now runs
+// server-side (/api/orders/finalize), where there's no realtime channel.
+export const notifyInventoryChanged = () => broadcastInventoryChanged();
+
 // Subscribe to live stock changes — e.g. a product page flips a size to "Out
 // of Stock" the moment someone else buys the last one. Returns an unsubscribe function.
 export const subscribeToInventoryChanges = (onChange: () => void): (() => void) => {
@@ -1311,18 +1321,33 @@ export const getInventoryBySku = async (sku: string): Promise<InventoryRecord | 
 };
 
 // Creates any missing size-variants for a product (e.g. a new size was added
-// in the admin form). Never touches an existing variant's stock — only fills gaps.
+// in the admin form), each with its own SKU and Galla barcode. If the
+// product's style/colour code changed, existing variants are re-pointed to
+// the new SKU — and to the new barcode, unless an admin overrode it. Never
+// touches stock.
 export const ensureVariantsForProduct = async (productId: string, sku: string | undefined, sizes: string[]): Promise<void> => {
   if (!isSupabaseConfigured || !supabase || !sku?.trim()) return;
   const cleanSizes = sizes.filter(s => s && s !== 'One Size');
   if (cleanSizes.length === 0) return;
 
   try {
-    const rows = cleanSizes.map(size => ({
-      product_id: productId,
-      sku: `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`,
-      size,
-    }));
+    const rows = cleanSizes.map(size => {
+      const variantSku = variantSkuFor(sku, size);
+      return { product_id: productId, sku: variantSku, size, galla_sku: gallaBarcodeFor(variantSku) };
+    });
+
+    const { data: existing } = await supabase
+      .from('product_variants')
+      .select('id,sku,size,galla_sku')
+      .eq('product_id', productId);
+    for (const variant of existing || []) {
+      const row = rows.find(r => r.size === variant.size);
+      if (!row || row.sku === variant.sku) continue;
+      const patch = isAutoBarcode(variant.galla_sku, variant.sku) ? { sku: row.sku, galla_sku: row.galla_sku } : { sku: row.sku };
+      const { error } = await supabase.from('product_variants').update(patch).eq('id', variant.id);
+      if (error) console.warn(`[Atelier DB] Could not re-point variant ${variant.sku} -> ${row.sku}:`, error.message);
+    }
+
     await supabase.from('product_variants').upsert(rows, { onConflict: 'product_id,size', ignoreDuplicates: true });
   } catch (e: any) {
     console.warn(`[Atelier DB] ensureVariantsForProduct failed for ${sku}:`, e.message || e);
@@ -1333,7 +1358,8 @@ export const ensureVariantsForProduct = async (productId: string, sku: string | 
 export const setInventoryManual = async (productId: string, sku: string, size: string, quantity: number): Promise<InventoryRecord | null> => {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+    await ensureVariantsForProduct(productId, sku, [size]); // new size → created with its barcode
+    const variantSku = variantSkuFor(sku, size);
     const { data: variant, error: vErr } = await supabase
       .from('product_variants')
       .upsert([{ product_id: productId, sku: variantSku, size }], { onConflict: 'product_id,size' })
@@ -1365,18 +1391,17 @@ export const setInventoryManual = async (productId: string, sku: string, size: s
   }
 };
 
-// Records Galla's own numeric product code for one size of one product —
-// their SKU scheme, not ours (see migration 20260812000000). Outbound order
-// sync (notifyGallaOfSale) looks this up per line item and skips any size
-// that has no mapping set, rather than sending our own SKU format, which
-// Galla's catalog wouldn't recognize.
+// Overrides the Galla barcode for one size of one product — only needed
+// when Galla's barcode for that item doesn't follow the usual rule (see
+// gallaBarcode.ts). Saving it blank resets it to the derived barcode.
 export const setGallaSkuForVariant = async (productId: string, sku: string, size: string, gallaSku: string): Promise<InventoryRecord | null> => {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+    const variantSku = variantSkuFor(sku, size);
+    const barcode = gallaSku.trim() || gallaBarcodeFor(variantSku);
     const { data: variant, error: vErr } = await supabase
       .from('product_variants')
-      .upsert([{ product_id: productId, sku: variantSku, size, galla_sku: gallaSku.trim() || null }], { onConflict: 'product_id,size' })
+      .upsert([{ product_id: productId, sku: variantSku, size, galla_sku: barcode }], { onConflict: 'product_id,size' })
       .select('id,sku,size,galla_sku')
       .single();
     if (vErr || !variant) {
@@ -2455,6 +2480,550 @@ export const setMemberDiscountConfig = async (config: MemberDiscountConfig): Pro
   } catch (e: any) {
     console.warn('[Atelier DB] setMemberDiscountConfig failed:', e.message || e);
     return false;
+  }
+};
+
+// =========================================================================
+// SALE / DISCOUNTS
+//
+// Global sale window (sale_config, reusing app_settings like plus_sizes /
+// member_discount_config above) plus two editable lists — category-wide
+// and product-specific discounts (see 20260903010000_add_sale_management.sql).
+// Same realtime-synced module cache shape as the product catalog and
+// plus-size config further up this file: getSaleSnapshot() populates it,
+// subscribeToSaleChanges() reacts to another tab/admin changing it, and the
+// pricing helpers at the bottom read the cache synchronously so every
+// storefront price display can call one function instead of re-deriving
+// sale math independently.
+// =========================================================================
+
+export interface SaleConfig {
+  active: boolean;
+  start_at: string | null; // ISO timestamp — sale goes live at this instant
+  end_at: string | null; // ISO timestamp — sale ends at this instant
+}
+
+export interface CategoryDiscount {
+  id: string;
+  category: string;
+  subcategory?: string | null; // null = applies to the whole category
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  active: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductDiscount {
+  id: string;
+  product_id: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  active: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SaleSnapshot {
+  config: SaleConfig;
+  categoryDiscounts: CategoryDiscount[];
+  productDiscounts: ProductDiscount[];
+}
+
+const DEFAULT_SALE_CONFIG: SaleConfig = { active: false, start_at: null, end_at: null };
+const EMPTY_SALE_SNAPSHOT: SaleSnapshot = { config: DEFAULT_SALE_CONFIG, categoryDiscounts: [], productDiscounts: [] };
+
+export const getSaleConfig = async (): Promise<SaleConfig> => {
+  if (!isSupabaseConfigured || !supabase) return DEFAULT_SALE_CONFIG;
+  try {
+    const { data } = await withOneRetry(() =>
+      supabaseTimeout(supabase.from('app_settings').select('value').eq('key', 'sale_config').maybeSingle())
+    );
+    if (data?.value) return { ...DEFAULT_SALE_CONFIG, ...(data.value as Partial<SaleConfig>) };
+  } catch (e: any) {
+    console.warn('[Atelier DB] getSaleConfig failed, using defaults:', e.message || e);
+  }
+  return DEFAULT_SALE_CONFIG;
+};
+
+export const setSaleConfig = async (config: SaleConfig): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'sale_config', value: config, updated_at: new Date().toISOString() }], { onConflict: 'key' });
+    if (error) {
+      console.warn('[Atelier DB] setSaleConfig failed:', error.message);
+      return false;
+    }
+    broadcastSaleChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] setSaleConfig failed:', e.message || e);
+    return false;
+  }
+};
+
+export const getCategoryDiscounts = async (): Promise<CategoryDiscount[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('category_discounts').select('*').order('created_at', { ascending: false })
+    );
+    if (error) throw error;
+    return (data || []) as CategoryDiscount[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getCategoryDiscounts failed:', e.message || e);
+    return [];
+  }
+};
+
+export const getProductDiscounts = async (): Promise<ProductDiscount[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('product_discounts').select('*').order('created_at', { ascending: false })
+    );
+    if (error) throw error;
+    return (data || []) as ProductDiscount[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getProductDiscounts failed:', e.message || e);
+    return [];
+  }
+};
+
+export interface DiscountFormInput {
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  active: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+}
+
+// Admin Sale Management page — Add/Edit compose into one call: pass `id` to
+// update an existing row, omit it to insert a new one. The unique index on
+// (category, subcategory) means a duplicate insert fails with a Postgres
+// unique_violation (23505), which is translated into a friendly message
+// rather than a raw DB error, so the admin form knows to edit the existing
+// row instead of creating a conflicting one.
+export const saveCategoryDiscount = async (
+  input: DiscountFormInput & { category: string; subcategory?: string | null },
+  id?: string
+): Promise<{ ok: boolean; data?: CategoryDiscount; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: 'Not available right now.' };
+  try {
+    const payload = { ...input, subcategory: input.subcategory || null, updated_at: new Date().toISOString() };
+    const { data, error } = id
+      ? await supabase.from('category_discounts').update(payload).eq('id', id).select().single()
+      : await supabase.from('category_discounts').insert([payload]).select().single();
+    if (error) {
+      if (error.code === '23505') {
+        return { ok: false, error: 'A discount for that category/subcategory already exists — edit it below instead of adding a new one.' };
+      }
+      throw error;
+    }
+    broadcastSaleChanged();
+    return { ok: true, data: data as CategoryDiscount };
+  } catch (e: any) {
+    console.warn('[Atelier DB] saveCategoryDiscount failed:', e.message || e);
+    return { ok: false, error: "Couldn't save — please try again." };
+  }
+};
+
+export const deleteCategoryDiscount = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('category_discounts').delete().eq('id', id);
+    if (error) throw error;
+    broadcastSaleChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteCategoryDiscount failed:', e.message || e);
+    return false;
+  }
+};
+
+// Same Add/Edit-in-one-call shape as saveCategoryDiscount — `product_discounts`
+// has a UNIQUE(product_id) constraint, so a duplicate insert (a second
+// discount for the same product) hits 23505 and gets the same friendly
+// "edit instead" treatment.
+export const saveProductDiscount = async (
+  input: DiscountFormInput & { product_id: string },
+  id?: string
+): Promise<{ ok: boolean; data?: ProductDiscount; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: 'Not available right now.' };
+  try {
+    const payload = { ...input, updated_at: new Date().toISOString() };
+    const { data, error } = id
+      ? await supabase.from('product_discounts').update(payload).eq('id', id).select().single()
+      : await supabase.from('product_discounts').insert([payload]).select().single();
+    if (error) {
+      if (error.code === '23505') {
+        return { ok: false, error: 'This product already has a discount configured — edit it below instead of adding a new one.' };
+      }
+      throw error;
+    }
+    broadcastSaleChanged();
+    return { ok: true, data: data as ProductDiscount };
+  } catch (e: any) {
+    console.warn('[Atelier DB] saveProductDiscount failed:', e.message || e);
+    return { ok: false, error: "Couldn't save — please try again." };
+  }
+};
+
+export const deleteProductDiscount = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('product_discounts').delete().eq('id', id);
+    if (error) throw error;
+    broadcastSaleChanged();
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteProductDiscount failed:', e.message || e);
+    return false;
+  }
+};
+
+// ── Realtime snapshot cache — config + both discount lists loaded together,
+// since a price display needs all three to resolve one product's price. ──
+const SALE_CHANNEL_NAME = 'sale-config-changed';
+const SALE_CHANGED_EVENT = 'sale-changed';
+let saleChannel: RealtimeChannel | null = null;
+const saleChangeListeners = new Set<() => void>();
+
+let saleSnapshotCache: SaleSnapshot = EMPTY_SALE_SNAPSHOT;
+let saleSnapshotFetchInFlight: Promise<SaleSnapshot> | null = null;
+
+const fetchSaleSnapshot = async (): Promise<SaleSnapshot> => {
+  if (!isSupabaseConfigured || !supabase) return EMPTY_SALE_SNAPSHOT;
+  try {
+    const [config, categoryDiscounts, productDiscounts] = await Promise.all([
+      getSaleConfig(),
+      getCategoryDiscounts(),
+      getProductDiscounts(),
+    ]);
+    saleSnapshotCache = { config, categoryDiscounts, productDiscounts };
+  } catch (e: any) {
+    console.warn('[Atelier DB] fetchSaleSnapshot failed, keeping last known snapshot:', e.message || e);
+  }
+  return saleSnapshotCache;
+};
+
+// Loads (or reloads) the sale snapshot the pricing helpers below read
+// synchronously. Call once on mount anywhere prices or sale UI render —
+// mirrors getPlusSizesConfig() above. In-flight calls are de-duplicated.
+export const getSaleSnapshot = (): Promise<SaleSnapshot> => {
+  if (saleSnapshotFetchInFlight) return saleSnapshotFetchInFlight;
+  const promise = fetchSaleSnapshot().finally(() => {
+    if (saleSnapshotFetchInFlight === promise) saleSnapshotFetchInFlight = null;
+  });
+  saleSnapshotFetchInFlight = promise;
+  return promise;
+};
+
+// Synchronous read of whatever getSaleSnapshot() last loaded — safe to call
+// before that resolves (returns the all-inactive default snapshot), the
+// same "start safe, upgrade once real data lands" shape as plusSizesSet.
+export const getSaleSnapshotSync = (): SaleSnapshot => saleSnapshotCache;
+
+const ensureSaleChannel = (): RealtimeChannel | null => {
+  if (!isSupabaseConfigured || !supabase) return null;
+  if (!saleChannel) {
+    saleChannel = supabase
+      .channel(SALE_CHANNEL_NAME)
+      .on('broadcast', { event: SALE_CHANGED_EVENT }, () => {
+        fetchSaleSnapshot().then(() => {
+          saleChangeListeners.forEach(fn => fn());
+        });
+      })
+      .subscribe();
+  }
+  return saleChannel;
+};
+
+const broadcastSaleChanged = () => {
+  const channel = ensureSaleChannel();
+  channel?.send({ type: 'broadcast', event: SALE_CHANGED_EVENT, payload: {} }).catch(() => {});
+};
+
+// Subscribe to live sale/discount changes (another tab or admin edited the
+// sale config, or added/removed a discount). Returns an unsubscribe function.
+export const subscribeToSaleChanges = (onChange: () => void): (() => void) => {
+  if (!isSupabaseConfigured || !supabase) return () => {};
+  ensureSaleChannel();
+  saleChangeListeners.add(onChange);
+  return () => { saleChangeListeners.delete(onChange); };
+};
+
+// Whether the store-wide sale window is currently live — the on/off switch
+// plus the configured start/end instant, if any. Every other sale check
+// (getProductDiscount) is gated behind this.
+export const isSaleLive = (config: SaleConfig, now: Date = new Date()): boolean => {
+  if (!config.active) return false;
+  if (config.start_at && now < new Date(config.start_at)) return false;
+  if (config.end_at && now > new Date(config.end_at)) return false;
+  return true;
+};
+
+const isDiscountRowLive = (row: { active: boolean; start_at?: string | null; end_at?: string | null }, now: Date): boolean => {
+  if (!row.active) return false;
+  if (row.start_at && now < new Date(row.start_at)) return false;
+  if (row.end_at && now > new Date(row.end_at)) return false;
+  return true;
+};
+
+// Resolves which single discount (if any) applies to a product right now.
+// Precedence — product-specific always wins over category-level: lets an
+// admin override a broad category sale for one product (e.g. everything in
+// Shirts is 20% off, but this one Premium Black Shirt is 30% off instead).
+// Falls back to the most specific matching category discount (exact
+// category+subcategory, then the whole-category row), and returns null
+// when nothing applies — including whenever the global sale window itself
+// isn't live, so every caller gets "no sale" for free during edge cases
+// #1-#3 (disabled / not started / expired) without checking isSaleLive
+// separately.
+export const getProductDiscount = (
+  product: Pick<Product, 'id' | 'category' | 'subcategory'>,
+  snapshot: SaleSnapshot,
+  now: Date = new Date()
+): CategoryDiscount | ProductDiscount | null => {
+  if (!isSaleLive(snapshot.config, now)) return null;
+
+  const productDiscount = snapshot.productDiscounts.find(d => d.product_id === product.id);
+  if (productDiscount && isDiscountRowLive(productDiscount, now)) return productDiscount;
+
+  const category = product.category?.toLowerCase();
+  const subcategory = product.subcategory?.toLowerCase();
+  const exactMatch = snapshot.categoryDiscounts.find(
+    d => d.category.toLowerCase() === category && !!d.subcategory && d.subcategory.toLowerCase() === subcategory
+  );
+  if (exactMatch && isDiscountRowLive(exactMatch, now)) return exactMatch;
+
+  const wholeCategoryMatch = snapshot.categoryDiscounts.find(
+    d => d.category.toLowerCase() === category && !d.subcategory
+  );
+  if (wholeCategoryMatch && isDiscountRowLive(wholeCategoryMatch, now)) return wholeCategoryMatch;
+
+  return null;
+};
+
+export interface SalePriceInfo {
+  original: number; // the amount the discount was applied to
+  salePrice: number; // equal to `original` whenever hasSale is false
+  discountPercent: number; // rounded, for display badges — 0 when hasSale is false
+  hasSale: boolean;
+}
+
+// Applies one resolved discount (or none) to a plain amount — the actual
+// arithmetic, kept separate from getSalePriceInfo below so a caller that
+// doesn't have a specific size in hand yet (the listing grid shows one
+// price per product card, not per size) can still price a product
+// correctly without going through getEffectivePrice.
+export const applySaleDiscount = (
+  original: number,
+  discount: CategoryDiscount | ProductDiscount | null
+): SalePriceInfo => {
+  if (!discount || discount.discount_value <= 0) {
+    return { original, salePrice: original, discountPercent: 0, hasSale: false };
+  }
+  const rawSalePrice = discount.discount_type === 'percentage'
+    ? original * (1 - discount.discount_value / 100)
+    : original - discount.discount_value;
+  const salePrice = Math.round(Math.min(original, Math.max(0, rawSalePrice)));
+  if (salePrice >= original) {
+    // A fixed-amount discount that doesn't actually beat the price (or a
+    // 0-value discount that slipped through) shouldn't render as a "sale".
+    return { original, salePrice: original, discountPercent: 0, hasSale: false };
+  }
+  const discountPercent = Math.round(((original - salePrice) / original) * 100);
+  return { original, salePrice, discountPercent, hasSale: true };
+};
+
+// The one place sale price math happens for a specific size — every
+// storefront surface that has a size in hand (product detail, cart,
+// checkout) should call this rather than re-deriving discount math
+// independently, so it can't drift between them (same reasoning
+// PriceDisplay's own comment gives for centralizing the MRP-vs-price
+// discount badge). `original` includes the plus-size surcharge via
+// getEffectivePrice, same as every other size-aware price in the app.
+export const getSalePriceInfo = (
+  product: Pick<Product, 'id' | 'category' | 'subcategory' | 'price' | 'plus_size_surcharge'>,
+  size: string,
+  snapshot: SaleSnapshot,
+  now: Date = new Date()
+): SalePriceInfo => {
+  const original = getEffectivePrice(product, size);
+  const discount = getProductDiscount(product, snapshot, now);
+  return applySaleDiscount(original, discount);
+};
+
+// =========================================================================
+// FESTIVAL STOREFRONT DECORATION (festivals table, see 20260915000000_
+// add_festivals_and_notifications.sql) — admin-configured seasonal
+// campaigns (Ganesh Chaturthi, Diwali, ...) that decorate the storefront
+// via src/components/FestivalBanner.tsx and optionally link a coupon to
+// drive sales during the window. Public read (same as category/product
+// discounts) since the banner is computed client-side on every visit.
+// =========================================================================
+
+export interface Festival {
+  id: string;
+  name: string;
+  emoji: string | null;
+  message: string;
+  theme_color: string | null;
+  coupon_code: string | null;
+  mode: 'auto' | 'manual';
+  manual_active: boolean;
+  enabled: boolean;
+  start_at: string | null;
+  end_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FestivalFormInput {
+  name: string;
+  emoji: string | null;
+  message: string;
+  theme_color: string | null;
+  coupon_code: string | null;
+  mode: 'auto' | 'manual';
+  manual_active: boolean;
+  enabled: boolean;
+  start_at: string | null;
+  end_at: string | null;
+}
+
+export const getFestivals = async (): Promise<Festival[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('festivals').select('*').order('created_at', { ascending: false })
+    );
+    if (error) throw error;
+    return (data || []) as Festival[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getFestivals failed:', e.message || e);
+    return [];
+  }
+};
+
+// Add/Edit-in-one-call, same shape as saveCategoryDiscount — pass `id` to
+// update an existing row, omit it to insert a new one.
+export const saveFestival = async (
+  input: FestivalFormInput,
+  id?: string
+): Promise<{ ok: boolean; data?: Festival; error?: string }> => {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: 'Not available right now.' };
+  try {
+    const payload = { ...input, updated_at: new Date().toISOString() };
+    const { data, error } = id
+      ? await supabase.from('festivals').update(payload).eq('id', id).select().single()
+      : await supabase.from('festivals').insert([payload]).select().single();
+    if (error) throw error;
+    return { ok: true, data: data as Festival };
+  } catch (e: any) {
+    console.warn('[Atelier DB] saveFestival failed:', e.message || e);
+    return { ok: false, error: "Couldn't save — please try again." };
+  }
+};
+
+export const deleteFestival = async (id: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('festivals').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (e: any) {
+    console.warn('[Atelier DB] deleteFestival failed:', e.message || e);
+    return false;
+  }
+};
+
+// Whether a festival should be decorating the storefront right now.
+// `enabled` is a hard override (same idea as SaleConfig.active) — off means
+// off regardless of mode/dates. Manual mode ignores dates entirely, so an
+// admin can flip a festival on/off on the spot without touching its window.
+export const isFestivalLive = (festival: Festival, now: Date = new Date()): boolean => {
+  if (!festival.enabled) return false;
+  if (festival.mode === 'manual') return festival.manual_active;
+  if (festival.start_at && now < new Date(festival.start_at)) return false;
+  if (festival.end_at && now > new Date(festival.end_at)) return false;
+  return !!(festival.start_at || festival.end_at); // auto mode with no window at all never auto-activates
+};
+
+// The single festival to actually show, if any — first live one by most
+// recently updated. Only one banner shows at a time even if an admin
+// accidentally leaves two overlapping windows enabled.
+export const getActiveFestival = (festivals: Festival[], now: Date = new Date()): Festival | null =>
+  festivals.find(f => isFestivalLive(f, now)) || null;
+
+// =========================================================================
+// ADMIN BULK NOTIFICATIONS (notification_campaigns table + src/lib/
+// whatsapp.ts) — send a WhatsApp announcement to every registered user or
+// every birthday/anniversary member (e.g. "we're closed for Diwali",
+// "24-hour flash sale"). The actual send happens server-side in
+// src/app/api/admin/notifications/send/route.ts (needs the WhatsApp API
+// key, which must never reach the browser); these are just the read side
+// for the admin page's history list and audience-size preview.
+// =========================================================================
+
+export interface NotificationCampaign {
+  id: string;
+  title: string;
+  message: string;
+  audience: 'all_users' | 'members';
+  channel: 'whatsapp';
+  template_name: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  status: 'sending' | 'completed' | 'failed';
+  results: { phone: string; name?: string; status: 'sent' | 'failed'; error?: string }[] | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export const getNotificationCampaigns = async (): Promise<NotificationCampaign[]> => {
+  if (!isSupabaseConfigured || !supabase) return [];
+  try {
+    const { data, error } = await supabaseTimeout(
+      supabase.from('notification_campaigns').select('*').order('created_at', { ascending: false }).limit(50)
+    );
+    if (error) throw error;
+    return (data || []) as NotificationCampaign[];
+  } catch (e: any) {
+    console.warn('[Atelier DB] getNotificationCampaigns failed:', e.message || e);
+    return [];
+  }
+};
+
+// Quick "who would this reach" count for the compose form — same
+// non-customer exclusion as getProfilesCount, and only counts contacts
+// with a phone on file since that's the only channel wired up today.
+export const getAudienceCount = async (audience: 'all_users' | 'members'): Promise<number> => {
+  if (!isSupabaseConfigured || !supabase) return 0;
+  try {
+    if (audience === 'members') {
+      const { count, error } = await supabaseTimeout(
+        supabase.from('members').select('*', { count: 'exact', head: true }).not('phone', 'is', null)
+      );
+      if (error) throw error;
+      return count ?? 0;
+    }
+    let builder = supabase.from('profiles').select('*', { count: 'exact', head: true }).not('phone', 'is', null);
+    for (const email of NON_CUSTOMER_PROFILE_EMAILS) builder = builder.not('email', 'ilike', email);
+    const { count, error } = await supabaseTimeout(builder);
+    if (error) throw error;
+    return count ?? 0;
+  } catch (e: any) {
+    console.warn('[Atelier DB] getAudienceCount failed:', e.message || e);
+    return 0;
   }
 };
 

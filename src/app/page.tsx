@@ -6,7 +6,10 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges, GARMENT_GROUPS, sortSizes } from '@/lib/db';
+import {
+  getProducts, Product, getSkuBase, getColorHex, getColorName, subscribeToProductChanges, GARMENT_GROUPS, sortSizes,
+  getSaleSnapshot, getSaleSnapshotSync, subscribeToSaleChanges, getProductDiscount, applySaleDiscount, SaleSnapshot,
+} from '@/lib/db';
 import { useCart } from '@/context/CartContext';
 import PriceDisplay from '@/components/PriceDisplay';
 
@@ -193,6 +196,17 @@ function ProductCard({
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get('category') || '';
 
+  // Synchronous cache read (instant, no flash of un-discounted price on
+  // first paint) refreshed from the server + kept live across tabs — same
+  // pattern the plus-size surcharge config uses. No size is selected yet on
+  // a listing card, so this discounts the base `price` directly rather than
+  // going through the size-aware getSalePriceInfo.
+  const [saleSnapshot, setSaleSnapshot] = useState<SaleSnapshot>(getSaleSnapshotSync());
+  useEffect(() => {
+    getSaleSnapshot().then(setSaleSnapshot);
+    return subscribeToSaleChanges(() => { getSaleSnapshot().then(setSaleSnapshot); });
+  }, []);
+
   useEffect(() => {
     setActiveProduct(initialProduct);
   }, [initialProduct]);
@@ -275,7 +289,19 @@ function ProductCard({
       <div className="pt-3 pb-4 px-1 text-left">
         <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-0.5">{activeProduct.subcategory || activeProduct.category}</p>
         <h3 className="text-[13px] font-semibold text-gray-900 leading-snug truncate pr-2">{activeProduct.title}</h3>
-        <PriceDisplay price={activeProduct.price} mrp={activeProduct.mrp} size="sm" className="mt-0.5" />
+        {(() => {
+          const discount = getProductDiscount(activeProduct, saleSnapshot);
+          const priceInfo = applySaleDiscount(activeProduct.price, discount);
+          return (
+            <PriceDisplay
+              price={activeProduct.price}
+              mrp={activeProduct.mrp}
+              salePrice={priceInfo.hasSale ? priceInfo.salePrice : undefined}
+              size="sm"
+              className="mt-0.5"
+            />
+          );
+        })()}
         <p className="text-[11px] text-gray-400 mt-0.5 truncate">{activeProduct.material}</p>
 
         {/* Color swatches — square with slightly rounded corners, sized like a
@@ -511,6 +537,15 @@ function StorefrontContent() {
   const [searchTerm, setSearchTerm] = useState(searchParam);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchParam);
 
+  // Powers the `category=sale` special case below (and every price shown on
+  // this page) — loaded once here and kept live the same way the product
+  // catalog itself is, via subscribeToSaleChanges.
+  const [saleSnapshot, setSaleSnapshot] = useState<SaleSnapshot>(getSaleSnapshotSync());
+  useEffect(() => {
+    getSaleSnapshot().then(setSaleSnapshot);
+    return subscribeToSaleChanges(() => { getSaleSnapshot().then(setSaleSnapshot); });
+  }, []);
+
   useEffect(() => { setActiveCategory(categoryParam); }, [categoryParam]);
   useEffect(() => { setSearchTerm(searchParam); }, [searchParam]);
 
@@ -586,7 +621,16 @@ function StorefrontContent() {
 
   // Filter Products based on category, subcategory, and search term
   const filteredProducts = products.filter(p => {
-    const matchCat = activeCategory === 'all' || activeCategory === '' || p.category.toLowerCase() === activeCategory.toLowerCase();
+    // "sale" isn't a real product category — it's a virtual one meaning
+    // "currently has a live discount", resolved through the same
+    // getProductDiscount() every other price display uses. This is what
+    // makes an inactive/expired sale correctly show nothing (edge case
+    // #10: a shopper landing on ?category=sale directly gets the normal
+    // empty state below, never a stale listing) without a separate page
+    // or duplicated filtering logic.
+    const matchCat = activeCategory === 'sale'
+      ? !!getProductDiscount(p, saleSnapshot)
+      : activeCategory === 'all' || activeCategory === '' || p.category.toLowerCase() === activeCategory.toLowerCase();
     const matchSub = !subcategoryParam || p.subcategory?.toLowerCase() === subcategoryParam.toLowerCase();
 
     // Multi-word search query checking against multiple product fields (Title, Material, Subcategory, SKU, Description, Colors)

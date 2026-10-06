@@ -5,17 +5,29 @@ import { supabase } from './db';
 //
 // Real contract, confirmed by Galla 2026-08-11:
 //   POST https://retail.galla.app/mystorev2/api/v2/webhooks/orders
-//   Headers: Content-Type, store-code, Authorization: Bearer <key>, loc_code
+//   Headers: Content-Type, store-code, Authorization: Bearer <key>, loc-code
 //   Body: { event: "order.created", external_order_id, line_items: [{sku, qty}] }
 // One request per ORDER (all its line items together), not one per SKU.
-// Currently pointed at Galla's DEMO account — see .env.local for the values
-// to swap once production store/location codes and API key are confirmed.
 //
-// Galla identifies stock by their own numeric product code (e.g. "10056"),
-// not our STYLE-COLOUR-SIZE sku (e.g. "SATN-CRM-M") — the two don't match.
-// Every item here must carry galla_sku (set per-variant by an admin, see
-// setGallaSkuForVariant in db.ts); anything missing it is skipped and
-// logged rather than sent with a sku Galla's catalog won't recognize.
+// loc-code is a HYPHEN, not an underscore, despite every cURL example Galla
+// has sent us (including their 2026-09-08 email) literally writing it as
+// `loc_code`. Sending it that way gets a 422 "loc_code header is required"
+// even though the header is present — their server just doesn't recognize
+// the underscore form. Confirmed live 2026-09-12 against their demo account
+// (202 {"status":"queued"} with the hyphen; consistent 422 with underscore).
+//
+// Currently pointed at Galla's DEMO account — see .env.local for the values
+// to swap once production store/location codes are confirmed.
+//
+// What goes in line_items[].sku is Galla's BARCODE / EAN CODE for the item,
+// not its item name. Confirmed 2026-10-06 from Galla's Item Manager: item
+// name "WINGS-F.S-XXL" (= our variant SKU) has barcode "WINGSF.SXXL" — the
+// same string with hyphens dropped. Every webhook call answers 202 queued
+// whatever the sku, so a wrong code fails silently on Galla's side; that's
+// how the earlier SKU-as-is setting (2026-09-12) went unnoticed. The barcode
+// is stored per size in product_variants.galla_sku, derived by
+// gallaBarcode.ts and overridable per size from the product's stock panel.
+// Still skipped-and-logged if somehow null.
 //
 // What this does: after an online order is confirmed, tell Galla what sold
 // so a store clerk doesn't sell the same physical unit again. Fire-and-
@@ -28,8 +40,8 @@ const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 800;
 
 interface GallaSaleItem {
-  sku: string; // our own variant SKU — for logging only, never sent to Galla
-  galla_sku: string | null; // Galla's numeric code for this exact size — what's actually sent
+  sku: string; // our own variant SKU (e.g. WINGS-F.S-XXL) — for logging only, never sent to Galla
+  galla_sku: string | null; // Galla barcode for this exact size (e.g. WINGSF.SXXL) — what's actually sent
   quantity: number;
 }
 
@@ -59,7 +71,7 @@ const callGalla = async (payload: ReturnType<typeof buildGallaOrderPayload>): Pr
           'Content-Type': 'application/json',
           'store-code': storeCode,
           'Authorization': `Bearer ${apiKey}`,
-          'loc_code': locCode,
+          'loc-code': locCode,
         },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(8000),
@@ -106,9 +118,20 @@ export const notifyGallaOfSale = async (orderId: string, items: GallaSaleItem[])
     }
   }
 
-  if (mappable.length === 0) return;
+  // GALLA_SKU_ALLOWLIST (comma-separated) restricts outbound sync to exactly
+  // those items — used while testing against a single dummy item so no other
+  // product's stock in Galla can be touched. Entries may be our SKU
+  // (SHIRT-M-M) or the Galla barcode (SHIRTMM). Unset = every mapped item is sent.
+  const allowlist = process.env.GALLA_SKU_ALLOWLIST?.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  const allowed = allowlist?.length
+    ? mappable.filter(i => allowlist.includes(i.galla_sku.toUpperCase()) || allowlist.includes(i.sku.toUpperCase()))
+    : mappable;
+  if (allowed.length < mappable.length) {
+    console.info(`[Galla Sync] Order ${orderId}: skipping non-allowlisted item(s):`, mappable.filter(i => !allowed.includes(i)).map(i => i.galla_sku));
+  }
+  if (allowed.length === 0) return;
 
-  const payload = buildGallaOrderPayload(orderId, mappable);
+  const payload = buildGallaOrderPayload(orderId, allowed);
   const result = await callGalla(payload);
 
   if (supabase) {
@@ -116,7 +139,7 @@ export const notifyGallaOfSale = async (orderId: string, items: GallaSaleItem[])
       await supabase.from('inventory_sync_log').insert([{
         direction: 'outbound',
         external_event_id: `sb-order-${orderId}`,
-        variant_sku: mappable.map(i => i.sku).join(','),
+        variant_sku: allowed.map(i => i.sku).join(','),
         payload,
         status: result.ok ? 'applied' : 'failed',
         error_message: result.error,

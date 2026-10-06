@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Product, OrderItem, getSuggestions, getCart, saveCart, getEffectivePrice, getPlusSizesConfig } from '@/lib/db';
+import { Product, OrderItem, getSuggestions, getCart, saveCart, getPlusSizesConfig, getSaleSnapshot, getSaleSnapshotSync, getSalePriceInfo } from '@/lib/db';
 import { useAuth } from './AuthContext';
 
 interface CartItem extends OrderItem {}
@@ -66,6 +66,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // (the admin settings panel) subscribe on their own.
   useEffect(() => {
     getPlusSizesConfig();
+    // Same reasoning as plus sizes above: fetch once so addToCart's
+    // synchronous getSalePriceInfo() call below has real data as soon as
+    // possible, without a dedicated realtime subscription here — sale
+    // config changes are rare/admin-only, and the surfaces that need to
+    // react live to it (nav, listing grid) already subscribe on their own.
+    getSaleSnapshot();
   }, []);
 
   // Load cart from localStorage on mount
@@ -178,10 +184,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         newCart[existingItemIndex].quantity += quantity;
         return newCart;
       } else {
+        // Locks in the current sale price (if any) at add-to-cart time —
+        // same "price is fixed once it's in the cart" behavior the app
+        // already has for plus-size surcharges. getSalePriceInfo falls back
+        // to a plain getEffectivePrice whenever no discount applies, so this
+        // is a strict superset of the previous line, not a behavior change
+        // for any product without an active sale.
+        const price = getSalePriceInfo(product, size, getSaleSnapshotSync()).salePrice;
         const newItem: CartItem = {
           product_id: product.id,
           title: product.title,
-          price: getEffectivePrice(product, size), // includes the plus-size surcharge, if this size carries one
+          price,
           quantity: quantity,
           selected_size: size,
           selected_color: color,
