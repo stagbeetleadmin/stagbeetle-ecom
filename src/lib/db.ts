@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { PRODUCT_COLORS } from './colors';
+import { variantSkuFor, gallaBarcodeFor, isAutoBarcode } from './gallaBarcode';
 
 // Define TS Interfaces
 export interface Product {
@@ -149,7 +150,7 @@ export interface InventoryRecord {
   variant_id: string;
   sku: string;
   size: string;
-  galla_sku: string | null; // Galla's own numeric product code for this size — not our sku; required for outbound order sync to reach the right item
+  galla_sku: string | null; // Galla BARCODE / EAN code for this size (e.g. WINGSF.SXXL) — what outbound order sync sends; see gallaBarcode.ts
   quantity_on_hand: number;
   quantity_reserved: number;
   quantity_available: number; // on_hand - reserved, floored at 0
@@ -166,6 +167,11 @@ export interface OrderItem {
   selected_size: string;
   selected_color: string;
   image: string;
+  // Filled in server-side when the order is recorded (orderPipeline), so the
+  // order keeps exactly which size-variant sold even if the product's codes
+  // change later. Absent on orders placed before 2026-10-06.
+  sku?: string | null; // e.g. WINGS-F.S-XXL
+  galla_barcode?: string | null; // e.g. WINGSF.SXXL
 }
 
 export interface Order {
@@ -1315,7 +1321,10 @@ export const getInventoryBySku = async (sku: string): Promise<InventoryRecord | 
 };
 
 // Creates any missing size-variants for a product (e.g. a new size was added
-// in the admin form). Never touches an existing variant's stock — only fills gaps.
+// in the admin form), each with its own SKU and Galla barcode. If the
+// product's style/colour code changed, existing variants are re-pointed to
+// the new SKU — and to the new barcode, unless an admin overrode it. Never
+// touches stock.
 export const ensureVariantsForProduct = async (productId: string, sku: string | undefined, sizes: string[]): Promise<void> => {
   if (!isSupabaseConfigured || !supabase || !sku?.trim()) return;
   const cleanSizes = sizes.filter(s => s && s !== 'One Size');
@@ -1323,19 +1332,22 @@ export const ensureVariantsForProduct = async (productId: string, sku: string | 
 
   try {
     const rows = cleanSizes.map(size => {
-      const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
-      return {
-        product_id: productId,
-        sku: variantSku,
-        size,
-        // Confirmed 2026-09-12: Galla's POS is loaded with our own SKU
-        // format directly (e.g. EURO-BLK-M) — no separate numeric mapping.
-        // Default galla_sku to the variant's own sku so new products are
-        // sync-ready immediately; still editable per-variant from the
-        // product's stock panel for the rare case Galla's code differs.
-        galla_sku: variantSku,
-      };
+      const variantSku = variantSkuFor(sku, size);
+      return { product_id: productId, sku: variantSku, size, galla_sku: gallaBarcodeFor(variantSku) };
     });
+
+    const { data: existing } = await supabase
+      .from('product_variants')
+      .select('id,sku,size,galla_sku')
+      .eq('product_id', productId);
+    for (const variant of existing || []) {
+      const row = rows.find(r => r.size === variant.size);
+      if (!row || row.sku === variant.sku) continue;
+      const patch = isAutoBarcode(variant.galla_sku, variant.sku) ? { sku: row.sku, galla_sku: row.galla_sku } : { sku: row.sku };
+      const { error } = await supabase.from('product_variants').update(patch).eq('id', variant.id);
+      if (error) console.warn(`[Atelier DB] Could not re-point variant ${variant.sku} -> ${row.sku}:`, error.message);
+    }
+
     await supabase.from('product_variants').upsert(rows, { onConflict: 'product_id,size', ignoreDuplicates: true });
   } catch (e: any) {
     console.warn(`[Atelier DB] ensureVariantsForProduct failed for ${sku}:`, e.message || e);
@@ -1346,7 +1358,8 @@ export const ensureVariantsForProduct = async (productId: string, sku: string | 
 export const setInventoryManual = async (productId: string, sku: string, size: string, quantity: number): Promise<InventoryRecord | null> => {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+    await ensureVariantsForProduct(productId, sku, [size]); // new size → created with its barcode
+    const variantSku = variantSkuFor(sku, size);
     const { data: variant, error: vErr } = await supabase
       .from('product_variants')
       .upsert([{ product_id: productId, sku: variantSku, size }], { onConflict: 'product_id,size' })
@@ -1378,18 +1391,17 @@ export const setInventoryManual = async (productId: string, sku: string, size: s
   }
 };
 
-// Records Galla's own numeric product code for one size of one product —
-// their SKU scheme, not ours (see migration 20260812000000). Outbound order
-// sync (notifyGallaOfSale) looks this up per line item and skips any size
-// that has no mapping set, rather than sending our own SKU format, which
-// Galla's catalog wouldn't recognize.
+// Overrides the Galla barcode for one size of one product — only needed
+// when Galla's barcode for that item doesn't follow the usual rule (see
+// gallaBarcode.ts). Saving it blank resets it to the derived barcode.
 export const setGallaSkuForVariant = async (productId: string, sku: string, size: string, gallaSku: string): Promise<InventoryRecord | null> => {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const variantSku = `${sku.trim().toUpperCase()}-${size.trim().toUpperCase()}`;
+    const variantSku = variantSkuFor(sku, size);
+    const barcode = gallaSku.trim() || gallaBarcodeFor(variantSku);
     const { data: variant, error: vErr } = await supabase
       .from('product_variants')
-      .upsert([{ product_id: productId, sku: variantSku, size, galla_sku: gallaSku.trim() || null }], { onConflict: 'product_id,size' })
+      .upsert([{ product_id: productId, sku: variantSku, size, galla_sku: barcode }], { onConflict: 'product_id,size' })
       .select('id,sku,size,galla_sku')
       .single();
     if (vErr || !variant) {

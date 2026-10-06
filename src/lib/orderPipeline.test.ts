@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
 
-import { aggregateLines, orderIdForPayment, validateDraft, verifyPayment, PipelineError } from './orderPipeline';
+import { aggregateLines, orderIdForPayment, validateDraft, verifyPayment, withVariantCodes, PipelineError } from './orderPipeline';
 
 const draft = {
   customer_name: 'Test', customer_email: 't@example.com', shipping_address: 'Addr', total_price: 799,
@@ -45,4 +45,23 @@ test('forged Razorpay signature is rejected before anything is recorded', async 
   // A correct signature gets past the HMAC check (then fails on the network fetch, which is expected offline)
   const good = crypto.createHmac('sha256', 'secret').update('order_rzp1|pay_1').digest('hex');
   await assert.rejects(verifyPayment({ ...proof, razorpay_signature: good }, 799), (e: Error) => !/signature/.test(e.message));
+});
+
+test('saved order items carry the SKU and Galla barcode of the exact size that sold', () => {
+  const items = [
+    { ...draft.items[0], selected_size: 'M' },
+    { ...draft.items[0], selected_size: 'XXL' },
+    { ...draft.items[0], selected_size: 'L' }, // untracked size — no variant
+  ];
+  const variants = new Map([
+    ['prod_1::M', { sku: 'WINGS-F.S-M', galla_sku: 'WINGSF.SM' }],
+    ['prod_1::XXL', { sku: 'WINGS-F.S-XXL', galla_sku: 'WINGSF.SXXL' }],
+  ]);
+  const stamped = withVariantCodes(items, variants);
+  assert.deepEqual(stamped.map(i => [i.sku, i.galla_barcode]), [
+    ['WINGS-F.S-M', 'WINGSF.SM'],
+    ['WINGS-F.S-XXL', 'WINGSF.SXXL'],
+    [null, null],
+  ]);
+  assert.equal(stamped[0].title, 'Shirt'); // rest of the line untouched
 });

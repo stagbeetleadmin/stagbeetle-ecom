@@ -28,6 +28,7 @@ import RichTextEditor from '@/components/RichTextEditor';
 import ImageUploadGrid from '@/components/admin/ImageUploadGrid';
 import ProductPreviewModal from '@/components/admin/ProductPreviewModal';
 import InventoryPanel from '@/components/admin/InventoryPanel';
+import { variantSkuFor, gallaBarcodeFor } from '@/lib/gallaBarcode';
 import SizeMultiSelect from '@/components/admin/SizeMultiSelect';
 import SizeChartEditor from '@/components/admin/SizeChartEditor';
 
@@ -1808,6 +1809,11 @@ function AdminDashboardContent() {
                                     <div key={idx} className="flex justify-between items-center py-2 first:pt-0 last:pb-0">
                                       <span className="font-medium text-zinc-800 truncate max-w-[80%]">
                                         {item.title} ({item.selected_size} / {item.selected_color}) <span className="font-bold text-zinc-400">x{item.quantity}</span>
+                                        {item.sku && (
+                                          <span className="block font-mono text-[10.5px] text-zinc-400">
+                                            {item.sku}{item.galla_barcode && ` · Galla ${item.galla_barcode}`}
+                                          </span>
+                                        )}
                                       </span>
                                       <span className="font-semibold text-zinc-800">₹{item.price * item.quantity}</span>
                                     </div>
@@ -2355,7 +2361,12 @@ function AdminDashboardContent() {
                   <div className="flex flex-wrap gap-2 pt-1.5">
                     {selectedSizes.map(sz => (
                       <span key={sz} className="bg-white border border-zinc-200 text-zinc-600 font-mono text-[11px] px-2 py-1 rounded-sm">
-                        {styleCode && colorCode ? `${styleCode}-${colorCode}-${sz}`.toUpperCase() : `[STYLE]-[COLOR]-${sz}`}
+                        {styleCode && colorCode ? (
+                          <>
+                            {variantSkuFor(`${styleCode}-${colorCode}`, sz)}
+                            <span className="text-zinc-400" title="Galla barcode sent for this size after an online sale"> · {gallaBarcodeFor(variantSkuFor(`${styleCode}-${colorCode}`, sz))}</span>
+                          </>
+                        ) : `[STYLE]-[COLOR]-${sz}`}
                       </span>
                     ))}
                     {selectedSizes.length === 0 && (
@@ -2368,7 +2379,7 @@ function AdminDashboardContent() {
                 {editingProduct && (
                   <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                     <span className="text-[11px] font-label-caps font-semibold text-on-surface-variant block border-b pb-1">
-                      STOCK PER SIZE
+                      STOCK & GALLA BARCODE PER SIZE
                     </span>
                     <InventoryPanel
                       productId={editingProduct.id}

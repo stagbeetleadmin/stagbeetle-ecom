@@ -57,12 +57,25 @@ export class PipelineError extends Error {
 export const orderIdForPayment = (paymentId: string) =>
   `order_${paymentId.replace(/^pay_/, '').toLowerCase()}`;
 
+const variantKey = (line: { product_id: string; selected_size: string }) => `${line.product_id}::${line.selected_size}`;
+
+// Stamps each cart line with the SKU and Galla barcode of the exact size
+// that sold. Lines whose size has no variant (untracked) get nulls.
+export const withVariantCodes = (
+  items: OrderItem[],
+  variants: Map<string, { sku: string; galla_sku: string | null }>,
+): OrderItem[] =>
+  items.map(item => {
+    const variant = variants.get(variantKey(item));
+    return { ...item, sku: variant?.sku ?? null, galla_barcode: variant?.galla_sku ?? null };
+  });
+
 // A cart can hold the same product+size twice (e.g. added from two pages);
 // stock is per variant, so deduct and report it as one line.
 export const aggregateLines = (items: { product_id: string; selected_size: string; quantity: number }[]) => {
   const byVariant = new Map<string, { product_id: string; selected_size: string; quantity: number }>();
   for (const item of items) {
-    const key = `${item.product_id}::${item.selected_size}`;
+    const key = variantKey(item);
     const existing = byVariant.get(key);
     if (existing) existing.quantity += item.quantity;
     else byVariant.set(key, { product_id: item.product_id, selected_size: item.selected_size, quantity: item.quantity });
@@ -120,6 +133,26 @@ export const recordOrderAndDeductStock = async (
 ): Promise<{ orderId: string; duplicate: boolean; sold: SoldLine[] }> => {
   if (!supabase) throw new PipelineError('Database not configured', 500);
   const orderId = orderIdForPayment(proof.razorpay_payment_id);
+  const lines = aggregateLines(draft.items);
+
+  // Resolve each line to its size-variant up front, so the order row itself
+  // records which SKU + Galla barcode sold — not just product id + size.
+  const variants = new Map<string, { id: string; sku: string; galla_sku: string | null }>();
+  // A failed lookup only loses that line's codes — payment is already
+  // captured, so it must never stop the order being recorded.
+  for (const line of lines) {
+    try {
+      const { data: variant } = await supabase
+        .from('product_variants')
+        .select('id,sku,galla_sku')
+        .eq('product_id', line.product_id)
+        .eq('size', line.selected_size)
+        .maybeSingle();
+      if (variant) variants.set(variantKey(line), variant);
+    } catch (e) {
+      console.warn(`[Order Pipeline] Variant lookup failed for ${orderId} ${line.product_id}/${line.selected_size}:`, e instanceof Error ? e.message : e);
+    }
+  }
 
   const { error: insertErr } = await supabase.from('orders').insert([{
     id: orderId,
@@ -128,7 +161,7 @@ export const recordOrderAndDeductStock = async (
     customer_email: draft.customer_email,
     shipping_address: draft.shipping_address,
     total_price: draft.total_price,
-    items: draft.items,
+    items: withVariantCodes(draft.items, variants),
     payment_status: 'paid',
     payment_method: 'Razorpay',
     coupon_applied: draft.coupon_applied,
@@ -142,16 +175,10 @@ export const recordOrderAndDeductStock = async (
   if (insertErr) throw new PipelineError(`Order could not be saved: ${insertErr.message}`, 500);
 
   const sold: SoldLine[] = [];
-  for (const line of aggregateLines(draft.items)) {
+  for (const line of lines) {
+    const variant = variants.get(variantKey(line));
+    if (!variant) continue; // untracked size — nothing to deduct or report
     try {
-      const { data: variant } = await supabase
-        .from('product_variants')
-        .select('id,sku,galla_sku')
-        .eq('product_id', line.product_id)
-        .eq('size', line.selected_size)
-        .maybeSingle();
-      if (!variant) continue; // untracked size — nothing to deduct or report
-
       const { data: applied, error } = await supabase.rpc('decrement_inventory_on_hand', {
         p_variant_id: variant.id,
         p_qty: line.quantity,

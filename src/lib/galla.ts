@@ -19,15 +19,15 @@ import { supabase } from './db';
 // Currently pointed at Galla's DEMO account — see .env.local for the values
 // to swap once production store/location codes are confirmed.
 //
-// Confirmed 2026-09-12 (per the store owner, via Galla): their POS is loaded
-// with our own STYLE-COLOUR-SIZE sku directly (e.g. "EURO-BLK-M") — "10056"
-// in Galla's sample cURL was just an arbitrary example value, not evidence
-// of a separate numeric catalog. galla_sku is backfilled to equal sku for
-// every existing variant, and ensureVariantsForProduct in db.ts defaults it
-// the same way for new ones — kept as its own column (rather than sending
-// sku directly) only so an admin can override it per-variant from the
-// product's stock panel (setGallaSkuForVariant) if a specific item's Galla
-// code ever needs to differ. Still skipped-and-logged if somehow null.
+// What goes in line_items[].sku is Galla's BARCODE / EAN CODE for the item,
+// not its item name. Confirmed 2026-10-06 from Galla's Item Manager: item
+// name "WINGS-F.S-XXL" (= our variant SKU) has barcode "WINGSF.SXXL" — the
+// same string with hyphens dropped. Every webhook call answers 202 queued
+// whatever the sku, so a wrong code fails silently on Galla's side; that's
+// how the earlier SKU-as-is setting (2026-09-12) went unnoticed. The barcode
+// is stored per size in product_variants.galla_sku, derived by
+// gallaBarcode.ts and overridable per size from the product's stock panel.
+// Still skipped-and-logged if somehow null.
 //
 // What this does: after an online order is confirmed, tell Galla what sold
 // so a store clerk doesn't sell the same physical unit again. Fire-and-
@@ -40,8 +40,8 @@ const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 800;
 
 interface GallaSaleItem {
-  sku: string; // our own variant SKU — for logging only, never sent to Galla
-  galla_sku: string | null; // Galla's numeric code for this exact size — what's actually sent
+  sku: string; // our own variant SKU (e.g. WINGS-F.S-XXL) — for logging only, never sent to Galla
+  galla_sku: string | null; // Galla barcode for this exact size (e.g. WINGSF.SXXL) — what's actually sent
   quantity: number;
 }
 
@@ -118,12 +118,14 @@ export const notifyGallaOfSale = async (orderId: string, items: GallaSaleItem[])
     }
   }
 
-  // GALLA_SKU_ALLOWLIST (comma-separated Galla SKUs) restricts outbound sync
-  // to exactly those items — used while testing against a single dummy item
-  // (e.g. SHIRT-M) so no other product's stock in Galla can be touched.
-  // Unset = every mapped item is sent.
+  // GALLA_SKU_ALLOWLIST (comma-separated) restricts outbound sync to exactly
+  // those items — used while testing against a single dummy item so no other
+  // product's stock in Galla can be touched. Entries may be our SKU
+  // (SHIRT-M-M) or the Galla barcode (SHIRTMM). Unset = every mapped item is sent.
   const allowlist = process.env.GALLA_SKU_ALLOWLIST?.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-  const allowed = allowlist?.length ? mappable.filter(i => allowlist.includes(i.galla_sku.toUpperCase())) : mappable;
+  const allowed = allowlist?.length
+    ? mappable.filter(i => allowlist.includes(i.galla_sku.toUpperCase()) || allowlist.includes(i.sku.toUpperCase()))
+    : mappable;
   if (allowed.length < mappable.length) {
     console.info(`[Galla Sync] Order ${orderId}: skipping non-allowlisted item(s):`, mappable.filter(i => !allowed.includes(i)).map(i => i.galla_sku));
   }

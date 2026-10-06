@@ -32,6 +32,17 @@ test('allowlist: an order with no SHIRT-M makes no Galla call at all', async () 
   assert.equal(sent.length, 0);
 });
 
+test('allowlist: an entry may be our SKU even though the barcode is what gets sent', async () => {
+  process.env.GALLA_SKU_ALLOWLIST = 'WINGS-F.S-M';
+  sent.length = 0;
+  await notifyGallaOfSale('order_t4', [
+    { sku: 'WINGS-F.S-M', galla_sku: 'WINGSF.SM', quantity: 1 },
+    { sku: 'WINGS-F.S-L', galla_sku: 'WINGSF.SL', quantity: 1 },
+  ]);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].line_items, [{ sku: 'WINGSF.SM', qty: 1 }]);
+});
+
 test('production (no allowlist): every sold item is sent to Galla in one order call', async () => {
   delete process.env.GALLA_SKU_ALLOWLIST;
   sent.length = 0;
