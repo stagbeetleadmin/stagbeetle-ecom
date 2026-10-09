@@ -20,6 +20,53 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Galla inventory integration
+
+Galla is the in-store POS/inventory system. Stock flows both ways:
+
+| Direction | What happens | Code |
+|---|---|---|
+| Galla → us (real time) | After every store sale/restock, Galla POSTs the new count to `https://www.stagbeetle.co.in/api/inventory/sync` | `src/app/api/inventory/sync/route.ts` |
+| Galla → us (daily safety net) | 03:00 IST Vercel cron pulls Galla's full stock list and corrects any size that drifted | `src/lib/gallaStockPull.ts`, `src/app/api/inventory/galla-pull/route.ts` |
+| Us → Galla | After each online order, we tell Galla what sold so the store doesn't sell the same unit | `src/lib/galla.ts` |
+
+Sizes are matched by **Galla barcode** = our variant SKU with hyphens removed (`WINGS-F.S-M` → `WINGSF.SM`), stored per size in `product_variants.galla_sku`.
+
+### Which key is which
+
+There are two different keys, one for each direction. Never put the values in this file — they live in `.env.local` and Vercel → Settings → Environment Variables.
+
+| Env variable | Who creates it | Who sends it | Where it's set in Galla |
+|---|---|---|---|
+| `INVENTORY_SYNC_API_KEY` (64 hex chars) | **Us** | **Galla**, in the `api-key` header, when calling our `/api/inventory/sync` | Settings → Integration → *Website Integration* → **API Key** (the field next to *Inventory Sync API*) |
+| `GALLA_API_KEY` (40 chars) | **Galla** | **Us**, as `Authorization: Bearer …`, when calling Galla's order webhook and stock-list | Settings → Integration → top **API Key** box. ⚠️ Clicking **Generate** there replaces it — update `GALLA_API_KEY` in `.env.local` and Vercel immediately if you do, or orders and the stock pull stop reaching Galla |
+
+The two must not be swapped: Galla's *Website Integration → API Key* must equal **our** `INVENTORY_SYNC_API_KEY`, and the value in Vercel must be identical to it (a mismatch rejects every Galla push with `invalid_credentials`).
+
+### All Galla-related env variables
+
+| Variable | Purpose |
+|---|---|
+| `INVENTORY_SYNC_API_KEY` | Key Galla must send to push stock to us (see above) |
+| `INVENTORY_SYNC_SECRET` | Alternative HMAC signing secret for `/api/inventory/sync` (`X-Stagbeetle-Signature`); Galla doesn't use it today |
+| `INVENTORY_SYNC_ALLOWED_IPS` | Optional comma-separated IP allowlist for inbound calls (Galla calls from `52.172.249.3`); empty = any IP |
+| `GALLA_API_KEY` | Galla-issued token for our calls to Galla |
+| `GALLA_STORE_CODE` / `GALLA_LOC_CODE` | Our Galla store (`0b39d036`) and location (`RRBPS`, Singanayakanahalli) — sent as `store-code` / `loc-code` headers (hyphens, not underscores) |
+| `GALLA_ORDERS_SYNC_URL` | Galla's order webhook, `https://retail.galla.app/mystorev2/api/v2/webhooks/orders` |
+| `GALLA_STOCK_LIST_URL` | Optional override; defaults to `https://retail.galla.app/mystorev2/api/v2/inventory/stock-list` |
+| `GALLA_SKU_ALLOWLIST` | Testing only: if set, only these items are reported to Galla after online orders. Remove for go-live, or online sales of other items never reduce Galla's stock |
+| `CRON_SECRET` | Vercel sends it to authorise the daily `/api/inventory/galla-pull` run |
+
+### Commands
+
+```bash
+npm run galla:pull              # preview what Galla's stock list would change
+npm run galla:pull -- --apply   # apply it now
+npm run galla:logs              # write logs/galla-sync.log (last 7 days; --days 30 for more)
+```
+
+`galla:logs` shows every push from Galla, every rejected attempt with the reason and a fingerprint of the key Galla sent (compare with ours, printed at the top of the file), each stock pull, and each order sent to Galla. The live record is the `inventory_sync_log` table.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
