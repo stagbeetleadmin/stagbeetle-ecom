@@ -57,6 +57,10 @@ The two must not be swapped: Galla's *Website Integration → API Key* must equa
 | `GALLA_SKU_ALLOWLIST` | Testing only: if set, only these items are reported to Galla after online orders. Remove for go-live, or online sales of other items never reduce Galla's stock |
 | `CRON_SECRET` | Vercel sends it to authorise the daily `/api/inventory/galla-pull` run |
 
+### Admin: Galla Stock Sync page
+
+`/admin/inventory-sync` (sidebar → **GALLA STOCK SYNC**) lists every size on the site next to Galla's live count, worst problems first: sizes that can be ordered without limit because Galla doesn't have them, counts out of sync, and in sync. It has a **Sync from Galla now** button (the same pull as the daily cron), per-size **Set stock** / **Set barcode** fixes, recent Galla push and rejection activity, and a CSV download for offline checks.
+
 ### Commands
 
 ```bash

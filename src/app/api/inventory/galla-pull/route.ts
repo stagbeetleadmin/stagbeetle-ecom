@@ -24,8 +24,8 @@ export async function GET(request: Request) {
     const result = await pullGallaStock({ dryRun });
     console.info(`[Galla Pull] ${dryRun ? 'dry run: ' : ''}${result.applied.length} changed, ${result.unchanged} unchanged, ${result.failed.length} failed, ${result.skipped_recent_local_change.length} deferred`);
     return Response.json(result, { status: result.failed.length ? 207 : 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Galla Pull] Failed:', error);
-    return Response.json({ error: 'Galla pull failed', details: error?.message }, { status: 502 });
+    return Response.json({ error: 'Galla pull failed', details: error instanceof Error ? error.message : String(error) }, { status: 502 });
   }
 }

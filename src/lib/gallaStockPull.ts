@@ -128,24 +128,41 @@ export const fetchGallaStockList = async (): Promise<GallaStockItem[]> => {
   return data.items;
 };
 
-const loadVariantStock = async (): Promise<VariantStock[]> => {
+// VariantStock plus what a person needs to recognise and fix the size —
+// only the health report uses the extra fields.
+export interface VariantDetail extends VariantStock {
+  size: string;
+  product_id: string;
+  product_title: string;
+  product_sku: string;
+  sync_source: string | null;
+}
+
+const loadVariantStock = async (): Promise<VariantDetail[]> => {
   if (!supabase) throw new Error('Database not configured');
   const PAGE = 1000;
-  const rows: VariantStock[] = [];
+  const rows: VariantDetail[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('product_variants')
-      .select('id,sku,galla_sku,inventory(quantity_on_hand,last_synced_at,updated_at)')
+      .select('id,sku,size,galla_sku,product_id,products(title,sku),inventory(quantity_on_hand,sync_source,last_synced_at,updated_at)')
       .order('id')
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`Variant lookup failed: ${error.message}`);
     for (const v of data ?? []) {
-      const inv = Array.isArray(v.inventory) ? v.inventory[0] : v.inventory;
+      // Embedded relations come back as an object or a one-element array
+      // depending on how PostgREST reads the foreign key.
+      const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] : x);
+      const inv = one(v.inventory);
+      const product = one(v.products);
       rows.push({
         variant_id: v.id, sku: v.sku, galla_sku: v.galla_sku,
         quantity_on_hand: inv?.quantity_on_hand ?? null,
         last_synced_at: inv?.last_synced_at ?? null,
         updated_at: inv?.updated_at ?? null,
+        size: v.size, product_id: v.product_id,
+        product_title: product?.title ?? '', product_sku: product?.sku ?? '',
+        sync_source: inv?.sync_source ?? null,
       });
     }
     if (!data || data.length < PAGE) return rows;
@@ -220,4 +237,87 @@ export const pullGallaStock = async ({ dryRun = false } = {}): Promise<PullResul
     skipped_recent_local_change: plan.skippedRecentLocalChange,
     not_in_galla: plan.notInGalla,
   };
+};
+
+// =========================================================================
+// HEALTH REPORT — every size on the site against Galla's live stock list,
+// for the admin's manual check (/admin/inventory-sync). Read-only.
+// =========================================================================
+
+export type StockHealthStatus =
+  | 'in_sync'           // matched, same count
+  | 'mismatch'          // matched, counts differ — "Sync now" fixes it
+  | 'untracked'         // matched, but no count on our site yet — sells as unlimited until synced
+  | 'not_in_galla_open' // no Galla match AND no count — sells as UNLIMITED; set a count or fix the barcode
+  | 'not_in_galla';     // no Galla match, has a hand-entered count — not kept in sync
+
+export interface StockHealthRow {
+  variant_id: string;
+  product_id: string;
+  product_title: string;
+  product_sku: string;
+  size: string;
+  sku: string;
+  galla_sku: string | null;
+  site_qty: number | null;
+  galla_qty: number | null; // raw Galla value (may be negative)
+  status: StockHealthStatus;
+  sync_source: string | null;
+  last_synced_at: string | null;
+  // Galla barcodes that look like this size under a different code (e.g.
+  // JAMUS for JAMU-ML-S) — a hint for fixing the barcode, never auto-applied.
+  suggestions: string[];
+}
+
+const STATUS_ORDER: StockHealthStatus[] = ['not_in_galla_open', 'mismatch', 'untracked', 'not_in_galla', 'in_sync'];
+
+// Pure: exported for tests.
+export const buildHealthRows = (items: GallaStockItem[], variants: VariantDetail[]): StockHealthRow[] => {
+  const galla = new Map<string, number>();
+  for (const item of items) {
+    if (item?.barcode && Number.isFinite(item.qty)) galla.set(item.barcode.trim().toUpperCase(), Math.trunc(item.qty));
+  }
+  const barcodes = [...galla.keys()];
+
+  return variants.map(v => {
+    const gallaQty = v.galla_sku ? galla.get(v.galla_sku.trim().toUpperCase()) ?? null : null;
+    let status: StockHealthStatus;
+    if (gallaQty === null) status = v.quantity_on_hand === null ? 'not_in_galla_open' : 'not_in_galla';
+    else if (v.quantity_on_hand === null) status = 'untracked';
+    else status = v.quantity_on_hand === Math.max(0, gallaQty) ? 'in_sync' : 'mismatch';
+
+    let suggestions: string[] = [];
+    if (gallaQty === null) {
+      // Same style prefix and same size suffix, e.g. JAMU…S for JAMU-ML-S.
+      const parts = v.sku.toUpperCase().split('-');
+      const style = parts[0].replace(/[^A-Z0-9.]/g, '');
+      const size = parts[parts.length - 1];
+      suggestions = barcodes.filter(b => b.startsWith(style) && b.endsWith(size) && b.length <= style.length + size.length + 4)
+        .sort((a, b) => a.length - b.length || a.localeCompare(b)).slice(0, 5);
+    }
+
+    return {
+      variant_id: v.variant_id, product_id: v.product_id, product_title: v.product_title, product_sku: v.product_sku,
+      size: v.size, sku: v.sku, galla_sku: v.galla_sku, site_qty: v.quantity_on_hand, galla_qty: gallaQty,
+      status, sync_source: v.sync_source, last_synced_at: v.last_synced_at, suggestions,
+    };
+  }).sort((a, b) =>
+    STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)
+    || a.product_title.localeCompare(b.product_title)
+    || a.sku.localeCompare(b.sku));
+};
+
+export interface StockHealthReport {
+  checked_at: string;
+  galla_items: number;
+  counts: Record<StockHealthStatus, number>;
+  rows: StockHealthRow[];
+}
+
+export const buildGallaHealthReport = async (): Promise<StockHealthReport> => {
+  const [items, variants] = await Promise.all([fetchGallaStockList(), loadVariantStock()]);
+  const rows = buildHealthRows(items, variants);
+  const counts = Object.fromEntries(STATUS_ORDER.map(s => [s, 0])) as Record<StockHealthStatus, number>;
+  for (const row of rows) counts[row.status]++;
+  return { checked_at: new Date().toISOString(), galla_items: items.length, counts, rows };
 };

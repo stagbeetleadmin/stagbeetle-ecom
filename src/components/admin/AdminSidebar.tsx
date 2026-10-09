@@ -18,6 +18,7 @@ const PAGE_LINKS = [
   { href: '/admin/sales', label: 'SALE MANAGEMENT', icon: 'sell', tooltip: 'Store-wide sale window, category discounts, and product-specific discounts' },
   { href: '/admin/festivals', label: 'FESTIVAL DECORATIONS', icon: 'celebration', tooltip: 'Decorate the storefront for a festival, automatically or by hand, with an optional linked coupon' },
   { href: '/admin/notifications', label: 'NOTIFICATIONS', icon: 'campaign', tooltip: 'Send a WhatsApp announcement to every registered user or member' },
+  { href: '/admin/inventory-sync', label: 'GALLA STOCK SYNC', icon: 'inventory', tooltip: 'Check every size against Galla\'s live stock and sync now' },
   { href: '/admin/integration', label: 'GALLA INTEGRATION DOCS', icon: 'sync_alt', tooltip: 'Reference for the in-store POS inventory sync' },
 ];
 

@@ -47,3 +47,22 @@ test('a size just sold online is deferred until Galla has caught up', () => {
   const ourSync = variant('A-1', 'A', 4, { last_synced_at: ago(30 * 1000), updated_at: ago(30 * 1000) });
   assert.equal(planGallaPull([{ barcode: 'A', qty: 3 }], [ourSync], NOW).changes.length, 1);
 });
+
+test('health rows: each size gets the right status, worst problems first', async () => {
+  const { buildHealthRows } = await import('./gallaStockPull');
+  const detail = (sku: string, galla_sku: string | null, qty: number | null) => ({
+    ...variant(sku, galla_sku, qty), size: sku.split('-').pop()!, product_id: 'p', product_title: 'T', product_sku: 'X', sync_source: null,
+  });
+  const rows = buildHealthRows(
+    [{ barcode: 'A', qty: 2 }, { barcode: 'B', qty: -1 }, { barcode: 'C', qty: 4 }, { barcode: 'JAMUS', qty: 0 }],
+    [detail('A-S', 'A', 2), detail('B-M', 'B', 3), detail('C-L', 'C', null), detail('JAMU-ML-S', 'JAMUMLS', null), detail('Z-XL', 'ZXL', 5)],
+  );
+  assert.deepEqual(rows.map(r => [r.sku, r.status]), [
+    ['JAMU-ML-S', 'not_in_galla_open'],
+    ['B-M', 'mismatch'],     // Galla -1 → site should be 0
+    ['C-L', 'untracked'],
+    ['Z-XL', 'not_in_galla'],
+    ['A-S', 'in_sync'],
+  ]);
+  assert.deepEqual(rows[0].suggestions, ['JAMUS']);
+});
