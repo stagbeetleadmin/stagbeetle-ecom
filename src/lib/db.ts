@@ -1180,6 +1180,20 @@ const broadcastInventoryChanged = () => {
 // server-side (/api/orders/finalize), where there's no realtime channel.
 export const notifyInventoryChanged = () => broadcastInventoryChanged();
 
+// Server-side equivalent (e.g. the Galla stock pull): one stateless HTTP
+// broadcast instead of opening a websocket in a short-lived function.
+export const notifyInventoryChangedFromServer = async () => {
+  if (!isSupabaseConfigured || !supabase) return;
+  const channel = supabase.channel(INVENTORY_CHANNEL_NAME);
+  try {
+    await channel.httpSend(INVENTORY_CHANGED_EVENT, {});
+  } catch (e) {
+    console.warn('[Atelier DB] Inventory broadcast failed:', e);
+  } finally {
+    supabase.removeChannel(channel).catch(() => {});
+  }
+};
+
 // Subscribe to live stock changes — e.g. a product page flips a size to "Out
 // of Stock" the moment someone else buys the last one. Returns an unsubscribe function.
 export const subscribeToInventoryChanges = (onChange: () => void): (() => void) => {
@@ -1558,11 +1572,22 @@ export const applyInboundInventorySync = async (
         continue;
       }
 
-      const { data: variant } = await supabase
+      // `sku` may be our variant SKU (WINGS-F.S-M) or — what Galla's own
+      // pushes actually send — their barcode (WINGSF.SM = our galla_sku).
+      const code = String(event.sku).trim();
+      let { data: variant } = await supabase
         .from('product_variants')
         .select('id')
-        .eq('sku', event.sku)
+        .eq('sku', code)
         .maybeSingle();
+      if (!variant) {
+        ({ data: variant } = await supabase
+          .from('product_variants')
+          .select('id')
+          .eq('galla_sku', code.toUpperCase())
+          .limit(1)
+          .maybeSingle());
+      }
 
       if (!variant) {
         if (!dryRun) {
@@ -1603,7 +1628,7 @@ export const applyInboundInventorySync = async (
       // that does exactly this one upsert rather than needing a service-role key.
       const { error: upsertErr } = await supabase.rpc('upsert_inventory_from_sync', {
         p_variant_id: variant.id,
-        p_quantity_on_hand: event.quantity_on_hand,
+        p_quantity_on_hand: Math.trunc(event.quantity_on_hand), // Galla can send fractional qty (e.g. 1009.4)
         p_last_synced_at: event.occurred_at,
       });
 

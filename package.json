@@ -10,7 +10,9 @@
     "migrate": "node src/scripts/migrate.js",
     "sql": "node src/scripts/run-sql.js",
     "galla:import": "node src/scripts/import-galla-stock.js",
-    "test": "node --import ./test/register.mjs --test \"src/**/*.test.ts\""
+    "test": "node --import ./test/register.mjs --test \"src/**/*.test.ts\"",
+    "galla:pull": "node --env-file=.env.local --import ./test/register.mjs src/scripts/pull-galla-stock.ts",
+    "galla:logs": "node src/scripts/galla-sync-logs.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

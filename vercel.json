@@ -2,5 +2,8 @@
   "version": 2,
   "buildCommand": "npm run build",
   "framework": "nextjs",
-  "regions": ["bom1"]
+  "regions": ["bom1"],
+  "crons": [
+    { "path": "/api/inventory/galla-pull", "schedule": "30 21 * * *" }
+  ]
 }

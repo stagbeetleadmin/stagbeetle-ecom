@@ -42,3 +42,6 @@ next-env.d.ts
 # ── migration kit (local only) ──
 migration/.env.migration
 migration/dump/
+
+# Galla sync log exports (npm run galla:logs) — contain stock data
+/logs/

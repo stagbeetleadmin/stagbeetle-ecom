@@ -38,14 +38,28 @@ const getClientIp = (request: Request): string | null => {
   return request.headers.get('x-real-ip');
 };
 
-const logAuthFailure = async (request: Request, reason: string, clientIp: string | null) => {
+// Short, non-reversible fingerprint of a key: enough to tell whether the
+// caller is sending OUR key, an old one, or something else entirely (compare
+// with `npm run galla:logs`, which prints our key's fingerprint), without the
+// key itself ever reaching the log.
+export const keyFingerprint = (key: string) =>
+  key ? `len${key.length}:${crypto.createHash('sha256').update(key).digest('hex').slice(0, 8)}` : null;
+
+const logAuthFailure = async (request: Request, reason: string, clientIp: string | null, rawBody = '') => {
   if (!supabase) return;
   try {
     await supabase.from('inventory_sync_log').insert([{
       direction: 'inbound',
       // Header NAMES only (never values) — enough to see whether a caller
       // sent its key under a header we don't check, without logging secrets.
-      payload: { reason, ip: clientIp, path: new URL(request.url).pathname, user_agent: request.headers.get('user-agent'), header_names: [...request.headers.keys()] },
+      // The rejected body is stock data, not a secret — kept (truncated) so
+      // we can see what Galla's pushes look like before they're accepted.
+      payload: {
+        reason, ip: clientIp, path: new URL(request.url).pathname, user_agent: request.headers.get('user-agent'), header_names: [...request.headers.keys()],
+        api_key_fingerprint: keyFingerprint((request.headers.get('api-key') || '').trim()),
+        bearer_fingerprint: keyFingerprint((request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()),
+        body_preview: rawBody.slice(0, 1500) || null,
+      },
       status: 'failed',
       error_message: `Rejected: ${reason}`,
     }]);
@@ -110,6 +124,6 @@ export const verifyInventoryRequest = async (request: Request, rawBody: string):
     }
   }
 
-  await logAuthFailure(request, 'invalid_credentials', getClientIp(request));
+  await logAuthFailure(request, 'invalid_credentials', getClientIp(request), rawBody);
   return { ok: false, status: 401, error: 'Invalid or missing credentials' };
 };
