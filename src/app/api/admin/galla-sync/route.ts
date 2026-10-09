@@ -6,26 +6,10 @@
 //          cron), then return the fresh report
 //
 // Admin session only — the same cookie check as the other /api/admin routes.
-import { createClient } from '@/utils/supabase/server';
+import { ensureAdmin, type AdminClient } from '@/lib/adminAuth';
 import { buildGallaHealthReport, pullGallaStock } from '@/lib/gallaStockPull';
 
 export const maxDuration = 60;
-
-const ADMIN_EMAIL = 'stagbeetlebilling@gmail.com';
-
-async function ensureAdmin() {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { ok: false as const, status: 401 };
-    if (user.email?.toLowerCase() !== ADMIN_EMAIL) return { ok: false as const, status: 403 };
-    return { ok: true as const, supabase };
-  } catch {
-    return { ok: false as const, status: 401 };
-  }
-}
-
-type AdminClient = Awaited<ReturnType<typeof createClient>>;
 
 // inventory_sync_log is admin-read only (RLS), so this uses the admin's own session.
 const recentActivity = async (supabase: AdminClient) => {

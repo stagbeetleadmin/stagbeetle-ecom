@@ -59,7 +59,11 @@ The two must not be swapped: Galla's *Website Integration → API Key* must equa
 
 ### Admin: Galla Stock Sync page
 
-`/admin/inventory-sync` (sidebar → **GALLA STOCK SYNC**) lists every size on the site next to Galla's live count, worst problems first: sizes that can be ordered without limit because Galla doesn't have them, counts out of sync, and in sync. It has a **Sync from Galla now** button (the same pull as the daily cron), per-size **Set stock** / **Set barcode** fixes, recent Galla push and rejection activity, and a CSV download for offline checks.
+`/admin/inventory-sync` (sidebar → **GALLA STOCK SYNC**) has a **Sync from Galla now** button (the same pull as the daily cron), live status cards (last Galla push, rejected Galla calls in 24h, last full sync) and three tabs:
+
+- **Health & Sync** — every size next to Galla's live count, worst problems first, with per-size **Set stock** / **Set barcode** fixes and a CSV export.
+- **Validation checklist** — every product and size against nine rules (size record exists, size still offered, barcode set / follows the rule / unique / found in Galla, stock tracked, count = Galla, no sync errors in 7 days) as ✓/✗ columns, with the reason and a fix on each failing size. Rules live in `src/lib/gallaChecks.ts`.
+- **Sync logs** — every Galla push, rejected call (with whether the API key was wrong or missing), full sync, CSV import and online order sent to Galla, in plain English with the raw data one click away. Filter by type, problems only, time range, or a SKU / barcode; each size's **Logs** button opens its history (`?tab=logs&codes=SKU,BARCODE`).
 
 ### Commands
 

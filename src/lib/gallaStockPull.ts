@@ -1,4 +1,5 @@
 import { supabase, notifyInventoryChangedFromServer } from './db';
+import type { CheckResult, ValidationCheckKey } from './gallaChecks';
 
 // =========================================================================
 // INBOUND PULL FROM GALLA (store stock → our inventory)
@@ -320,4 +321,129 @@ export const buildGallaHealthReport = async (): Promise<StockHealthReport> => {
   const counts = Object.fromEntries(STATUS_ORDER.map(s => [s, 0])) as Record<StockHealthStatus, number>;
   for (const row of rows) counts[row.status]++;
   return { checked_at: new Date().toISOString(), galla_items: items.length, counts, rows };
+};
+
+// =========================================================================
+// VALIDATION CHECKLIST — every product, every size, each rule a size must
+// pass for its stock to be trustworthy (/admin/inventory-sync?tab=validation).
+// Read-only.
+// =========================================================================
+
+export interface ValidationSizeRow {
+  variant_id: string | null; // null = offered size with no size record
+  size: string;
+  sku: string;
+  galla_sku: string | null;
+  site_qty: number | null;
+  galla_qty: number | null;
+  error_count: number;
+  suggestions: string[];
+  checks: Record<ValidationCheckKey, CheckResult>;
+}
+
+export interface ValidationProduct {
+  product_id: string;
+  title: string;
+  product_sku: string;
+  failures: number; // sizes with at least one 'fail'
+  warnings: number; // sizes with a 'warn' but no 'fail'
+  sizes: ValidationSizeRow[];
+}
+
+export interface CatalogProduct {
+  id: string;
+  title: string;
+  sku: string;
+  sizes: string[] | null;
+}
+
+// Checks that only describe hygiene, not a stock risk, report 'warn'.
+const WARN_ONLY: ValidationCheckKey[] = ['offered', 'barcode_rule'];
+
+// Pure: exported for tests. errorCounts is keyed by upper-cased SKU or barcode.
+export const buildValidation = (
+  items: GallaStockItem[],
+  variants: VariantDetail[],
+  products: CatalogProduct[],
+  errorCounts: Map<string, number>,
+): ValidationProduct[] => {
+  const health = new Map(buildHealthRows(items, variants).map(r => [r.variant_id, r]));
+  const barcodeUse = new Map<string, number>();
+  for (const v of variants) {
+    if (v.galla_sku) barcodeUse.set(v.galla_sku.toUpperCase(), (barcodeUse.get(v.galla_sku.toUpperCase()) ?? 0) + 1);
+  }
+  const byProduct = new Map<string, VariantDetail[]>();
+  for (const v of variants) byProduct.set(v.product_id, [...(byProduct.get(v.product_id) ?? []), v]);
+
+  const result = products.map(p => {
+    const offered = (p.sizes ?? []).map(s => s.trim()).filter(Boolean);
+    const own = byProduct.get(p.id) ?? [];
+    const rows: ValidationSizeRow[] = [];
+
+    for (const v of own) {
+      const h = health.get(v.variant_id)!;
+      const errors = (errorCounts.get(v.sku.toUpperCase()) ?? 0) + (v.galla_sku ? errorCounts.get(v.galla_sku.toUpperCase()) ?? 0 : 0);
+      const inGalla = h.galla_qty !== null;
+      const checks: Record<ValidationCheckKey, CheckResult> = {
+        has_variant: 'pass',
+        offered: offered.some(s => s.toUpperCase() === v.size.toUpperCase()) ? 'pass' : 'fail',
+        has_barcode: v.galla_sku ? 'pass' : 'fail',
+        barcode_rule: !v.galla_sku ? 'na' : v.galla_sku.toUpperCase() === v.sku.toUpperCase().replace(/-/g, '') ? 'pass' : 'fail',
+        barcode_unique: !v.galla_sku ? 'na' : (barcodeUse.get(v.galla_sku.toUpperCase()) ?? 0) > 1 ? 'fail' : 'pass',
+        in_galla: !v.galla_sku ? 'na' : inGalla ? 'pass' : 'fail',
+        tracked: v.quantity_on_hand !== null ? 'pass' : 'fail',
+        qty_match: !inGalla || v.quantity_on_hand === null ? 'na' : h.status === 'in_sync' ? 'pass' : 'fail',
+        no_errors: errors > 0 ? 'fail' : 'pass',
+      };
+      for (const k of WARN_ONLY) if (checks[k] === 'fail') checks[k] = 'warn';
+      // A leftover record for a size the product no longer offers can't be
+      // bought, so its stock checks don't matter — only flag the leftover.
+      if (checks.offered === 'warn') {
+        for (const k of Object.keys(checks) as ValidationCheckKey[]) if (k !== 'has_variant' && k !== 'offered') checks[k] = 'na';
+      }
+      rows.push({
+        variant_id: v.variant_id, size: v.size, sku: v.sku, galla_sku: v.galla_sku,
+        site_qty: v.quantity_on_hand, galla_qty: h.galla_qty, error_count: errors, suggestions: h.suggestions, checks,
+      });
+    }
+
+    for (const size of offered) {
+      if (own.some(v => v.size.toUpperCase() === size.toUpperCase())) continue;
+      rows.push({
+        variant_id: null, size, sku: `${p.sku}-${size}`.toUpperCase(), galla_sku: null,
+        site_qty: null, galla_qty: null, error_count: 0, suggestions: [],
+        checks: {
+          has_variant: 'fail', offered: 'pass', has_barcode: 'na', barcode_rule: 'na', barcode_unique: 'na',
+          in_galla: 'na', tracked: 'fail', qty_match: 'na', no_errors: 'na',
+        },
+      });
+    }
+
+    const order = offered.map(s => s.toUpperCase());
+    rows.sort((a, b) => {
+      const ia = order.indexOf(a.size.toUpperCase()), ib = order.indexOf(b.size.toUpperCase());
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.size.localeCompare(b.size);
+    });
+    const failed = (r: ValidationSizeRow) => Object.values(r.checks).includes('fail');
+    return {
+      product_id: p.id, title: p.title, product_sku: p.sku, sizes: rows,
+      failures: rows.filter(failed).length,
+      warnings: rows.filter(r => !failed(r) && Object.values(r.checks).includes('warn')).length,
+    };
+  });
+
+  return result.sort((a, b) => b.failures - a.failures || b.warnings - a.warnings || a.title.localeCompare(b.title));
+};
+
+const loadCatalogProducts = async (): Promise<CatalogProduct[]> => {
+  if (!supabase) throw new Error('Database not configured');
+  const { data, error } = await supabase.from('products').select('id,title,sku,sizes').order('title').range(0, 4999);
+  if (error) throw new Error(`Product lookup failed: ${error.message}`);
+  return (data ?? []) as CatalogProduct[];
+};
+
+export const buildValidationReport = async (errorCounts: Map<string, number>) => {
+  const [items, variants, products] = await Promise.all([fetchGallaStockList(), loadVariantStock(), loadCatalogProducts()]);
+  const validation = buildValidation(items, variants, products, errorCounts);
+  return { checked_at: new Date().toISOString(), galla_items: items.length, products: validation };
 };

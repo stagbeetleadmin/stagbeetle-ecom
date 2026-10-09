@@ -66,3 +66,45 @@ test('health rows: each size gets the right status, worst problems first', async
   ]);
   assert.deepEqual(rows[0].suggestions, ['JAMUS']);
 });
+
+test('validation: each rule is checked per size, offered sizes with no record are flagged', async () => {
+  const { buildValidation } = await import('./gallaStockPull');
+  const detail = (sku: string, galla_sku: string | null, qty: number | null, size = sku.split('-').pop()!) => ({
+    ...variant(sku, galla_sku, qty), size, product_id: 'p1', product_title: 'Shorts', product_sku: 'FINN-BLK', sync_source: null,
+  });
+  const [product] = buildValidation(
+    [{ barcode: 'FINNBLKM', qty: 1 }, { barcode: 'FINNBLKL', qty: 3 }],
+    [detail('FINN-BLK-M', 'FINNBLKM', 1), detail('FINN-BLK-L', 'FINNBLKL', 2), detail('FINN-BLK-S', 'FINNBLKS', null), detail('FINN-BLK-XS', 'FINNBLKXS', 0)],
+    [{ id: 'p1', title: 'Shorts', sku: 'FINN-BLK', sizes: ['S', 'M', 'L', 'XL'] }],
+    new Map([['FINNBLKL', 2]]),
+  );
+  const by = Object.fromEntries(product.sizes.map(s => [s.size, s.checks]));
+  assert.deepEqual(product.sizes.map(s => s.size), ['S', 'M', 'L', 'XL', 'XS']); // product's size order, leftovers last
+  assert.ok(Object.values(by.M).every(r => r === 'pass'));
+  assert.equal(by.L.qty_match, 'fail');
+  assert.equal(by.L.no_errors, 'fail');
+  assert.equal(by.S.in_galla, 'fail');
+  assert.equal(by.S.tracked, 'fail');
+  assert.equal(by.XL.has_variant, 'fail');   // offered, but no size record
+  assert.equal(by.XS.offered, 'warn');       // record left over from a removed size
+  assert.equal(product.failures, 3);
+});
+
+test('sync log entries explain what went wrong in plain words', async () => {
+  const { describeSyncLog } = await import('./gallaSyncLog');
+  const base = { id: '1', created_at: '2026-10-09T10:00:00Z', direction: 'inbound', variant_sku: null, external_event_id: null };
+  const rejected = describeSyncLog({ ...base, status: 'failed', error_message: 'Rejected: invalid_credentials',
+    payload: { reason: 'invalid_credentials', ip: '52.172.249.3', path: '/api/inventory/sync', api_key_fingerprint: 'len64:d0504483' } }, [], 'len64:8a7d7631');
+  assert.equal(rejected.type, 'rejected');
+  assert.match(rejected.detail!, /Wrong API key.*len64:d0504483.*len64:8a7d7631/);
+
+  const unknown = describeSyncLog({ ...base, status: 'sku_not_found', external_event_id: 'galla-ADJUSTMENT-1', variant_sku: 'JAMUS', error_message: 'x',
+    payload: { sku: 'JAMUS', quantity_on_hand: 0 } });
+  assert.equal(unknown.type, 'galla_push');
+  assert.match(unknown.summary, /Galla set JAMUS to 0/);
+  assert.match(unknown.detail!, /matches no size/);
+
+  const pull = describeSyncLog({ ...base, status: 'applied', external_event_id: 'galla-pull-x', variant_sku: 'A-S,B-M', error_message: null,
+    payload: { changes: [{ sku: 'A-S', before: 2, after: 1 }, { sku: 'B-M', before: null, after: 4 }], failed: [] } }, ['b-m']);
+  assert.equal(pull.summary, 'Full sync set B-M: untracked → 4');
+});
