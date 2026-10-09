@@ -8,7 +8,7 @@ import type { StockHealthReport, PullResult } from '@/lib/gallaStockPull';
 import HealthTab, { ISSUE_STATUSES } from '@/components/admin/galla/HealthTab';
 import ValidationTab from '@/components/admin/galla/ValidationTab';
 import LogsTab from '@/components/admin/galla/LogsTab';
-import { errorMessage, fmtTime } from '@/components/admin/galla/shared';
+import { adminFetch, errorMessage, fmtTime } from '@/components/admin/galla/shared';
 
 // Galla stock control centre: "Sync from Galla now" plus three views —
 //   Health & Sync  every size vs Galla's live count, worst first
@@ -68,7 +68,7 @@ function InventorySyncInner() {
   };
 
   const fetchReport = useCallback(() =>
-    fetch('/api/admin/galla-sync', { cache: 'no-store' })
+    adminFetch('/api/admin/galla-sync')
       .then(async res => {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
@@ -86,7 +86,7 @@ function InventorySyncInner() {
     if (!window.confirm('Pull current stock from Galla and overwrite the site\'s count for every size Galla stocks?')) return;
     setSyncing(true); setError(''); setNotice('');
     try {
-      const res = await fetch('/api/admin/galla-sync', { method: 'POST' });
+      const res = await adminFetch('/api/admin/galla-sync', { method: 'POST' });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
       setLastSync(body.result); setReport(body.report); setActivity(body.activity);

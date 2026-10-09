@@ -13,7 +13,7 @@ import { describeSyncLog, type RawSyncLogRow } from '@/lib/gallaSyncLog';
 const PAGE_SIZE = 50;
 
 export async function GET(request: Request) {
-  const auth = await ensureAdmin();
+  const auth = await ensureAdmin(request);
   if (!auth.ok) return Response.json({ error: 'Not authorised' }, { status: auth.status });
 
   const params = new URL(request.url).searchParams;

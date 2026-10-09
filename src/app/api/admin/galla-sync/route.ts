@@ -5,7 +5,7 @@
 //   POST → "Sync now": pull Galla's stock into ours (same code as the daily
 //          cron), then return the fresh report
 //
-// Admin session only — the same cookie check as the other /api/admin routes.
+// Admin only — see ensureAdmin in src/lib/adminAuth.ts.
 import { ensureAdmin, type AdminClient } from '@/lib/adminAuth';
 import { buildGallaHealthReport, pullGallaStock } from '@/lib/gallaStockPull';
 
@@ -34,8 +34,8 @@ const recentActivity = async (supabase: AdminClient) => {
   };
 };
 
-export async function GET() {
-  const auth = await ensureAdmin();
+export async function GET(request: Request) {
+  const auth = await ensureAdmin(request);
   if (!auth.ok) return Response.json({ error: 'Not authorised' }, { status: auth.status });
   try {
     const [report, activity] = await Promise.all([buildGallaHealthReport(), recentActivity(auth.supabase)]);
@@ -46,8 +46,8 @@ export async function GET() {
   }
 }
 
-export async function POST() {
-  const auth = await ensureAdmin();
+export async function POST(request: Request) {
+  const auth = await ensureAdmin(request);
   if (!auth.ok) return Response.json({ error: 'Not authorised' }, { status: auth.status });
   try {
     const result = await pullGallaStock({ dryRun: false });

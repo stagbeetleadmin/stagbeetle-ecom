@@ -29,8 +29,8 @@ const recentErrorCounts = async (supabase: AdminClient) => {
   return counts;
 };
 
-export async function GET() {
-  const auth = await ensureAdmin();
+export async function GET(request: Request) {
+  const auth = await ensureAdmin(request);
   if (!auth.ok) return Response.json({ error: 'Not authorised' }, { status: auth.status });
   try {
     return Response.json(await buildValidationReport(await recentErrorCounts(auth.supabase)));

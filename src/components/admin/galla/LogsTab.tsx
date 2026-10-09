@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { SYNC_LOG_TYPE_LABELS, type SyncLogEntry, type SyncLogType } from '@/lib/gallaSyncLog';
-import { FilterChip, errorMessage, fmtTime, smallButton } from './shared';
+import { FilterChip, adminFetch, errorMessage, fmtTime, smallButton } from './shared';
 
 // Sync Logs tab: every Galla push, rejected call, full sync, CSV import and
 // online order sent to Galla, newest first — filterable down to one size.
@@ -40,7 +40,7 @@ export default function LogsTab({ codes, onCodesChange, refreshKey }: {
     const params = new URLSearchParams({ type, days: String(days), page: String(page) });
     if (problemsOnly) params.set('problems', '1');
     if (codes.length) params.set('codes', codes.join(','));
-    return fetch(`/api/admin/galla-sync/logs?${params}`, { cache: 'no-store' })
+    return adminFetch(`/api/admin/galla-sync/logs?${params}`)
       .then(async res => {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);

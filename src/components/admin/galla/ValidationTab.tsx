@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { VALIDATION_CHECKS, type CheckResult, type ValidationCheckKey } from '@/lib/gallaChecks';
 import type { ValidationProduct, ValidationSizeRow } from '@/lib/gallaStockPull';
-import { FilterChip, StockFixActions, downloadCsv, errorMessage, fmtTime, smallButton } from './shared';
+import { FilterChip, StockFixActions, adminFetch, downloadCsv, errorMessage, fmtTime, smallButton } from './shared';
 
 // Validation checklist tab: every product, every size, a ✓/✗ per stock rule
 // (rules and their meaning live in VALIDATION_CHECKS), with inline fixes.
@@ -34,7 +34,7 @@ export default function ValidationTab({ refreshKey, onChanged, onViewLogs }: {
   const [showGuide, setShowGuide] = useState(false);
 
   const fetchValidation = useCallback(() =>
-    fetch('/api/admin/galla-sync/validation', { cache: 'no-store' })
+    adminFetch('/api/admin/galla-sync/validation')
       .then(async res => {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);

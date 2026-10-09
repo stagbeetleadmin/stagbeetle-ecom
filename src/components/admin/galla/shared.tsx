@@ -1,9 +1,18 @@
 "use client";
 
 import React, { useState } from 'react';
-import { setInventoryManual, setGallaSkuForVariant } from '@/lib/db';
+import { supabase, setInventoryManual, setGallaSkuForVariant } from '@/lib/db';
 
 // Shared bits for the /admin/inventory-sync tabs.
+
+// fetch() for the /api/admin/* routes: attaches the signed-in admin's access
+// token, since the session lives in localStorage, not a cookie (see adminAuth.ts).
+export const adminFetch = async (url: string, init: RequestInit = {}) => {
+  const { data: { session } } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+  const headers = new Headers(init.headers);
+  if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`);
+  return fetch(url, { cache: 'no-store', ...init, headers });
+};
 
 export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
